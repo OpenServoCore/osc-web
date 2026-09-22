@@ -1,6 +1,6 @@
 import type { BaudRate } from "@openservocore/client";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
 import {
   Activity,
   ChevronRight,
@@ -44,6 +44,7 @@ import { simRequested } from "@/lib/backend";
 import { formatBaud } from "@/lib/format";
 import { isTheme } from "@/lib/prefs";
 import { useSession, type Servo, type Status } from "@/lib/session";
+import { useConnectionPopover } from "@/lib/use-connection-popover";
 import { useThemePref } from "@/lib/use-pref";
 
 const nav = [
@@ -63,7 +64,7 @@ export function AppSidebar() {
     () => !simRequested(),
     () => false,
   );
-  const [open, setOpen] = useState<boolean>();
+  const [open, setOpen] = useConnectionPopover();
   const connectionOpen = open ?? bootOpen;
   return (
     <Sidebar collapsible="icon" variant="floating">
@@ -168,7 +169,7 @@ function ServosItem({ onConnect }: { onConnect: () => void }) {
   const { status, servos, selected, select, discover } = useSession();
   const navigate = useNavigate();
   function open(servo: Servo) {
-    void select(servo.id);
+    select(servo.id);
     void navigate({ to: "/servo", search: true });
   }
   return (

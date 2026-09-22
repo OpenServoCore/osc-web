@@ -11,3 +11,7 @@ export function hex16(n: number): string {
 export function formatBaud(rate: BaudRate): string {
   return `${Number(rate.slice(1)) / 1_000_000} M`;
 }
+
+export function hexAddr(addr: number): string {
+  return `0x${addr.toString(16).padStart(3, "0")}`;
+}

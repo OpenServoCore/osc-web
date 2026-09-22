@@ -1,8 +1,10 @@
 export type Theme = "light" | "dark" | "system";
 export type Pane = "open" | "collapsed";
+export type Units = "real" | "raw";
 
 export const THEME_KEY = "osc-theme";
 export const PANE_KEY = "osc-pane";
+export const UNITS_KEY = "osc-units";
 
 export interface StorageLike {
   getItem(key: string): string | null;
@@ -16,6 +18,7 @@ export interface ThemeRoot {
 
 const themes: readonly Theme[] = ["light", "dark", "system"];
 const panes: readonly Pane[] = ["open", "collapsed"];
+const units: readonly Units[] = ["real", "raw"];
 
 export function isTheme(value: string): value is Theme {
   return themes.some((t) => t === value);
@@ -37,6 +40,19 @@ export function readPane(storage: StorageLike): Pane {
 
 export function writePane(storage: StorageLike, pane: Pane): void {
   storage.setItem(PANE_KEY, pane);
+}
+
+export function isUnits(value: string): value is Units {
+  return units.some((u) => u === value);
+}
+
+export function readUnits(storage: StorageLike): Units {
+  const value = storage.getItem(UNITS_KEY);
+  return value !== null && isUnits(value) ? value : "real";
+}
+
+export function writeUnits(storage: StorageLike, value: Units): void {
+  storage.setItem(UNITS_KEY, value);
 }
 
 export function applyTheme(root: ThemeRoot, theme: Theme): void {

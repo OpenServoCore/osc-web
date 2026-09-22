@@ -4,9 +4,12 @@ import {
   PANE_KEY,
   readPane,
   readTheme,
+  readUnits,
   THEME_KEY,
+  UNITS_KEY,
   writePane,
   writeTheme,
+  writeUnits,
   type StorageLike,
 } from "./prefs";
 
@@ -57,4 +60,17 @@ test("applyTheme sets data-theme for light and dark and removes it for system", 
   expect(attrs.get("data-theme")).toBe("light");
   applyTheme(root, "system");
   expect(attrs.has("data-theme")).toBe(false);
+});
+
+test("units default to real and reject unknown values", () => {
+  expect(readUnits(stub())).toBe("real");
+  expect(readUnits(stub({ [UNITS_KEY]: "raw" }))).toBe("raw");
+  expect(readUnits(stub({ [UNITS_KEY]: "si" }))).toBe("real");
+});
+
+test("writeUnits round-trips through the storage", () => {
+  const s = stub();
+  writeUnits(s, "raw");
+  expect(s.map.get(UNITS_KEY)).toBe("raw");
+  expect(readUnits(s)).toBe("raw");
 });

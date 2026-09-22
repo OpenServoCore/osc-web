@@ -2,11 +2,14 @@ import { useSyncExternalStore } from "react";
 import {
   readPane,
   readTheme,
+  readUnits,
   writePane,
   writeTheme,
+  writeUnits,
   type Pane,
   type StorageLike,
   type Theme,
+  type Units,
 } from "./prefs";
 
 const listeners = new Set<() => void>();
@@ -43,4 +46,8 @@ export function useThemePref(): [Theme, (theme: Theme) => void] {
 
 export function usePanePref(): [Pane, (pane: Pane) => void] {
   return usePref(readPane, writePane, "open");
+}
+
+export function useUnitsPref(): [Units, (units: Units) => void] {
+  return usePref(readUnits, writeUnits, "real");
 }

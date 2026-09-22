@@ -1,4 +1,4 @@
-import { unpackVersion, type BaudRate, type Rails } from "@openservocore/client";
+import { unpackVersion, type Rails } from "@openservocore/client";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { formatBaud, formatVersion, hex16 } from "../lib/format";
@@ -9,30 +9,28 @@ export const Route = createFileRoute("/")({ component: ConnectPage });
 
 const cell = "border-b border-border px-3 py-1 text-left";
 
-interface BusStatus {
-  rails: Rails;
-  baud: BaudRate | undefined;
-}
-
 function ConnectPage() {
-  const { client, servos, selected, connect, disconnect, discover, select } = useSession();
+  const session = useSession();
+  const { status, client, baud, servos, selected, connect, disconnect, select } = session;
   const [error, setError] = useState<string>();
-  const [bus, setBus] = useState<BusStatus>();
+  const [rails, setRails] = useState<Rails>();
 
+  // The adapter takes one command at a time: wait for the scan to finish.
   useEffect(() => {
-    if (client === undefined) return;
+    if (client === undefined || status !== "ready") return;
     let live = true;
-    void Promise.all([client.rails(), client.findBusBaud()])
-      .then(([rails, baud]) => {
-        if (live) setBus({ rails, baud });
-      })
-      .catch((e: unknown) => {
+    client.rails().then(
+      (r) => {
+        if (live) setRails(r);
+      },
+      (e: unknown) => {
         if (live) setError(e instanceof Error ? e.message : String(e));
-      });
+      },
+    );
     return () => {
       live = false;
     };
-  }, [client]);
+  }, [client, status]);
 
   async function run(action: () => Promise<void>) {
     setError(undefined);
@@ -47,8 +45,12 @@ function ConnectPage() {
     return (
       <>
         <h1 className="mb-4 text-xl font-semibold">Connect</h1>
-        <Button onClick={() => void run(connect)}>Connect adapter</Button>
-        {error !== undefined && <p className="mb-4 text-danger">{error}</p>}
+        {status === "connecting" ? (
+          <p>Connecting ..</p>
+        ) : (
+          <Button onClick={() => void connect()}>Connect adapter</Button>
+        )}
+        {session.error !== undefined && <p className="mt-4 text-danger">{session.error}</p>}
       </>
     );
   }
@@ -64,17 +66,14 @@ function ConnectPage() {
         <dd>{link.ticksPerUs}</dd>
         <dt>Rails</dt>
         <dd>
-          {bus === undefined
+          {rails === undefined
             ? "..."
-            : `3V3 ${bus.rails.v3v3 ? "on" : "off"}, 5V ${bus.rails.v5 ? "on" : "off"}`}
+            : `3V3 ${rails.v3v3 ? "on" : "off"}, 5V ${rails.v5 ? "on" : "off"}`}
         </dd>
         <dt>Bus baud</dt>
-        <dd>
-          {bus === undefined ? "..." : bus.baud === undefined ? "no bus" : formatBaud(bus.baud)}
-        </dd>
+        <dd>{status !== "ready" ? "..." : baud === undefined ? "no bus" : formatBaud(baud)}</dd>
       </dl>
       <p className="mb-4">
-        <Button onClick={() => void run(discover)}>Discover</Button>{" "}
         <Button variant="outline" onClick={() => void run(disconnect)}>
           Disconnect
         </Button>

@@ -1,10 +1,12 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
+import { UnsupportedBrowser } from "@/components/unsupported-browser";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { applyTheme } from "@/lib/prefs";
 import { SessionProvider } from "@/lib/session";
+import { usbSupported } from "@/lib/support";
 import { usePanePref, useThemePref } from "@/lib/use-pref";
 import appCss from "../styles/app.css?url";
 
@@ -20,14 +22,29 @@ export const Route = createRootRoute({
   component: RootComponent,
 });
 
+const never = () => () => undefined;
+
 function RootComponent() {
+  // The prerendered shell assumes support; the client corrects after hydration.
+  const supported = useSyncExternalStore(
+    never,
+    () => usbSupported(navigator, location.search),
+    () => true,
+  );
   return (
     <RootDocument>
-      <SessionProvider>
-        <TooltipProvider>
-          <AppShell />
-        </TooltipProvider>
-      </SessionProvider>
+      {supported ? (
+        <SessionProvider>
+          <TooltipProvider>
+            <AppShell />
+          </TooltipProvider>
+          <div className="fixed inset-0 z-50 hidden items-center justify-center bg-bg max-lg:flex">
+            Use a larger window
+          </div>
+        </SessionProvider>
+      ) : (
+        <UnsupportedBrowser />
+      )}
     </RootDocument>
   );
 }

@@ -7,7 +7,6 @@ const UID_2 = "30634f42dde2095340c8d84f67f28244";
 
 test("a simulated fleet of two discovers as ids 1 and 2", async ({ page }) => {
   await gotoSim(page, [1, 2]);
-  await page.getByRole("button", { name: "Discover" }).click();
 
   const rows = page.getByRole("row").filter({ has: page.getByRole("radio") });
   await expect(rows).toHaveCount(2);

@@ -1,3 +1,4 @@
+import type { BaudRate } from "@openservocore/client";
 import { Link, useNavigate } from "@tanstack/react-router";
 import {
   Activity,
@@ -36,15 +37,17 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { formatBaud } from "@/lib/format";
 import { isTheme } from "@/lib/prefs";
-import { useSession, type Servo } from "@/lib/session";
+import { useSession, type Servo, type Status } from "@/lib/session";
 import { useThemePref } from "@/lib/use-pref";
 
 const nav = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
-  { to: "/servo", label: "Servo", icon: Wrench, exact: false },
-  { to: "/table", label: "Control table", icon: Table, exact: false },
-  { to: "/live", label: "Live", icon: Activity, exact: false },
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, exact: true, gated: false },
+  { to: "/servo", label: "Servo", icon: Wrench, exact: false, gated: true },
+  { to: "/table", label: "Control table", icon: Table, exact: false, gated: true },
+  { to: "/live", label: "Live", icon: Activity, exact: false, gated: true },
 ] as const;
 
 export function AppSidebar() {
@@ -61,16 +64,7 @@ export function AppSidebar() {
       <SidebarContent>
         <SidebarGroup>
           <SidebarMenu>
-            {nav.map(({ to, label, icon: Icon, exact }) => (
-              <SidebarMenuItem key={to}>
-                <SidebarMenuButton asChild tooltip={label}>
-                  <Link to={to} activeOptions={{ exact }} activeProps={{ "data-active": true }}>
-                    <Icon />
-                    <span>{label}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
+            <NavItems />
           </SidebarMenu>
         </SidebarGroup>
         <SidebarGroup>
@@ -90,8 +84,62 @@ export function AppSidebar() {
   );
 }
 
+function NavItems() {
+  const { status, selected } = useSession();
+  const gate =
+    status !== "ready"
+      ? "Connect the adapter first"
+      : selected === undefined
+        ? "Pick a servo"
+        : undefined;
+  return nav.map(({ to, label, icon: Icon, exact, gated }) => {
+    const reason = gated ? gate : undefined;
+    const item = (
+      <SidebarMenuButton asChild tooltip={reason === undefined ? label : undefined}>
+        <Link
+          to={to}
+          disabled={reason !== undefined}
+          activeOptions={{ exact }}
+          activeProps={{ "data-active": true }}
+        >
+          <Icon />
+          <span>{label}</span>
+        </Link>
+      </SidebarMenuButton>
+    );
+    return (
+      <SidebarMenuItem key={to}>
+        {reason === undefined ? (
+          item
+        ) : (
+          // The disabled button drops pointer events, so the wrapper hosts the tooltip.
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div>{item}</div>
+            </TooltipTrigger>
+            <TooltipContent side="right">{reason}</TooltipContent>
+          </Tooltip>
+        )}
+      </SidebarMenuItem>
+    );
+  });
+}
+
+function servosEmptyText(status: Status): string {
+  switch (status) {
+    case "connecting":
+    case "scanning":
+      return "Looking for servos ..";
+    case "ready":
+      return "No servos found";
+    case "disconnected":
+    case "error":
+      return "Connect the adapter to see servos";
+  }
+}
+
 function ServosItem() {
-  const { client, servos, selected, select, discover } = useSession();
+  const { status, servos, selected, select, discover } = useSession();
   const navigate = useNavigate();
   function open(servo: Servo) {
     void select(servo.id);
@@ -109,47 +157,53 @@ function ServosItem() {
         </CollapsibleTrigger>
         <CollapsibleContent>
           <SidebarMenuSub>
-            {servos.map((servo) => (
-              <SidebarMenuSubItem key={servo.uid}>
-                <SidebarMenuSubButton asChild isActive={selected === servo.id}>
-                  <button
-                    type="button"
-                    className="w-full"
-                    onClick={() => {
-                      open(servo);
-                    }}
-                  >
-                    <Cog />
-                    <span>ID {servo.id}</span>
-                    <span className="ml-auto flex shrink-0 gap-1">
-                      {servo.fault !== undefined && (
-                        <Badge variant="destructive">
-                          <CircleAlert />
-                          fault
-                        </Badge>
-                      )}
-                      {servo.unsaved === true && (
-                        <Badge className="bg-warning-soft text-warning">
-                          <Pencil />
-                          unsaved
-                        </Badge>
-                      )}
-                      {servo.calibrated === false && (
-                        <Badge variant="outline" className="border-dashed text-text-3">
-                          raw
-                        </Badge>
-                      )}
-                    </span>
-                  </button>
-                </SidebarMenuSubButton>
+            {(status !== "ready" || servos.length === 0) && (
+              <SidebarMenuSubItem className="px-2 text-sm text-text-3">
+                {servosEmptyText(status)}
               </SidebarMenuSubItem>
-            ))}
+            )}
+            {status === "ready" &&
+              servos.map((servo) => (
+                <SidebarMenuSubItem key={servo.uid}>
+                  <SidebarMenuSubButton asChild isActive={selected === servo.id}>
+                    <button
+                      type="button"
+                      className="w-full"
+                      onClick={() => {
+                        open(servo);
+                      }}
+                    >
+                      <Cog />
+                      <span>ID {servo.id}</span>
+                      <span className="ml-auto flex shrink-0 gap-1">
+                        {servo.fault !== undefined && (
+                          <Badge variant="destructive">
+                            <CircleAlert />
+                            fault
+                          </Badge>
+                        )}
+                        {servo.unsaved === true && (
+                          <Badge className="bg-warning-soft text-warning">
+                            <Pencil />
+                            unsaved
+                          </Badge>
+                        )}
+                        {servo.calibrated === false && (
+                          <Badge variant="outline" className="border-dashed text-text-3">
+                            raw
+                          </Badge>
+                        )}
+                      </span>
+                    </button>
+                  </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+              ))}
             <SidebarMenuSubItem>
               <SidebarMenuSubButton asChild>
                 <button
                   type="button"
                   className="w-full"
-                  disabled={client === undefined}
+                  disabled={status !== "ready"}
                   onClick={() => void discover()}
                 >
                   <RefreshCw />
@@ -165,19 +219,34 @@ function ServosItem() {
 }
 
 function ConnectionItem() {
-  const { client } = useSession();
+  const { status, baud } = useSession();
+  const text = connectionText(status, baud);
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton tooltip="Connection">
+      <SidebarMenuButton tooltip={text}>
         <Plug />
-        <span>Connection</span>
+        <span>{text}</span>
         <span
           className="ml-auto size-2 shrink-0 rounded-full bg-text-3 data-[connected=true]:bg-success"
-          data-connected={client !== undefined}
+          data-connected={status === "ready"}
         />
       </SidebarMenuButton>
     </SidebarMenuItem>
   );
+}
+
+function connectionText(status: Status, baud: BaudRate | undefined): string {
+  switch (status) {
+    case "disconnected":
+    case "error":
+      return "Not connected";
+    case "connecting":
+      return "Connecting ..";
+    case "scanning":
+      return "Looking for servos ..";
+    case "ready":
+      return baud === undefined ? "Connected" : `Connected at ${formatBaud(baud)}`;
+  }
 }
 
 function SettingsItem() {

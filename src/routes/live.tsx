@@ -4,11 +4,11 @@ import { useSession } from "../lib/session";
 export const Route = createFileRoute("/live")({ component: LivePage });
 
 function LivePage() {
-  const { client } = useSession();
+  const { status } = useSession();
   return (
     <>
       <h1 className="mb-4 text-xl font-semibold">Live</h1>
-      {client === undefined && <p>Connect first.</p>}
+      {status !== "ready" && <p>Connect first.</p>}
     </>
   );
 }

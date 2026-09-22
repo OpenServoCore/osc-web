@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const port = 5179;
+// Parallel worktrees each take their own dev server: PW_PORT=5183 npm run test:e2e
+const port = Number(process.env.PW_PORT ?? 5179);
 
 export default defineConfig({
   testDir: "tests/e2e",

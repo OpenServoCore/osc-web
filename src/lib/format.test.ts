@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { formatBaud, formatVersion, hex16 } from "./format";
+import { formatBaud, formatVersion, hex16, hexAddr } from "./format";
 
 test("formatVersion joins major.minor.patch", () => {
   expect(formatVersion([1, 2, 3])).toBe("1.2.3");
@@ -17,4 +17,9 @@ test("formatBaud renders megabaud", () => {
   expect(formatBaud("b1000000")).toBe("1 M");
   expect(formatBaud("b2000000")).toBe("2 M");
   expect(formatBaud("b3000000")).toBe("3 M");
+});
+
+test("hexAddr zero-pads to three digits", () => {
+  expect(hexAddr(0x20)).toBe("0x020");
+  expect(hexAddr(0x3ff)).toBe("0x3ff");
 });

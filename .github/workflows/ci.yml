@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    name: typecheck + lint + test + build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: osc-web
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: osc-web
+      - uses: actions/checkout@v4
+        with:
+          repository: OpenServoCore/open-servo-core
+          path: open-servo-core
+      - name: Install Rust (nightly + wasm32)
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: open-servo-core/client
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: osc-web/.node-version
+          cache: npm
+          cache-dependency-path: osc-web/package-lock.json
+      - name: npm run wasm
+        run: npm run wasm
+      - name: npm ci
+        run: npm ci
+      - name: typecheck
+        run: npm run typecheck
+      - name: lint
+        run: npm run lint
+      - name: format:check
+        run: npm run format:check
+      - name: test
+        run: npm test
+      - name: build
+        run: npm run build

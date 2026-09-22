@@ -6,6 +6,10 @@ import { fetchDescriptor } from "./descriptor";
 /** `ping` is undefined only when the id was answered by more than one node. */
 export interface Servo extends Found {
   ping: Ping | undefined;
+  /** Unset until the session reads them from the servo. */
+  fault?: string;
+  unsaved?: boolean;
+  calibrated?: boolean;
 }
 
 export interface Session {

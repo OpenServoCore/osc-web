@@ -48,3 +48,13 @@ jobs:
         run: npm test
       - name: build
         run: npm run build
+      - name: install chromium
+        run: npx playwright install --with-deps chromium
+      - name: test:e2e
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: osc-web/playwright-report
+          retention-days: 7

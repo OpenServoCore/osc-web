@@ -2,5 +2,7 @@ node_modules/
 dist/
 .output/
 coverage/
+playwright-report/
+test-results/
 package-lock.json
 src/routeTree.gen.ts

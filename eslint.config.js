@@ -5,7 +5,14 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import tseslint from "typescript-eslint";
 
 export default defineConfig([
-  globalIgnores(["dist/", ".output/", "coverage/", "src/routeTree.gen.ts"]),
+  globalIgnores([
+    "dist/",
+    ".output/",
+    "coverage/",
+    "playwright-report/",
+    "test-results/",
+    "src/routeTree.gen.ts",
+  ]),
   js.configs.recommended,
   {
     files: ["**/*.{ts,tsx}"],

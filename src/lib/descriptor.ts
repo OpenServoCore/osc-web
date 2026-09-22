@@ -3,7 +3,11 @@ import { hex16 } from "./format";
 
 const MODEL_NAMES: ReadonlyMap<number, string> = new Map([[0x0101, "osc-servo"]]);
 
-const BASE = "https://raw.githubusercontent.com/OpenServoCore/open-servo-core/main/descriptors";
+const BASE =
+  import.meta.env.VITE_DESCRIPTOR_BASE ??
+  (import.meta.env.DEV
+    ? "/descriptors"
+    : "https://raw.githubusercontent.com/OpenServoCore/open-servo-core/main/descriptors");
 
 export function modelName(model: number): string | undefined {
   return MODEL_NAMES.get(model);

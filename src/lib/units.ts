@@ -114,15 +114,18 @@ const CHECKS: readonly Check[] = [
   },
 ];
 
+/** Every failing check's reason, in check order. */
+export function calibrationIssues(cal: Calibration): string[] {
+  return CHECKS.filter((check) => !check.ok(cal)).map((check) => check.reason);
+}
+
 /**
  * Derived calibration status: the servo keeps no calibrated flag, so the five
  * numbers are judged on their own. The first failing check names the issue.
  */
 export function calibrationStatus(cal: Calibration): CalibrationStatus {
-  for (const check of CHECKS) {
-    if (!check.ok(cal)) return { valid: false, reason: check.reason };
-  }
-  return { valid: true };
+  const [reason] = calibrationIssues(cal);
+  return reason === undefined ? { valid: true } : { valid: false, reason };
 }
 
 function angleSpanCdeg(cal: Calibration): number {

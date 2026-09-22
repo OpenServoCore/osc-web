@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Cog } from "lucide-react";
 import { AboutCard } from "@/components/about-card";
+import { CalibrationCard } from "@/components/calibration-card";
 import { HealthCard } from "@/components/health-card";
 import { useSession } from "@/lib/session";
 
@@ -19,8 +20,9 @@ function ServoPage() {
         ID {servo.id}
       </h1>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(22rem,1fr))] gap-4">
-        <AboutCard key={`about-${servo.id}`} client={client} id={servo.id} uid={servo.uid} />
-        <HealthCard key={`health-${servo.id}`} client={client} id={servo.id} />
+        <AboutCard key={`about-${servo.id}`} id={servo.id} uid={servo.uid} />
+        <HealthCard key={`health-${servo.id}`} id={servo.id} />
+        <CalibrationCard key={`calibration-${servo.id}`} id={servo.id} uid={servo.uid} />
       </div>
     </>
   );

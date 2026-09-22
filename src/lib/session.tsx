@@ -60,6 +60,8 @@ export interface Session {
    * nothing overlaps and the client's "busy" never surfaces.
    */
   run: <T>(fn: (client: OscClient) => Promise<T>) => Promise<T>;
+  /** Re-reads a servo's CALIB constants on the next poll, after a calibration write. */
+  refreshConstants: (uid: string) => void;
 }
 
 const SessionContext = createContext<Session | undefined>(undefined);
@@ -122,6 +124,7 @@ class Controller {
   private snap = initial;
   private readonly queue = new CommandQueue<OscClient>(() => this.snap.client);
   private pollGen = 0;
+  private readonly stale = new Set<string>();
   private readonly fetching = new Set<string>();
   private readonly listeners = new Set<() => void>();
 
@@ -143,8 +146,11 @@ class Controller {
     this.set({ state: reduce(this.snap.state, event) });
   }
 
-  run<T>(fn: (client: OscClient) => Promise<T>): Promise<T> {
-    return this.queue.run(fn);
+  // Stable so a card's effect can depend on it.
+  readonly run = <T,>(fn: (client: OscClient) => Promise<T>): Promise<T> => this.queue.run(fn);
+
+  refreshConstants(uid: string): void {
+    this.stale.add(uid);
   }
 
   layoutFor(servo: Servo): Layout | undefined {
@@ -260,7 +266,9 @@ class Controller {
       if (layout === undefined) continue;
       const values = new Map(this.snap.values);
       try {
-        const prior = this.snap.values.get(servo.uid)?.constants;
+        const prior = this.stale.delete(servo.uid)
+          ? undefined
+          : this.snap.values.get(servo.uid)?.constants;
         values.set(servo.uid, await readCard(client, servo.id, layout.plan, prior));
       } catch {
         values.delete(servo.uid);
@@ -356,7 +364,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     select: (id) => {
       ctl.select(id);
     },
-    run: (fn) => ctl.run(fn),
+    run: ctl.run,
+    refreshConstants: (uid) => {
+      ctl.refreshConstants(uid);
+    },
   };
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

@@ -11,6 +11,7 @@ import {
   toRaw,
   type EditValue,
   type FieldKind,
+  type NumberDisplay,
 } from "@/lib/edit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,13 +31,29 @@ interface ValueEditorProps {
   field: Field;
   value: EditValue;
   onApply: (raw: EditValue) => Promise<void>;
+  display?: NumberDisplay;
+  /** The page's own rule over a parsed edit; its message keeps Apply disabled. */
+  validate?: (raw: EditValue) => string | undefined;
   disabled?: string;
 }
 
 const valueClass = "rounded-sm px-1 font-mono tabular-nums";
 
-export function ValueEditor({ field, value, onApply, disabled }: ValueEditorProps) {
-  const kind = fieldKind(field);
+function rawOf(kind: FieldKind, value: EditValue): EditValue {
+  return kind.kind === "number" && typeof value === "number" ? toRaw(kind, value) : value;
+}
+
+export function ValueEditor({
+  field,
+  value,
+  onApply,
+  display,
+  validate,
+  disabled,
+}: ValueEditorProps) {
+  const base = fieldKind(field);
+  const kind: FieldKind =
+    base.kind === "number" && display !== undefined ? { ...base, ...display } : base;
   const label = formatValue(kind, value);
   const inputId = useId();
   const [open, setOpen] = useState(false);
@@ -58,7 +75,8 @@ export function ValueEditor({ field, value, onApply, disabled }: ValueEditorProp
   }
 
   const parsed = parseInput(kind, text);
-  const message = parsed.ok ? error : parsed.reason;
+  const issue = parsed.ok ? validate?.(rawOf(kind, parsed.value)) : parsed.reason;
+  const message = issue ?? error;
 
   function edit(next: string) {
     setText(next);
@@ -74,14 +92,10 @@ export function ValueEditor({ field, value, onApply, disabled }: ValueEditorProp
   }
 
   async function apply() {
-    if (!parsed.ok || pending) return;
+    if (!parsed.ok || issue !== undefined || pending) return;
     setPending(true);
     try {
-      const raw =
-        kind.kind === "number" && typeof parsed.value === "number"
-          ? toRaw(kind, parsed.value)
-          : parsed.value;
-      await onApply(raw);
+      await onApply(rawOf(kind, parsed.value));
       setOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -115,7 +129,13 @@ export function ValueEditor({ field, value, onApply, disabled }: ValueEditorProp
           {field.name}
           <span>{hexAddr(field.addr)}</span>
         </Label>
-        <Control kind={kind} id={inputId} text={text} onChange={edit} invalid={!parsed.ok} />
+        <Control
+          kind={kind}
+          id={inputId}
+          text={text}
+          onChange={edit}
+          invalid={issue !== undefined}
+        />
         {kind.kind === "number" && rangeHint(kind) !== undefined && (
           <p className="text-xs text-muted-foreground">{rangeHint(kind)}</p>
         )}
@@ -134,7 +154,7 @@ export function ValueEditor({ field, value, onApply, disabled }: ValueEditorProp
           <Button
             type="button"
             size="sm"
-            disabled={!parsed.ok || pending}
+            disabled={issue !== undefined || pending}
             onClick={() => void apply()}
           >
             {pending && <LoaderCircle className="animate-spin" />}

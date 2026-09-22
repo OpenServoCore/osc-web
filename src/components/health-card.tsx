@@ -1,12 +1,12 @@
-import type { Health, OscClient } from "@openservocore/client";
+import type { Health } from "@openservocore/client";
 import { CircleAlert, CircleCheck, HeartPulse, TriangleAlert } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { queued } from "@/lib/command";
 import { countersLine, statements, trimLine, type Level } from "@/lib/health";
+import { useSession } from "@/lib/session";
 
 const POLL_MS = 1000;
 
@@ -17,7 +17,8 @@ const tone: Record<Level, string> = {
   ok: "text-success",
 };
 
-export function HealthCard({ client, id }: { client: OscClient; id: number }) {
+export function HealthCard({ id }: { id: number }) {
+  const { run } = useSession();
   const [health, setHealth] = useState<Health>();
   const [error, setError] = useState<string>();
   const [clearing, setClearing] = useState(false);
@@ -31,7 +32,7 @@ export function HealthCard({ client, id }: { client: OscClient; id: number }) {
       if (busy || !live) return;
       busy = true;
       try {
-        const read = await queued(() => client.health(id));
+        const read = await run((c) => c.health(id));
         if (live) {
           setHealth(read);
           setError(undefined);
@@ -48,13 +49,13 @@ export function HealthCard({ client, id }: { client: OscClient; id: number }) {
       live = false;
       window.clearInterval(timer);
     };
-  }, [client, id]);
+  }, [run, id]);
 
   async function clear() {
     setClearing(true);
     try {
-      await queued(() => client.clearCounters(id));
-      setHealth(await queued(() => client.health(id)));
+      await run((c) => c.clearCounters(id));
+      setHealth(await run((c) => c.health(id)));
       setError(undefined);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

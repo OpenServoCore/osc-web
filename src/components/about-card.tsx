@@ -1,12 +1,12 @@
-import { unpackVersion, type Identity, type OscClient } from "@openservocore/client";
+import { unpackVersion, type Identity } from "@openservocore/client";
 import { Cog } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { queued } from "@/lib/command";
 import { modelName } from "@/lib/descriptor";
 import { formatVersion, hex16 } from "@/lib/format";
+import { useSession } from "@/lib/session";
 
 /** `capability_flags` bit order (protocol sec 5.4). */
 const CAPABILITIES: readonly string[] = ["Motor encoder"];
@@ -29,7 +29,8 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-export function AboutCard({ client, id, uid }: { client: OscClient; id: number; uid: string }) {
+export function AboutCard({ id, uid }: { id: number; uid: string }) {
+  const { run } = useSession();
   const [identity, setIdentity] = useState<Identity>();
   const [error, setError] = useState<string>();
 
@@ -37,7 +38,7 @@ export function AboutCard({ client, id, uid }: { client: OscClient; id: number; 
     let live = true;
     void (async () => {
       try {
-        const read = await queued(() => client.identity(id));
+        const read = await run((c) => c.identity(id));
         if (live) setIdentity(read);
       } catch (e) {
         if (live) setError(e instanceof Error ? e.message : String(e));
@@ -46,7 +47,7 @@ export function AboutCard({ client, id, uid }: { client: OscClient; id: number; 
     return () => {
       live = false;
     };
-  }, [client, id]);
+  }, [run, id]);
 
   const name = identity === undefined ? undefined : modelName(identity.model);
   return (

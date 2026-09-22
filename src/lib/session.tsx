@@ -1,11 +1,6 @@
-import init, {
-  OscClient,
-  requestDevice,
-  type Descriptor,
-  type Found,
-  type Ping,
-} from "@openservocore/client";
-import { createContext, useContext, useState, type ReactNode } from "react";
+import type { Descriptor, Found, OscClient, Ping } from "@openservocore/client";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { openClient, simRequested } from "./backend";
 import { fetchDescriptor } from "./descriptor";
 
 /** `ping` is undefined only when the id was answered by more than one node. */
@@ -15,6 +10,7 @@ export interface Servo extends Found {
 
 export interface Session {
   client: OscClient | undefined;
+  simulated: boolean;
   servos: Servo[];
   selected: number | undefined;
   descriptor: Descriptor | undefined;
@@ -26,8 +22,6 @@ export interface Session {
 }
 
 const SessionContext = createContext<Session | undefined>(undefined);
-
-let wasmReady: Promise<unknown> | undefined;
 
 async function pingAll(client: OscClient, found: Found[]): Promise<Servo[]> {
   const count = new Map<number, number>();
@@ -42,6 +36,7 @@ async function pingAll(client: OscClient, found: Found[]): Promise<Servo[]> {
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [client, setClient] = useState<OscClient>();
+  const [simulated, setSimulated] = useState(false);
   const [servos, setServos] = useState<Servo[]>([]);
   const [selected, setSelected] = useState<number>();
   const [descriptor, setDescriptor] = useState<Descriptor>();
@@ -54,15 +49,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }
 
   async function connect() {
-    wasmReady ??= init();
-    await wasmReady;
-    const device = await requestDevice();
-    setClient(await OscClient.connect(device));
+    setClient(await openClient());
+    setSimulated(simRequested());
   }
+
+  useEffect(() => {
+    if (!simRequested()) return;
+    void openClient().then((c) => {
+      setClient(c);
+      setSimulated(true);
+    });
+  }, []);
 
   async function disconnect() {
     if (client === undefined) return;
     setClient(undefined);
+    setSimulated(false);
     setServos([]);
     setSelected(undefined);
     clearDescriptor();
@@ -89,6 +91,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const value: Session = {
     client,
+    simulated,
     servos,
     selected,
     descriptor,

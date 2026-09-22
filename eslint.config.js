@@ -52,7 +52,7 @@ export default defineConfig([
   },
   {
     // Vendored shadcn registry files: keep them diffable against upstream.
-    files: ["src/components/ui/**", "src/hooks/use-mobile.ts"],
+    files: ["src/components/ui/**"],
     rules: {
       "@typescript-eslint/consistent-type-definitions": "off",
       "@typescript-eslint/no-confusing-void-expression": "off",

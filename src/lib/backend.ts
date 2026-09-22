@@ -1,4 +1,4 @@
-import init, { OscClient, requestDevice } from "@openservocore/client";
+import init, { OscClient, pid, requestDevice, vid } from "@openservocore/client";
 
 const ID_MIN = 1;
 const ID_MAX = 0xf9;
@@ -21,6 +21,15 @@ export function simRequested(): boolean {
   return parseSimIds(window.location.search) !== undefined;
 }
 
+/** The first device already permitted for this origin that is an osc-adapter. */
+export function permittedAdapter<T extends { vendorId: number; productId: number }>(
+  devices: readonly T[],
+  vendor: number,
+  product: number,
+): T | undefined {
+  return devices.find((d) => d.vendorId === vendor && d.productId === product);
+}
+
 let wasmReady: Promise<unknown> | undefined;
 
 export async function openClient(): Promise<OscClient> {
@@ -28,5 +37,6 @@ export async function openClient(): Promise<OscClient> {
   await wasmReady;
   const ids = parseSimIds(window.location.search);
   if (ids !== undefined) return OscClient.fake(ids);
-  return OscClient.connect(await requestDevice());
+  const device = permittedAdapter(await navigator.usb.getDevices(), vid(), pid());
+  return OscClient.connect(device ?? (await requestDevice()));
 }

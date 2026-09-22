@@ -1,7 +1,13 @@
-import { createRootRoute, HeadContent, Link, Outlet, Scripts } from "@tanstack/react-router";
-import type { ReactNode } from "react";
-import { SessionProvider, useSession } from "../lib/session";
+import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
+import { useEffect, useSyncExternalStore, type ReactNode } from "react";
+import { AppSidebar } from "@/components/app-sidebar";
+import { UnsupportedBrowser } from "@/components/unsupported-browser";
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { applyTheme } from "@/lib/prefs";
+import { SessionProvider } from "@/lib/session";
+import { usbSupported } from "@/lib/support";
+import { usePanePref, useThemePref } from "@/lib/use-pref";
 import appCss from "../styles/app.css?url";
 
 export const Route = createRootRoute({
@@ -16,47 +22,58 @@ export const Route = createRootRoute({
   component: RootComponent,
 });
 
+const never = () => () => undefined;
+
 function RootComponent() {
+  // The prerendered shell assumes support; the client corrects after hydration.
+  const supported = useSyncExternalStore(
+    never,
+    () => usbSupported(navigator, location.search),
+    () => true,
+  );
   return (
     <RootDocument>
-      <SessionProvider>
-        <TooltipProvider>
-          <Nav />
-          <main className="p-6">
-            <Outlet />
-          </main>
-        </TooltipProvider>
-      </SessionProvider>
+      {supported ? (
+        <SessionProvider>
+          <TooltipProvider>
+            <AppShell />
+          </TooltipProvider>
+          <div className="fixed inset-0 z-50 hidden items-center justify-center bg-bg max-lg:flex">
+            Use a larger window
+          </div>
+        </SessionProvider>
+      ) : (
+        <UnsupportedBrowser />
+      )}
     </RootDocument>
   );
 }
 
-const navLink = "text-text-2 data-[status=active]:font-semibold data-[status=active]:text-text";
+function AppShell() {
+  const [theme] = useThemePref();
+  const [pane, setPane] = usePanePref();
 
-function Nav() {
-  const { client } = useSession();
-  const connected = client !== undefined;
+  // Set after mount: a data-theme written before hydration is dropped when
+  // TanStack Start hydrates <html>.
+  useEffect(() => {
+    applyTheme(document.documentElement, theme);
+  }, [theme]);
+
   return (
-    <nav className="flex items-center gap-4 border-b border-border bg-surface px-6 py-3">
-      <Link to="/" className={navLink}>
-        Connect
-      </Link>
-      <Link to="/servo" className={navLink}>
-        Servo
-      </Link>
-      <Link to="/table" className={navLink}>
-        Control Table
-      </Link>
-      <Link to="/live" className={navLink}>
-        Live
-      </Link>
-      <span
-        className="ml-auto rounded-sm border border-border px-2 py-1 text-xs text-text-3 data-[connected=true]:border-success data-[connected=true]:text-success"
-        data-connected={connected}
-      >
-        {connected ? "connected" : "disconnected"}
-      </span>
-    </nav>
+    <SidebarProvider
+      open={pane === "open"}
+      onOpenChange={(open) => {
+        setPane(open ? "open" : "collapsed");
+      }}
+    >
+      <AppSidebar />
+      <SidebarInset className="px-6 py-4">
+        <SidebarTrigger className="-ml-2" />
+        <div className="mx-auto w-full max-w-content-w pt-2">
+          <Outlet />
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
 

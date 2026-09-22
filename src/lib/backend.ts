@@ -1,4 +1,4 @@
-import init, { OscClient, pid, requestDevice, vid } from "@openservocore/client";
+import init, { OscClient, pid, requestDevice, vid, type Track } from "@openservocore/client";
 
 const ID_MIN = 1;
 const ID_MAX = 0xf9;
@@ -36,7 +36,30 @@ export async function openClient(): Promise<OscClient> {
   wasmReady ??= init();
   await wasmReady;
   const ids = parseSimIds(window.location.search);
-  if (ids !== undefined) return OscClient.fake(ids);
+  if (ids !== undefined) {
+    const track = await simTrack();
+    return OscClient.fakeWithTracks(ids.map((id) => ({ id, track })));
+  }
   const device = permittedAdapter(await navigator.usb.getDevices(), vid(), pid());
   return OscClient.connect(device ?? (await requestDevice()));
+}
+
+// Loaded on demand: the recording is for the simulated fleet only and stays
+// out of the bundle a real adapter needs.
+async function simTrack(): Promise<Track> {
+  const { track } = (await import("../../tests/fixtures/stall-24mhz.json")).default;
+  return {
+    pos: Uint16Array.from(track.pos),
+    current: Int16Array.from(track.current),
+    currentTrough: Uint16Array.from(track.currentTrough),
+    dutyQ15: Int16Array.from(track.dutyQ15),
+    vdiff: Int16Array.from(track.vdiff),
+    vbus: Uint16Array.from(track.vbus),
+    currentRaw: Uint16Array.from(track.currentRaw),
+    vmotorA: Uint16Array.from(track.vmotorA),
+    vmotorB: Uint16Array.from(track.vmotorB),
+    vbusRaw: Uint16Array.from(track.vbusRaw),
+    ntcRaw: Uint16Array.from(track.ntcRaw),
+    windowValid: Uint8Array.from(track.windowValid),
+  };
 }

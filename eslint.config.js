@@ -39,6 +39,11 @@ export default defineConfig([
     },
   },
   {
+    // Node tooling scripts, not part of the app bundle.
+    files: ["scripts/**"],
+    languageOptions: { globals: { console: "readonly", process: "readonly" } },
+  },
+  {
     // Vendored shadcn registry files: keep them diffable against upstream.
     files: ["src/components/ui/**", "src/hooks/use-mobile.ts"],
     rules: {

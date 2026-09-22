@@ -1,4 +1,4 @@
-import type { BaudRate, Found, Ping } from "@openservocore/client";
+import type { Alive, BaudRate, Found, Ping, Rails } from "@openservocore/client";
 
 /** `ping` is undefined only when the id was answered by more than one node. */
 export interface Servo extends Found {
@@ -16,14 +16,19 @@ export interface SessionState {
   /** The last failure; set only while `status` is "error". */
   error: string | undefined;
   baud: BaudRate | undefined;
+  rails: Rails | undefined;
   servos: Servo[];
   selected: number | undefined;
+  /** Ids the last speed change lost; kept through its own rescan, cleared by the next. */
+  missing: number[];
 }
 
 export type SessionEvent =
   | { type: "connect" }
   | { type: "scan" }
-  | { type: "found"; servos: Servo[]; baud: BaudRate | undefined }
+  | { type: "migrated"; roster: Alive[] }
+  | { type: "found"; servos: Servo[]; baud: BaudRate | undefined; rails: Rails }
+  | { type: "rails"; rails: Rails }
   | { type: "fail"; error: string }
   | { type: "select"; id: number | undefined }
   | { type: "disconnect" };
@@ -32,8 +37,10 @@ export const idle: SessionState = {
   status: "disconnected",
   error: undefined,
   baud: undefined,
+  rails: undefined,
   servos: [],
   selected: undefined,
+  missing: [],
 };
 
 // Events that do not apply in the current status leave it unchanged, so a
@@ -46,7 +53,11 @@ export function reduce(state: SessionState, event: SessionEvent): SessionState {
         : state;
     case "scan":
       return state.status === "connecting" || state.status === "ready"
-        ? { ...state, status: "scanning" }
+        ? { ...state, status: "scanning", missing: [] }
+        : state;
+    case "migrated":
+      return state.status === "scanning"
+        ? { ...state, missing: event.roster.filter((a) => !a.alive).map((a) => a.id) }
         : state;
     case "found":
       return state.status === "scanning"
@@ -54,12 +65,15 @@ export function reduce(state: SessionState, event: SessionEvent): SessionState {
             ...state,
             status: "ready",
             baud: event.baud,
+            rails: event.rails,
             servos: event.servos,
             selected: event.servos.some((s) => s.id === state.selected)
               ? state.selected
               : undefined,
           }
         : state;
+    case "rails":
+      return state.status === "ready" ? { ...state, rails: event.rails } : state;
     case "fail":
       return state.status === "disconnected" || state.status === "error"
         ? state

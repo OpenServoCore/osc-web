@@ -1,5 +1,6 @@
 import type { BaudRate } from "@openservocore/client";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   Activity,
   ChevronRight,
@@ -18,6 +19,7 @@ import {
   Table,
   Wrench,
 } from "lucide-react";
+import { ConnectionPopover } from "@/components/connection-popover";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -38,6 +40,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { simRequested } from "@/lib/backend";
 import { formatBaud } from "@/lib/format";
 import { isTheme } from "@/lib/prefs";
 import { useSession, type Servo, type Status } from "@/lib/session";
@@ -50,7 +53,18 @@ const nav = [
   { to: "/live", label: "Live", icon: Activity, exact: false, gated: true },
 ] as const;
 
+const never = () => () => undefined;
+
 export function AppSidebar() {
+  // Prerendered closed; after hydration it opens once on a boot that will not
+  // connect on its own.
+  const bootOpen = useSyncExternalStore(
+    never,
+    () => !simRequested(),
+    () => false,
+  );
+  const [open, setOpen] = useState<boolean>();
+  const connectionOpen = open ?? bootOpen;
   return (
     <Sidebar collapsible="icon" variant="floating">
       <SidebarHeader>
@@ -69,13 +83,17 @@ export function AppSidebar() {
         </SidebarGroup>
         <SidebarGroup>
           <SidebarMenu>
-            <ServosItem />
+            <ServosItem
+              onConnect={() => {
+                setOpen(true);
+              }}
+            />
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
-          <ConnectionItem />
+          <ConnectionItem open={connectionOpen} onOpenChange={setOpen} />
           <SettingsItem />
         </SidebarMenu>
       </SidebarFooter>
@@ -98,6 +116,7 @@ function NavItems() {
       <SidebarMenuButton asChild tooltip={reason === undefined ? label : undefined}>
         <Link
           to={to}
+          search={true}
           disabled={reason !== undefined}
           activeOptions={{ exact }}
           activeProps={{ "data-active": true }}
@@ -125,7 +144,7 @@ function NavItems() {
   });
 }
 
-function servosEmptyText(status: Status): string {
+function servosEmpty(status: Status, onConnect: () => void): ReactNode {
   switch (status) {
     case "connecting":
     case "scanning":
@@ -134,16 +153,23 @@ function servosEmptyText(status: Status): string {
       return "No servos found";
     case "disconnected":
     case "error":
-      return "Connect the adapter to see servos";
+      return (
+        <>
+          <button type="button" className="underline underline-offset-4" onClick={onConnect}>
+            Connect the adapter
+          </button>{" "}
+          to see servos
+        </>
+      );
   }
 }
 
-function ServosItem() {
+function ServosItem({ onConnect }: { onConnect: () => void }) {
   const { status, servos, selected, select, discover } = useSession();
   const navigate = useNavigate();
   function open(servo: Servo) {
     void select(servo.id);
-    void navigate({ to: "/servo" });
+    void navigate({ to: "/servo", search: true });
   }
   return (
     <Collapsible defaultOpen className="group/collapsible">
@@ -159,7 +185,7 @@ function ServosItem() {
           <SidebarMenuSub>
             {(status !== "ready" || servos.length === 0) && (
               <SidebarMenuSubItem className="px-2 text-sm text-text-3">
-                {servosEmptyText(status)}
+                {servosEmpty(status, onConnect)}
               </SidebarMenuSubItem>
             )}
             {status === "ready" &&
@@ -218,19 +244,27 @@ function ServosItem() {
   );
 }
 
-function ConnectionItem() {
+function ConnectionItem({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const { status, baud } = useSession();
   const text = connectionText(status, baud);
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton tooltip={text}>
-        <Plug />
-        <span>{text}</span>
-        <span
-          className="ml-auto size-2 shrink-0 rounded-full bg-text-3 data-[connected=true]:bg-success"
-          data-connected={status === "ready"}
-        />
-      </SidebarMenuButton>
+      <ConnectionPopover open={open} onOpenChange={onOpenChange}>
+        <SidebarMenuButton tooltip={text}>
+          <Plug />
+          <span>{text}</span>
+          <span
+            className="ml-auto size-2 shrink-0 rounded-full bg-text-3 data-[connected=true]:bg-success"
+            data-connected={status === "ready"}
+          />
+        </SidebarMenuButton>
+      </ConnectionPopover>
     </SidebarMenuItem>
   );
 }

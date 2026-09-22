@@ -13,7 +13,13 @@ function run(events: SessionEvent[], from: SessionState = idle): SessionState {
   return events.reduce(reduce, from);
 }
 
-const found: SessionEvent = { type: "found", servos: [servo(1), servo(2)], baud: "b1000000" };
+const rails = { v3v3: true, v5: false };
+const found: SessionEvent = {
+  type: "found",
+  servos: [servo(1), servo(2)],
+  baud: "b1000000",
+  rails,
+};
 const ready = run([{ type: "connect" }, { type: "scan" }, found]);
 
 test("connect walks connecting, scanning, ready", () => {
@@ -24,6 +30,7 @@ test("connect walks connecting, scanning, ready", () => {
   const done = reduce(scanning, found);
   expect(done.status).toBe("ready");
   expect(done.baud).toBe("b1000000");
+  expect(done.rails).toBe(rails);
   expect(done.servos.map((s) => s.id)).toEqual([1, 2]);
   expect(done.selected).toBeUndefined();
 });
@@ -46,7 +53,7 @@ test("selection survives a rescan that still lists the id", () => {
   const selected = reduce(ready, { type: "select", id: 2 });
   expect(selected.selected).toBe(2);
   const again = run(
-    [{ type: "scan" }, { type: "found", servos: [servo(2), servo(3)], baud: "b1000000" }],
+    [{ type: "scan" }, { type: "found", servos: [servo(2), servo(3)], baud: "b1000000", rails }],
     selected,
   );
   expect(again.status).toBe("ready");
@@ -56,7 +63,7 @@ test("selection survives a rescan that still lists the id", () => {
 test("selection clears when a rescan loses the id", () => {
   const selected = reduce(ready, { type: "select", id: 1 });
   const again = run(
-    [{ type: "scan" }, { type: "found", servos: [servo(2)], baud: "b1000000" }],
+    [{ type: "scan" }, { type: "found", servos: [servo(2)], baud: "b1000000", rails }],
     selected,
   );
   expect(again.selected).toBeUndefined();
@@ -79,6 +86,7 @@ test("failure enters error from connecting, scanning and ready", () => {
     expect(failed.servos).toEqual([]);
     expect(failed.selected).toBeUndefined();
     expect(failed.baud).toBeUndefined();
+    expect(failed.rails).toBeUndefined();
   }
 });
 
@@ -97,4 +105,30 @@ test("disconnect returns to idle from anywhere", () => {
   for (const from of [ready, reduce(ready, { type: "scan" }), reduce(idle, { type: "connect" })]) {
     expect(reduce(from, { type: "disconnect" })).toBe(idle);
   }
+});
+
+test("rails apply only when ready", () => {
+  const flipped = { v3v3: true, v5: true };
+  expect(reduce(ready, { type: "rails", rails: flipped }).rails).toBe(flipped);
+  const scanning = reduce(ready, { type: "scan" });
+  expect(reduce(scanning, { type: "rails", rails: flipped })).toBe(scanning);
+  expect(reduce(idle, { type: "rails", rails: flipped })).toBe(idle);
+});
+
+test("a speed change records who went missing until the next rescan", () => {
+  const roster = [
+    { id: 1, alive: true },
+    { id: 2, alive: false },
+  ];
+  const changed = run([{ type: "scan" }, { type: "migrated", roster }, found], ready);
+  expect(changed.status).toBe("ready");
+  expect(changed.missing).toEqual([2]);
+  const rescanned = run([{ type: "scan" }, found], changed);
+  expect(rescanned.missing).toEqual([]);
+});
+
+test("migrated applies only while scanning", () => {
+  const roster = [{ id: 1, alive: false }];
+  expect(reduce(ready, { type: "migrated", roster })).toBe(ready);
+  expect(reduce(idle, { type: "migrated", roster })).toBe(idle);
 });

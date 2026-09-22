@@ -1,4 +1,4 @@
-import type { BaudRate, Descriptor, Found, OscClient } from "@openservocore/client";
+import type { BaudRate, Descriptor, Found, OscClient, Rails } from "@openservocore/client";
 import { useNavigate } from "@tanstack/react-router";
 import {
   createContext,
@@ -25,15 +25,20 @@ export interface Session {
   status: Status;
   error: string | undefined;
   baud: BaudRate | undefined;
+  rails: Rails | undefined;
   client: OscClient | undefined;
   simulated: boolean;
   servos: Servo[];
   selected: number | undefined;
+  /** Ids the last speed change lost, per its reunion roster. */
+  missing: number[];
   descriptor: Descriptor | undefined;
   descriptorError: string | undefined;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
   discover: () => Promise<void>;
+  setRails: (patch: Partial<Rails>) => Promise<void>;
+  setBaud: (rate: BaudRate) => Promise<void>;
   select: (id: number | undefined) => Promise<void>;
 }
 
@@ -81,6 +86,7 @@ async function release(client: OscClient): Promise<void> {
 /** Owns the wasm client and its commands; `reduce` owns every state change. */
 class Controller {
   private snap = initial;
+  private railsJob: Promise<unknown> = Promise.resolve();
   private readonly listeners = new Set<() => void>();
 
   readonly subscribe = (listener: () => void): (() => void) => {
@@ -121,13 +127,20 @@ class Controller {
     await this.scan(client);
   }
 
-  private async scan(client: OscClient): Promise<void> {
+  /** With `rate`, migrates the fleet first (servos, then the host, then the reunion sweep). */
+  private async scan(client: OscClient, rate?: BaudRate): Promise<void> {
     this.dispatch({ type: "scan" });
     try {
+      if (rate !== undefined) {
+        const ids = [...new Set(this.snap.state.servos.map((s) => s.id))];
+        const roster = await client.setBaud(ids, rate);
+        this.dispatch({ type: "migrated", roster });
+      }
       const baud = await client.findBusBaud();
       const servos = await pingAll(client, await client.discover());
+      const rails = await client.rails();
       if (this.snap.client !== client) return;
-      this.dispatch({ type: "found", servos, baud });
+      this.dispatch({ type: "found", servos, baud, rails });
       if (this.snap.state.selected === undefined) this.clearDescriptor();
     } catch (e) {
       if (this.snap.client !== client) return;
@@ -142,6 +155,26 @@ class Controller {
     const { client } = this.snap;
     if (client === undefined || this.snap.state.status !== "ready") return;
     await this.scan(client);
+  }
+
+  async setBaud(rate: BaudRate): Promise<void> {
+    const { client } = this.snap;
+    if (client === undefined || this.snap.state.status !== "ready") return;
+    await this.scan(client, rate);
+  }
+
+  // Queued so two quick toggles reach the adapter one at a time, each merged
+  // over the state the previous one acked.
+  async setRails(patch: Partial<Rails>): Promise<void> {
+    const { client } = this.snap;
+    if (client === undefined || this.snap.state.status !== "ready") return;
+    const job = this.railsJob.then(() => {
+      const cur = this.snap.state.rails ?? { v3v3: false, v5: false };
+      return client.setRails(patch.v3v3 ?? cur.v3v3, patch.v5 ?? cur.v5);
+    });
+    this.railsJob = job.catch(() => undefined);
+    const rails = await job;
+    if (this.snap.client === client) this.dispatch({ type: "rails", rails });
   }
 
   async disconnect(): Promise<void> {
@@ -185,17 +218,21 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     status: snap.state.status,
     error: snap.state.error,
     baud: snap.state.baud,
+    rails: snap.state.rails,
     client: snap.client,
     simulated: snap.simulated,
     servos: snap.state.servos,
     selected: snap.state.selected,
+    missing: snap.state.missing,
     descriptor: snap.descriptor,
     descriptorError: snap.descriptorError,
     connect: () => ctl.connect(),
     disconnect: async () => {
-      await Promise.all([ctl.disconnect(), navigate({ to: "/" })]);
+      await Promise.all([ctl.disconnect(), navigate({ to: "/", search: true })]);
     },
     discover: () => ctl.discover(),
+    setRails: (patch) => ctl.setRails(patch),
+    setBaud: (rate) => ctl.setBaud(rate),
     select: (id) => ctl.select(id),
   };
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

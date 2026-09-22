@@ -3,8 +3,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { formatBaud, formatVersion, hex16 } from "../lib/format";
 import { useSession } from "../lib/session";
+import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/")({ component: ConnectPage });
+
+const cell = "border-b border-border px-3 py-1 text-left";
 
 interface BusStatus {
   rails: Rails;
@@ -43,9 +46,9 @@ function ConnectPage() {
   if (client === undefined) {
     return (
       <>
-        <h1>Connect</h1>
-        <button onClick={() => void run(connect)}>Connect adapter</button>
-        {error !== undefined && <p className="error">{error}</p>}
+        <h1 className="mb-4 text-xl font-semibold">Connect</h1>
+        <Button onClick={() => void run(connect)}>Connect adapter</Button>
+        {error !== undefined && <p className="mb-4 text-danger">{error}</p>}
       </>
     );
   }
@@ -53,8 +56,8 @@ function ConnectPage() {
   const link = client.linkInfo();
   return (
     <>
-      <h1>Connect</h1>
-      <dl>
+      <h1 className="mb-4 text-xl font-semibold">Connect</h1>
+      <dl className="mb-4 grid grid-cols-[max-content_auto] gap-x-4 gap-y-1">
         <dt>Adapter firmware</dt>
         <dd>{link.version}</dd>
         <dt>Ticks per us</dt>
@@ -70,26 +73,28 @@ function ConnectPage() {
           {bus === undefined ? "..." : bus.baud === undefined ? "no bus" : formatBaud(bus.baud)}
         </dd>
       </dl>
-      <p>
-        <button onClick={() => void run(discover)}>Discover</button>{" "}
-        <button onClick={() => void run(disconnect)}>Disconnect</button>
+      <p className="mb-4">
+        <Button onClick={() => void run(discover)}>Discover</Button>{" "}
+        <Button variant="outline" onClick={() => void run(disconnect)}>
+          Disconnect
+        </Button>
       </p>
-      {error !== undefined && <p className="error">{error}</p>}
+      {error !== undefined && <p className="mb-4 text-danger">{error}</p>}
       {servos.length > 0 && (
-        <table>
+        <table className="border-collapse text-sm">
           <thead>
             <tr>
-              <th></th>
-              <th>ID</th>
-              <th>UID</th>
-              <th>Model</th>
-              <th>Firmware</th>
+              <th className={cell}></th>
+              <th className={cell}>ID</th>
+              <th className={cell}>UID</th>
+              <th className={cell}>Model</th>
+              <th className={cell}>Firmware</th>
             </tr>
           </thead>
           <tbody>
             {servos.map((s) => (
               <tr key={s.uid}>
-                <td>
+                <td className={cell}>
                   <input
                     type="radio"
                     name="selected"
@@ -97,14 +102,16 @@ function ConnectPage() {
                     onChange={() => void run(() => select(s.id))}
                   />
                 </td>
-                <td>{s.id}</td>
-                <td className="mono">{s.uid}</td>
+                <td className={cell}>{s.id}</td>
+                <td className={`${cell} font-mono`}>{s.uid}</td>
                 {s.ping === undefined ? (
-                  <td colSpan={2}>duplicate id</td>
+                  <td className={cell} colSpan={2}>
+                    duplicate id
+                  </td>
                 ) : (
                   <>
-                    <td className="mono">{hex16(s.ping.model)}</td>
-                    <td>{formatVersion(unpackVersion(s.ping.fw))}</td>
+                    <td className={`${cell} font-mono`}>{hex16(s.ping.model)}</td>
+                    <td className={cell}>{formatVersion(unpackVersion(s.ping.fw))}</td>
                   </>
                 )}
               </tr>

@@ -7,7 +7,7 @@ function LivePage() {
   const { client } = useSession();
   return (
     <>
-      <h1>Live</h1>
+      <h1 className="mb-4 text-xl font-semibold">Live</h1>
       {client === undefined && <p>Connect first.</p>}
     </>
   );

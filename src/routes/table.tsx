@@ -7,7 +7,7 @@ function TablePage() {
   const { client } = useSession();
   return (
     <>
-      <h1>Control Table</h1>
+      <h1 className="mb-4 text-xl font-semibold">Control Table</h1>
       {client === undefined && <p>Connect first.</p>}
     </>
   );

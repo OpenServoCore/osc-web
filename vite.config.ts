@@ -1,14 +1,17 @@
+import tailwindcss from "@tailwindcss/vite";
 import babel from "@rolldown/plugin-babel";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  resolve: { alias: { "@": "/src" } },
   server: {
     // The file: dependency lives outside this repo, so dev must be allowed to serve its wasm.
     fs: { allow: [".", "../open-servo-core/client/web"] },
   },
   plugins: [
+    tailwindcss(),
     tanstackStart({
       spa: {
         enabled: true,

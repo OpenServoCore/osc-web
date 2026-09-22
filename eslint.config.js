@@ -38,5 +38,14 @@ export default defineConfig([
       "@typescript-eslint/no-non-null-assertion": "warn",
     },
   },
+  {
+    // Vendored shadcn registry files: keep them diffable against upstream.
+    files: ["src/components/ui/**", "src/hooks/use-mobile.ts"],
+    rules: {
+      "@typescript-eslint/consistent-type-definitions": "off",
+      "@typescript-eslint/no-confusing-void-expression": "off",
+      "react-hooks/set-state-in-effect": "off",
+    },
+  },
   prettier,
 ]);

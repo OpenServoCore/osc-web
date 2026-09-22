@@ -7,7 +7,7 @@ function ServoPage() {
   const { client } = useSession();
   return (
     <>
-      <h1>Servo</h1>
+      <h1 className="mb-4 text-xl font-semibold">Servo</h1>
       {client === undefined && <p>Connect first.</p>}
     </>
   );

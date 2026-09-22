@@ -1,0 +1,14 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useSession } from "../lib/session";
+
+export const Route = createFileRoute("/table")({ component: TablePage });
+
+function TablePage() {
+  const { client } = useSession();
+  return (
+    <>
+      <h1>Control Table</h1>
+      {client === undefined && <p>Connect first.</p>}
+    </>
+  );
+}

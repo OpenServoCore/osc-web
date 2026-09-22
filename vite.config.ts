@@ -4,11 +4,9 @@ import react, { reactCompilerPreset } from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  resolve: {
-    alias: {
-      // Delete with src/stubs and src/types/osc-client.d.ts once client/web/pkg exists.
-      "@openservocore/client": "/src/stubs/osc-client.ts",
-    },
+  server: {
+    // The file: dependency lives outside this repo, so dev must be allowed to serve its wasm.
+    fs: { allow: [".", "../open-servo-core/client/web"] },
   },
   plugins: [
     tanstackStart({

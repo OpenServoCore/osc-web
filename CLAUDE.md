@@ -23,4 +23,3 @@
 ## Dependencies
 
 - `@openservocore/client` is the wasm build of the monorepo's `client/web`, consumed as a local path dependency (`file:../open-servo-core/client/web`). `npm run wasm` builds it; the monorepo must be checked out as a sibling directory.
-- Until that package is linked, `src/types/osc-client.d.ts` declares the module so the app typechecks. Delete the stub when the real package lands; do not let the two drift.

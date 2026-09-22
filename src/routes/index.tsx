@@ -1,7 +1,7 @@
 import { unpackVersion, type BaudRate, type Rails } from "@openservocore/client";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { formatVersion, hex16 } from "../lib/format";
+import { formatBaud, formatVersion, hex16 } from "../lib/format";
 import { useSession } from "../lib/session";
 
 export const Route = createFileRoute("/")({ component: ConnectPage });
@@ -66,7 +66,9 @@ function ConnectPage() {
             : `3V3 ${bus.rails.v3v3 ? "on" : "off"}, 5V ${bus.rails.v5 ? "on" : "off"}`}
         </dd>
         <dt>Bus baud</dt>
-        <dd>{bus === undefined ? "..." : (bus.baud ?? "no bus")}</dd>
+        <dd>
+          {bus === undefined ? "..." : bus.baud === undefined ? "no bus" : formatBaud(bus.baud)}
+        </dd>
       </dl>
       <p>
         <button onClick={() => void run(discover)}>Discover</button>{" "}
@@ -97,8 +99,14 @@ function ConnectPage() {
                 </td>
                 <td>{s.id}</td>
                 <td className="mono">{s.uid}</td>
-                <td className="mono">{hex16(s.model)}</td>
-                <td>{formatVersion(unpackVersion(s.fw))}</td>
+                {s.ping === undefined ? (
+                  <td colSpan={2}>duplicate id</td>
+                ) : (
+                  <>
+                    <td className="mono">{hex16(s.ping.model)}</td>
+                    <td>{formatVersion(unpackVersion(s.ping.fw))}</td>
+                  </>
+                )}
               </tr>
             ))}
           </tbody>

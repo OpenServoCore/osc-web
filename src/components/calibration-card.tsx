@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { CALIBRATION_REGISTERS, editReason, type CalibrationRegister } from "@/lib/calibration";
-import { decodeSpan, span } from "@/lib/card-poll";
+import { decodeSpan, span } from "@/lib/bus/spans";
 import { hexAddr } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import { calibrationFromTable, calibrationStatus, type Calibration } from "@/lib/units";

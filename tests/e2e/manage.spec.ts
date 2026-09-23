@@ -36,6 +36,10 @@ test("Reboot rescans and the servo answers again", async ({ page }) => {
   await expect(card.getByText("Rebooting .. back in a moment.")).toBeVisible();
   await expect(page.getByRole("button", { name: "ID 2" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "ID 2" })).toBeVisible();
+  // The seed is SAVEd like a bench calibration, so the reboot boots it back.
+  await expect(
+    page.getByRole("region", { name: "Calibration" }).getByText("Calibrated", { exact: true }),
+  ).toBeVisible();
 });
 
 test("Factory reset runs behind the confirm strip", async ({ page }) => {
@@ -56,8 +60,8 @@ test("Factory reset runs behind the confirm strip", async ({ page }) => {
   await expect(erase).toBeHidden();
   await expect(card.getByText("Erased. It comes back as ID 1 at 1 M.")).toBeVisible();
   await expect(page.getByRole("button", { name: "ID 2" })).toBeVisible();
-  // The seeded calibration is written into the servo's live table, never into
-  // its store, so the wipe reboots it onto board defaults and it reads blank.
+  // Hardware FACTORY erases the calibration image with the config, so the
+  // servo comes back reading blank, exactly like a real one.
   await expect(
     page.getByRole("region", { name: "Calibration" }).getByText("Not calibrated"),
   ).toBeVisible();

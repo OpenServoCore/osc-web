@@ -27,6 +27,9 @@ export interface RawKind {
 
 export type FieldKind = NumberKind | EnumKind | BoolKind | RawKind;
 
+/** What a page knows and the descriptor does not: how a register reads in real units. */
+export type NumberDisplay = Pick<NumberKind, "scale" | "unit">;
+
 export type EditValue = number | boolean | Uint8Array;
 
 export type ValueOf<K extends FieldKind> = K extends BoolKind

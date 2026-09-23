@@ -1,13 +1,14 @@
 import type { Descriptor } from "@openservocore/client";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronRight, CircleHelp, Cog, Download } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ChevronRight, CircleHelp, Cog, Download, RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { EditValue } from "@/lib/edit";
+import { ValueEditor } from "@/components/value-editor";
+import { toValue, type EditValue } from "@/lib/edit";
 import { hexAddr } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import {
@@ -17,8 +18,10 @@ import {
   type Link as LinkTarget,
   type Row,
   type Tab,
+  type TabName,
 } from "@/lib/table-model";
-import { readRows, type Values } from "@/lib/table-read";
+import { FLASH_MS, LIVE_POLL_MS, spanHolding, startPoll } from "@/lib/table-live";
+import { decodeSpan, readRows, readSpans, type Values } from "@/lib/table-read";
 
 export const Route = createFileRoute("/table")({ component: TablePage });
 
@@ -68,44 +71,123 @@ function TablePage() {
 
 function Table({ id, descriptor }: { id: number; descriptor: Descriptor }) {
   const model = useMemo(() => buildTable(descriptor), [descriptor]);
+  const [tab, setTab] = useState<TabName>("Settings");
+  const [refresh, setRefresh] = useState(0);
   return (
-    <Tabs defaultValue="Settings">
-      <TabsList>
-        {model.tabs.map((tab) => (
-          <TabsTrigger key={tab.name} value={tab.name}>
-            {tab.name}
-          </TabsTrigger>
-        ))}
-      </TabsList>
-      {model.tabs.map((tab) => (
-        <TabsContent key={tab.name} value={tab.name}>
-          <TabPanel key={id} id={id} descriptor={descriptor} tab={tab} />
+    <Tabs
+      value={tab}
+      onValueChange={(v) => {
+        setTab(v as TabName);
+      }}
+    >
+      <div className="flex items-center justify-between">
+        <TabsList>
+          {model.tabs.map((t) => (
+            <TabsTrigger key={t.name} value={t.name}>
+              {t.name}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        {tab !== "Live values" && (
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={() => {
+              setRefresh((n) => n + 1);
+            }}
+          >
+            <RefreshCw />
+            Refresh
+          </Button>
+        )}
+      </div>
+      {model.tabs.map((t) => (
+        <TabsContent key={t.name} value={t.name}>
+          <TabPanel key={id} id={id} descriptor={descriptor} tab={t} refresh={refresh} />
         </TabsContent>
       ))}
     </Tabs>
   );
 }
 
-function TabPanel({ id, descriptor, tab }: { id: number; descriptor: Descriptor; tab: Tab }) {
+interface Flash {
+  name: string;
+  seq: number;
+}
+
+function TabPanel({
+  id,
+  descriptor,
+  tab,
+  refresh,
+}: {
+  id: number;
+  descriptor: Descriptor;
+  tab: Tab;
+  refresh: number;
+}) {
   const { run } = useSession();
   const [values, setValues] = useState<Values>();
   const [error, setError] = useState<string>();
+  const [flash, setFlash] = useState<Flash>();
+  const holds = useRef(0);
+  const rows = useMemo(() => tab.groups.flatMap((g) => g.rows), [tab]);
+  const spans = useMemo(() => readSpans(rows), [rows]);
 
   useEffect(() => {
     let live = true;
-    const rows = tab.groups.flatMap((g) => g.rows);
-    run((c) => readRows(rows, descriptor, (addr, count) => c.read(id, addr, count))).then(
-      (v) => {
-        if (live) setValues(v);
-      },
-      (e: unknown) => {
-        if (live) setError(e instanceof Error ? e.message : String(e));
-      },
-    );
+    const load = async () => {
+      const v = await run((c) =>
+        readRows(rows, descriptor, (addr, count) => c.read(id, addr, count)),
+      );
+      if (!live) return;
+      setValues(v);
+      setError(undefined);
+    };
+    const fail = (e: unknown) => {
+      if (live) setError(e instanceof Error ? e.message : String(e));
+    };
+    const stop =
+      tab.name === "Live values"
+        ? startPoll({
+            periodMs: LIVE_POLL_MS,
+            tick: load,
+            hold: () => holds.current > 0,
+            onError: fail,
+          })
+        : (load().catch(fail), undefined);
     return () => {
       live = false;
+      stop?.();
     };
-  }, [run, id, descriptor, tab]);
+  }, [run, id, descriptor, tab, rows, refresh]);
+
+  useEffect(() => {
+    if (flash === undefined) return;
+    const timer = setTimeout(() => {
+      setFlash(undefined);
+    }, FLASH_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [flash]);
+
+  async function apply(row: Row, raw: EditValue): Promise<void> {
+    const { field } = row;
+    const bytes = descriptor.encode(field.name, toValue(field, raw));
+    const span = spanHolding(spans, field);
+    holds.current++;
+    try {
+      const fresh = await run(async (c) => {
+        await c.write(id, field.addr, bytes);
+        return decodeSpan(descriptor, rows, span, await c.read(id, span.addr, span.count));
+      });
+      setValues((v) => new Map([...(v ?? []), ...fresh]));
+      setFlash((f) => ({ name: field.name, seq: (f?.seq ?? 0) + 1 }));
+    } finally {
+      holds.current--;
+    }
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -116,6 +198,8 @@ function TabPanel({ id, descriptor, tab }: { id: number; descriptor: Descriptor;
           group={group}
           values={values}
           loading={values === undefined && error === undefined}
+          flashed={flash?.name}
+          onApply={apply}
         />
       ))}
     </div>
@@ -126,10 +210,14 @@ function GroupSection({
   group,
   values,
   loading,
+  flashed,
+  onApply,
 }: {
   group: Group;
   values: Values | undefined;
   loading: boolean;
+  flashed: string | undefined;
+  onApply: (row: Row, raw: EditValue) => Promise<void>;
 }) {
   return (
     <Collapsible defaultOpen={group.expanded} className="rounded-lg border bg-card">
@@ -150,6 +238,8 @@ function GroupSection({
                 row={row}
                 value={values?.get(row.field.name)}
                 loading={loading}
+                flashed={row.field.name === flashed}
+                onApply={onApply}
               />
             ))}
           </tbody>
@@ -178,13 +268,19 @@ function RowLine({
   row,
   value,
   loading,
+  flashed,
+  onApply,
 }: {
   row: Row;
   value: EditValue | undefined;
   loading: boolean;
+  flashed: boolean;
+  onApply: (row: Row, raw: EditValue) => Promise<void>;
 }) {
   return (
-    <tr className="border-t first:border-t-0">
+    <tr
+      className={`border-t first:border-t-0 ${flashed ? "bg-success-soft" : "transition-colors duration-700"}`}
+    >
       <th scope="row" className="w-1/2 px-3 py-2 text-left align-top font-medium">
         <div>{row.label}</div>
         <div className="font-mono text-xs font-normal text-text-3">
@@ -193,7 +289,7 @@ function RowLine({
       </th>
       <td className="px-3 py-2 align-top font-mono tabular-nums">
         {value !== undefined ? (
-          <ValueCell row={row} value={value} />
+          <ValueCell row={row} value={value} onApply={onApply} />
         ) : loading ? (
           <Skeleton className="h-4 w-16" />
         ) : (
@@ -204,11 +300,23 @@ function RowLine({
   );
 }
 
-function ValueCell({ row, value }: { row: Row; value: EditValue }) {
+function ValueCell({
+  row,
+  value,
+  onApply,
+}: {
+  row: Row;
+  value: EditValue;
+  onApply: (row: Row, raw: EditValue) => Promise<void>;
+}) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
       <span>
-        {formatRow(row, value)}
+        {row.editable && !row.blob ? (
+          <ValueEditor field={row.field} value={value} onApply={(raw) => onApply(row, raw)} />
+        ) : (
+          formatRow(row, value)
+        )}
         {row.hint !== undefined && (
           <>
             {" "}

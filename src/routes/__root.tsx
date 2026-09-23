@@ -1,6 +1,7 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { AppSidebar } from "@/components/app-sidebar";
+import { BusDebug } from "@/components/bus-debug";
 import { UnsupportedBrowser } from "@/components/unsupported-browser";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -41,6 +42,7 @@ function RootComponent() {
           <div className="fixed inset-0 z-50 hidden items-center justify-center bg-bg max-lg:flex">
             Use a larger window
           </div>
+          <BusDebug />
         </SessionProvider>
       ) : (
         <UnsupportedBrowser />

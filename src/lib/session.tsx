@@ -17,8 +17,20 @@ import {
   type ReactNode,
 } from "react";
 import { openClient, simRequested } from "./backend";
-import { faultText, plan, POLL_MS, readCard, type CardValues, type Plan } from "./card-poll";
-import { CommandQueue } from "./command-queue";
+import { BusContext, type BusHost } from "./bus/hooks";
+import { BusManager, systemClock, type Snapshot } from "./bus/manager";
+import {
+  CONSTANT_REGISTERS,
+  constantsFrom,
+  faultText,
+  healthFrom,
+  HEALTH_REGISTERS,
+  liveFrom,
+  LIVE_REGISTERS,
+  type CardValues,
+  type Layout,
+} from "./bus/spans";
+import { animationFrame, BusStore } from "./bus/store";
 import { fetchDescriptor } from "./descriptor";
 import {
   idle,
@@ -46,7 +58,7 @@ export interface Session {
   descriptor: Descriptor | undefined;
   descriptorError: string | undefined;
   descriptorFor: (servo: Servo) => Descriptor | undefined;
-  /** Per uid, the values the cards poll about once a second. */
+  /** Per uid, the values the cards subscribe to about once a second. */
   values: ReadonlyMap<string, CardValues>;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
@@ -55,37 +67,37 @@ export interface Session {
   setBaud: (rate: BaudRate) => Promise<void>;
   select: (id: number | undefined) => void;
   /**
-   * The only way to talk to the adapter from a page: every command (scan,
-   * rails, this and other pages' reads) waits its turn on one queue, so
-   * nothing overlaps and the client's "busy" never surfaces.
+   * The bus manager's control lane under the name the pages still use: a
+   * command waits for at most the exchange in flight, and the client's
+   * "busy" can never surface.
    */
   run: <T>(fn: (client: OscClient) => Promise<T>) => Promise<T>;
-  /** Re-reads a servo's CALIB constants on the next poll, after a calibration write. */
+  /** Re-reads a servo's CALIB constants, after a calibration write. */
   refreshConstants: (uid: string) => void;
 }
 
 const SessionContext = createContext<Session | undefined>(undefined);
 
-/** One descriptor and the card reads planned over it, shared by every servo of that model and firmware. */
-interface Layout {
+/** One descriptor, shared by every servo of that model and firmware. */
+interface Model {
   descriptor: Descriptor;
-  plan: Plan;
+  layout: Layout;
 }
 
-interface Snapshot {
+interface Snap {
   state: SessionState;
   client: OscClient | undefined;
   simulated: boolean;
-  layouts: ReadonlyMap<string, Layout>;
+  models: ReadonlyMap<string, Model>;
   layoutErrors: ReadonlyMap<string, string>;
   values: ReadonlyMap<string, CardValues>;
 }
 
-const initial: Snapshot = {
+const initial: Snap = {
   state: idle,
   client: undefined,
   simulated: false,
-  layouts: new Map(),
+  models: new Map(),
   layoutErrors: new Map(),
   values: new Map(),
 };
@@ -95,9 +107,17 @@ function message(e: unknown): string {
 }
 
 /** Descriptors are published per model and major.minor. */
-function layoutKey(ping: Ping): string {
+function modelKey(ping: Ping): string {
   const [major, minor] = unpackVersion(ping.fw);
   return `${ping.model}/${major}.${minor}`;
+}
+
+function busLayout(descriptor: Descriptor): Layout {
+  return {
+    encode: descriptor.encode.bind(descriptor),
+    decode: descriptor.decode.bind(descriptor),
+    fields: descriptor.fields(),
+  };
 }
 
 // The adapter takes one command at a time, so the pings run in sequence.
@@ -119,12 +139,14 @@ async function release(client: OscClient): Promise<void> {
   }
 }
 
-/** Owns the wasm client and its commands; `reduce` owns every state change. */
+/** Owns the wasm client through the bus manager; `reduce` owns every state change. */
 class Controller {
   private snap = initial;
-  private readonly queue = new CommandQueue<OscClient>(() => this.snap.client);
-  private pollGen = 0;
-  private readonly stale = new Set<string>();
+  private readonly bus = new BusManager(systemClock);
+  readonly host: BusHost = { manager: this.bus, store: new BusStore(animationFrame) };
+  private readonly cards = new Map<string, Partial<CardValues>>();
+  private readonly subscriptions = new Map<string, () => void>();
+  private readonly reading = new Set<string>();
   private readonly fetching = new Set<string>();
   private readonly listeners = new Set<() => void>();
 
@@ -135,9 +157,9 @@ class Controller {
     };
   };
 
-  readonly snapshot = (): Snapshot => this.snap;
+  readonly snapshot = (): Snap => this.snap;
 
-  private set(patch: Partial<Snapshot>): void {
+  private set(patch: Partial<Snap>): void {
     this.snap = { ...this.snap, ...patch };
     for (const listener of this.listeners) listener();
   }
@@ -147,39 +169,52 @@ class Controller {
   }
 
   // Stable so a card's effect can depend on it.
-  readonly run = <T,>(fn: (client: OscClient) => Promise<T>): Promise<T> => this.queue.run(fn);
+  readonly run = <T,>(fn: (client: OscClient) => Promise<T>): Promise<T> => this.bus.command(fn);
 
   refreshConstants(uid: string): void {
-    this.stale.add(uid);
+    const servo = this.snap.state.servos.find((s) => s.uid === uid);
+    if (servo === undefined) return;
+    const card = this.cards.get(uid);
+    if (card !== undefined) card.constants = undefined;
+    this.readConstants(servo);
   }
 
-  layoutFor(servo: Servo): Layout | undefined {
-    return servo.ping === undefined ? undefined : this.snap.layouts.get(layoutKey(servo.ping));
+  modelFor(servo: Servo): Model | undefined {
+    return servo.ping === undefined ? undefined : this.snap.models.get(modelKey(servo.ping));
   }
 
   layoutErrorFor(servo: Servo): string | undefined {
-    return servo.ping === undefined ? undefined : this.snap.layoutErrors.get(layoutKey(servo.ping));
+    return servo.ping === undefined ? undefined : this.snap.layoutErrors.get(modelKey(servo.ping));
   }
 
-  private loadLayouts(servos: Servo[]): void {
+  private readonly layoutById = (id: number): Layout | undefined => {
+    const servo = this.snap.state.servos.find((s) => s.id === id);
+    return servo === undefined ? undefined : this.modelFor(servo)?.layout;
+  };
+
+  private loadModels(servos: Servo[]): void {
     for (const servo of servos) {
       const { ping } = servo;
       if (ping === undefined) continue;
-      const key = layoutKey(ping);
-      if (this.snap.layouts.has(key) || this.fetching.has(key)) continue;
+      const key = modelKey(ping);
+      if (this.snap.models.has(key) || this.fetching.has(key)) continue;
       this.fetching.add(key);
       fetchDescriptor(ping.model, ping.fw)
         .then(
           (descriptor) => {
-            if (this.snap.layouts.has(key)) {
+            if (this.snap.models.has(key)) {
               descriptor.free();
               return;
             }
-            const layouts = new Map(this.snap.layouts);
-            layouts.set(key, { descriptor, plan: plan(descriptor.fields()) });
+            const models = new Map(this.snap.models);
+            models.set(key, { descriptor, layout: busLayout(descriptor) });
             const layoutErrors = new Map(this.snap.layoutErrors);
             layoutErrors.delete(key);
-            this.set({ layouts, layoutErrors });
+            this.set({ models, layoutErrors });
+            for (const s of this.snap.state.servos) {
+              if (s.ping !== undefined && modelKey(s.ping) === key) this.bus.layoutChanged(s.id);
+            }
+            this.syncCards();
           },
           (e: unknown) => {
             const layoutErrors = new Map(this.snap.layoutErrors);
@@ -205,76 +240,131 @@ class Controller {
       return;
     }
     this.set({ client, simulated: simRequested() });
+    this.bus.attach(client, this.layoutById);
     await this.scan(client);
   }
 
   /** With `rate`, migrates the fleet first (servos, then the host, then the reunion sweep). */
   private async scan(client: OscClient, rate?: BaudRate): Promise<void> {
     this.dispatch({ type: "scan" });
-    try {
-      await this.run(async () => {
-        if (rate !== undefined) {
-          const ids = [...new Set(this.snap.state.servos.map((s) => s.id))];
-          const roster = await client.setBaud(ids, rate);
-          this.dispatch({ type: "migrated", roster });
+    this.clearCards();
+    // The whole scan is one exclusive turn: the lanes stay frozen, so on a
+    // failure the client is released with nothing else reaching for it.
+    const failure = await this.bus
+      .exclusive(async (): Promise<unknown> => {
+        try {
+          if (rate !== undefined) {
+            const ids = [...new Set(this.snap.state.servos.map((s) => s.id))];
+            const roster = await client.setBaud(ids, rate);
+            this.dispatch({ type: "migrated", roster });
+          }
+          const baud = await client.findBusBaud();
+          const servos = await pingAll(client, await client.discover());
+          const rails = await client.rails();
+          if (this.snap.client !== client) return undefined;
+          this.dispatch({ type: "found", servos, baud, rails });
+          this.bus.roster([...new Set(servos.map((s) => s.id))]);
+          this.loadModels(servos);
+          return undefined;
+        } catch (e) {
+          this.bus.detach(message(e));
+          return e;
         }
-        const baud = await client.findBusBaud();
-        const servos = await pingAll(client, await client.discover());
-        const rails = await client.rails();
-        if (this.snap.client !== client) return;
-        this.set({ values: new Map() });
-        this.dispatch({ type: "found", servos, baud, rails });
-        this.loadLayouts(servos);
-      });
-      if (this.snap.client === client) this.startPoll(client);
-    } catch (e) {
-      if (this.snap.client !== client) return;
-      this.set({ client: undefined, simulated: false, values: new Map() });
-      this.dispatch({ type: "fail", error: message(e) });
-      await release(client);
+      })
+      .catch((e: unknown) => e);
+    if (failure === undefined) {
+      this.syncCards();
+      return;
     }
+    if (this.snap.client !== client) return;
+    this.set({ client: undefined, simulated: false });
+    this.clearCards();
+    this.dispatch({ type: "fail", error: message(failure) });
+    await release(client);
   }
 
-  // Fixed cadence; a tick still queued or running when the next is due is
-  // skipped, so a slow bus never piles reads up behind a scan.
-  private startPoll(client: OscClient): void {
-    const gen = ++this.pollGen;
-    const live = () =>
-      gen === this.pollGen && this.snap.client === client && this.snap.state.status === "ready";
-    let ticking = false;
-    const tick = () => {
-      if (!live()) {
-        clearInterval(timer);
-        return;
+  // The fleet cards: one slow subscription per servo over the live sensors and
+  // the health block, plus the CALIB constants read once.
+  private syncCards(): void {
+    const wanted = new Set<string>();
+    if (this.snap.state.status === "ready") {
+      for (const servo of this.snap.state.servos) {
+        if (this.modelFor(servo) === undefined) continue;
+        wanted.add(servo.uid);
+        if (this.subscriptions.has(servo.uid)) continue;
+        this.cards.set(servo.uid, {});
+        this.subscriptions.set(
+          servo.uid,
+          this.bus.subscribe(
+            { id: servo.id, registers: [...LIVE_REGISTERS, ...HEALTH_REGISTERS], rate: "slow" },
+            (snapshot) => {
+              this.onCard(servo.uid, snapshot);
+            },
+          ),
+        );
+        this.readConstants(servo);
       }
-      if (ticking) return;
-      ticking = true;
-      this.run((c) => this.readCards(c, live))
-        .catch(() => undefined)
-        .finally(() => {
-          ticking = false;
-        });
-    };
-    const timer = setInterval(tick, POLL_MS);
-    tick();
+    }
+    for (const [uid, stop] of this.subscriptions) {
+      if (wanted.has(uid)) continue;
+      stop();
+      this.subscriptions.delete(uid);
+      this.cards.delete(uid);
+    }
+    this.publishCards();
   }
 
-  private async readCards(client: OscClient, live: () => boolean): Promise<void> {
-    for (const servo of this.snap.state.servos) {
-      if (!live()) return;
-      const layout = this.layoutFor(servo);
-      if (layout === undefined) continue;
-      const values = new Map(this.snap.values);
-      try {
-        const prior = this.stale.delete(servo.uid)
-          ? undefined
-          : this.snap.values.get(servo.uid)?.constants;
-        values.set(servo.uid, await readCard(client, servo.id, layout.plan, prior));
-      } catch {
-        values.delete(servo.uid);
+  private clearCards(): void {
+    for (const stop of this.subscriptions.values()) stop();
+    this.subscriptions.clear();
+    this.cards.clear();
+    this.set({ values: new Map() });
+  }
+
+  private readConstants(servo: Servo): void {
+    if (this.reading.has(servo.uid)) return;
+    this.reading.add(servo.uid);
+    void this.bus
+      .readOnce(servo.id, CONSTANT_REGISTERS)
+      .then(
+        (snapshot) => {
+          const card = this.cards.get(servo.uid);
+          if (card === undefined) return;
+          card.constants = constantsFrom(snapshot.read);
+          this.publishCards();
+        },
+        () => undefined,
+      )
+      .finally(() => this.reading.delete(servo.uid));
+  }
+
+  private onCard(uid: string, snapshot: Snapshot): void {
+    const card = this.cards.get(uid);
+    if (card === undefined) return;
+    if (snapshot.stale) {
+      card.live = undefined;
+      card.health = undefined;
+    } else {
+      card.live = liveFrom(snapshot.read);
+      card.health = healthFrom(snapshot.read);
+      // A constants read that failed, or one a calibration write invalidated,
+      // is retried on the next card snapshot.
+      if (card.constants === undefined) {
+        const servo = this.snap.state.servos.find((s) => s.uid === uid);
+        if (servo !== undefined) this.readConstants(servo);
       }
-      if (live()) this.set({ values });
     }
+    this.publishCards();
+  }
+
+  private publishCards(): void {
+    const values = new Map<string, CardValues>();
+    for (const [uid, card] of this.cards) {
+      const { constants, live, health } = card;
+      if (constants === undefined || live === undefined || health === undefined) continue;
+      values.set(uid, { constants, live, health });
+    }
+    this.set({ values });
   }
 
   async discover(): Promise<void> {
@@ -293,7 +383,7 @@ class Controller {
     const { client } = this.snap;
     if (client === undefined || this.snap.state.status !== "ready") return;
     // Each toggle merges over the state the previous one acked.
-    const rails = await this.run((c) => {
+    const rails = await this.bus.command((c) => {
       const cur = this.snap.state.rails ?? { v3v3: false, v5: false };
       return c.setRails(patch.v3v3 ?? cur.v3v3, patch.v5 ?? cur.v5);
     });
@@ -303,12 +393,17 @@ class Controller {
   async disconnect(): Promise<void> {
     const { client } = this.snap;
     if (client === undefined) return;
-    // Queued behind any command still on the old client; `run` would already
-    // see no client, so the release rides the chain directly.
-    const done = this.run(() => Promise.resolve()).catch(() => undefined);
-    this.set({ client: undefined, simulated: false, values: new Map() });
+    this.set({ client: undefined, simulated: false });
+    this.clearCards();
     this.dispatch({ type: "disconnect" });
-    await done;
+    // Detaching from inside an exclusive turn: the exchange in flight has
+    // settled and the lanes are frozen, so the client is free to release.
+    await this.bus
+      .exclusive(() => {
+        this.bus.detach("disconnected");
+        return Promise.resolve();
+      })
+      .catch(() => undefined);
     await release(client);
   }
 
@@ -316,7 +411,7 @@ class Controller {
     if (this.snap.state.status !== "ready") return;
     this.dispatch({ type: "select", id });
     const servo = this.snap.state.servos.find((s) => s.id === id);
-    if (servo !== undefined) this.loadLayouts([servo]);
+    if (servo !== undefined) this.loadModels([servo]);
   }
 }
 
@@ -350,9 +445,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     servos: snap.state.servos.map((s) => withHealth(s, snap.values.get(s.uid))),
     selected: snap.state.selected,
     missing: snap.state.missing,
-    descriptor: selected === undefined ? undefined : ctl.layoutFor(selected)?.descriptor,
+    descriptor: selected === undefined ? undefined : ctl.modelFor(selected)?.descriptor,
     descriptorError: selected === undefined ? undefined : ctl.layoutErrorFor(selected),
-    descriptorFor: (servo) => ctl.layoutFor(servo)?.descriptor,
+    descriptorFor: (servo) => ctl.modelFor(servo)?.descriptor,
     values: snap.values,
     connect: () => ctl.connect(),
     disconnect: async () => {
@@ -369,7 +464,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       ctl.refreshConstants(uid);
     },
   };
-  return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
+  return (
+    <BusContext.Provider value={ctl.host}>
+      <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
+    </BusContext.Provider>
+  );
 }
 
 export function useSession(): Session {

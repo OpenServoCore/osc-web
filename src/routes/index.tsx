@@ -13,7 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { faultText, type CardValues } from "@/lib/card-poll";
+import { faultText, type CardValues } from "@/lib/bus/spans";
 import { formatQuantity, formatVersion, hex16 } from "@/lib/format";
 import { useSession, type Servo } from "@/lib/session";
 import { busV, currentMa, DISPLAY, positionDeg, temperatureC } from "@/lib/units";

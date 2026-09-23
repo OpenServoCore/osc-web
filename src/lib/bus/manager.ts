@@ -15,6 +15,7 @@ import {
 } from "./spans";
 import {
   classify,
+  isDisconnect,
   StatsRecorder,
   type BusStats,
   type Exchange,
@@ -187,6 +188,7 @@ export class BusManager {
 
   private client: (OscClient & BusClient) | undefined;
   private layoutOf: ((id: number) => Layout | undefined) | undefined;
+  private onLost: ((error: string) => void) | undefined;
   private rosterIds: ReadonlySet<number> | undefined;
 
   private readonly subs = new Set<Sub>();
@@ -219,9 +221,15 @@ export class BusManager {
 
   // Connection
 
-  attach(client: OscClient & BusClient, layout: (id: number) => Layout | undefined): void {
+  /** `onLost` reports the one failure class no retry survives: the adapter is gone. */
+  attach(
+    client: OscClient & BusClient,
+    layout: (id: number) => Layout | undefined,
+    onLost?: (error: string) => void,
+  ): void {
     this.client = client;
     this.layoutOf = layout;
+    this.onLost = onLost;
     const now = this.nowMs();
     for (const id of this.servos.keys()) {
       const state = this.state(id);
@@ -239,6 +247,7 @@ export class BusManager {
   detach(reason: string): void {
     this.client = undefined;
     this.layoutOf = undefined;
+    this.onLost = undefined;
     this.arm(undefined);
     this.stopProbe?.();
     this.stopProbe = undefined;
@@ -627,6 +636,19 @@ export class BusManager {
     };
   }
 
+  /**
+   * Every client failure is read here, so the session hears about a gone
+   * adapter once however the lane that met it reports the error onwards.
+   */
+  private outcome(error: unknown): Outcome {
+    if (this.client !== undefined && isDisconnect(error)) {
+      const report = this.onLost;
+      this.onLost = undefined;
+      report?.(message(error));
+    }
+    return classify(error);
+  }
+
   private async execute(job: Job): Promise<void> {
     const client = this.client;
     if (client === undefined) {
@@ -652,7 +674,7 @@ export class BusManager {
           try {
             job.item.settle.resolve(await job.item.fn(client));
           } catch (e) {
-            outcome = classify(e);
+            outcome = this.outcome(e);
             job.item.settle.reject(e);
           }
           this.restart();
@@ -664,7 +686,7 @@ export class BusManager {
             try {
               job.item.settle.resolve(await job.item.fn(client));
             } catch (e) {
-              outcome = classify(e);
+              outcome = this.outcome(e);
               job.item.settle.reject(e);
             }
             break;
@@ -691,7 +713,7 @@ export class BusManager {
             for (const s of item.settle) s.resolve();
             this.markDirty(item.id, f);
           } catch (e) {
-            outcome = classify(e);
+            outcome = this.outcome(e);
             this.rejectControl(item, e);
           }
           break;
@@ -755,7 +777,7 @@ export class BusManager {
       } catch (e) {
         for (const target of read.targets)
           this.fail(target.id, read, seq, t, message(e), read.done);
-        return classify(e);
+        return this.outcome(e);
       }
       let outcome: Outcome = "ok";
       read.targets.forEach((target, i) => {
@@ -777,7 +799,7 @@ export class BusManager {
       return "ok";
     } catch (e) {
       this.fail(target.id, read, seq, t, message(e), read.done);
-      return classify(e);
+      return this.outcome(e);
     }
   }
 

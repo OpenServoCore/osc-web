@@ -58,3 +58,31 @@ test("without ?sim the popover opens on boot offering to connect", async ({ page
   await expect(popover.getByText("osc-adapter")).toBeVisible();
   await expect(popover.getByRole("button", { name: "Connect adapter" })).toBeVisible();
 });
+
+test("an unplugged adapter ends the session and Reconnect brings the fleet back", async ({
+  page,
+}) => {
+  await gotoSim(page, [1, 2], { debug: true });
+  const exchanges = page
+    .getByRole("region", { name: "Bus statistics" })
+    .locator('dt:text-is("exchanges") + dd');
+  await page.evaluate(() => {
+    (window as unknown as { __osc: { sever: () => void } }).__osc.sever();
+  });
+  const lost = page.getByRole("button", { name: "Connection lost" });
+  await expect(lost).toBeVisible();
+  await lost.click();
+  const popover = page.getByRole("dialog");
+  await expect(popover.getByText("The adapter was unplugged.")).toBeVisible();
+  const reconnect = popover.getByRole("button", { name: "Reconnect" });
+  await expect(reconnect).toBeVisible();
+  // The readout publishes twice a second, so let the last exchanges reach it.
+  await page.waitForTimeout(1000);
+  const stopped = (await exchanges.textContent()) ?? "";
+  expect(stopped).not.toBe("0");
+  await page.waitForTimeout(1000);
+  await expect(exchanges).toHaveText(stopped);
+  await reconnect.click();
+  await expect(page.getByRole("button", { name: "ID 1" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "ID 2" })).toBeVisible();
+});

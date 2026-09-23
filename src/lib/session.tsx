@@ -17,7 +17,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { openClient, simRequested } from "./backend";
+import { isAdapter, openClient, simRequested } from "./backend";
 import { BusContext, type BusHost } from "./bus/hooks";
 import { BusManager, systemClock, type Snapshot } from "./bus/manager";
 import {
@@ -31,6 +31,7 @@ import {
   type CardValues,
   type Layout,
 } from "./bus/spans";
+import { DISCONNECTED, isDisconnect } from "./bus/stats";
 import { animationFrame, BusStore } from "./bus/store";
 import { fetchDescriptor } from "./descriptor";
 import {
@@ -225,7 +226,7 @@ class Controller {
 
   async connect(): Promise<void> {
     const { status } = this.snap.state;
-    if (status !== "disconnected" && status !== "error") return;
+    if (status !== "disconnected" && status !== "error" && status !== "lost") return;
     this.dispatch({ type: "connect" });
     let client: OscClient;
     try {
@@ -235,7 +236,7 @@ class Controller {
       return;
     }
     this.set({ client, linkInfo: client.linkInfo(), simulated: simRequested() });
-    this.bus.attach(client, this.layoutById);
+    this.bus.attach(client, this.layoutById, this.lost);
     await this.scan(client);
   }
 
@@ -274,7 +275,11 @@ class Controller {
     if (this.snap.client !== client) return;
     this.set({ client: undefined, linkInfo: undefined, simulated: false });
     this.clearCards();
-    this.dispatch({ type: "fail", error: message(failure) });
+    this.dispatch(
+      isDisconnect(failure)
+        ? { type: "lost", error: message(failure) }
+        : { type: "fail", error: message(failure) },
+    );
     await release(client);
   }
 
@@ -385,6 +390,34 @@ class Controller {
     if (this.snap.client === client) this.dispatch({ type: "rails", rails });
   }
 
+  /** The adapter is gone: stop the lanes, drop the client, keep the reason. */
+  private readonly lost = (error: string): void => {
+    const { client } = this.snap;
+    if (client === undefined) return;
+    this.set({ client: undefined, linkInfo: undefined, simulated: false });
+    this.clearCards();
+    // Safe from inside the manager's own dispatch: the call in flight has
+    // already rejected and nothing new is picked while the client is unset.
+    this.bus.detach(error);
+    this.dispatch({ type: "lost", error });
+    // The device is already gone, so closing it is best effort.
+    release(client).catch(() => undefined);
+  };
+
+  /** The browser says a device left; only the open adapter ends this session. */
+  deviceGone(device: { vendorId: number; productId: number }): void {
+    if (this.snap.client === undefined || this.snap.simulated) return;
+    if (!isAdapter(device)) return;
+    this.lost(DISCONNECTED);
+  }
+
+  /** Test hook: the simulated adapter fails with the text a real unplug produces. */
+  sever(): void {
+    this.lost(
+      `pipe: NotFoundError: Failed to execute 'transferOut' on 'USBDevice': ${DISCONNECTED}`,
+    );
+  }
+
   async disconnect(): Promise<void> {
     const { client } = this.snap;
     if (client === undefined) return;
@@ -420,6 +453,11 @@ function withHealth(servo: Servo, values: CardValues | undefined): Servo {
   };
 }
 
+/** `?sim` only: the handle a browser spec severs the fake adapter through. */
+interface SimWindow extends Window {
+  __osc?: { sever: () => void };
+}
+
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [ctl] = useState(() => new Controller());
   const snap = useSyncExternalStore(ctl.subscribe, ctl.snapshot, ctl.snapshot);
@@ -427,6 +465,31 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (simRequested()) void ctl.connect();
+  }, [ctl]);
+
+  // An unplug on an idle bus has no exchange to reject, so the browser's own
+  // event is what ends the session; the sim is severed by a test instead.
+  useEffect(() => {
+    if (simRequested()) {
+      const w = window as SimWindow;
+      w.__osc = {
+        sever: () => {
+          ctl.sever();
+        },
+      };
+      return () => {
+        delete w.__osc;
+      };
+    }
+    const usb = (navigator as { usb?: USB }).usb;
+    if (usb === undefined) return;
+    const gone = (e: USBConnectionEvent) => {
+      ctl.deviceGone(e.device);
+    };
+    usb.addEventListener("disconnect", gone);
+    return () => {
+      usb.removeEventListener("disconnect", gone);
+    };
   }, [ctl]);
 
   const selected = snap.state.servos.find((s) => s.id === snap.state.selected);

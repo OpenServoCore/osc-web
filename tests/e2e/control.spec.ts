@@ -26,11 +26,24 @@ async function setGoal(page: Page, value: string): Promise<void> {
   await input.press("Enter");
 }
 
-test("the simulated servo boots in open loop, with the warning and the duty readouts", async ({
+test("the app's default mode is position and the servo is switched to it on its own", async ({
   page,
 }) => {
   await openLive(page);
-  await expect(page.getByRole("combobox", { name: "Mode" })).toHaveText("Open loop");
+  await expect(page.getByRole("combobox", { name: "Mode" })).toHaveText("Position");
+  // The goal control reads the servo's own `mode` register, so degrees here
+  // means the servo took the write, with nothing asked of the user.
+  await expect(page.getByLabel("Goal readout")).toHaveText(/ deg$/);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByLabel("Commanded duty value")).toHaveCount(0);
+});
+
+test("open loop, once picked, shows the warning and the duty readouts", async ({ page }) => {
+  await openLive(page);
+  // Degrees first: the servo has taken the default mode, so the pick below is
+  // the last mode write on the wire.
+  await expect(page.getByLabel("Goal readout")).toHaveText(/ deg$/);
+  await pickMode(page, "Open loop");
   await expect(page.getByRole("alert")).toContainText("Open loop can strip the gears");
   await expect(page.getByLabel("Goal readout")).toHaveText(/%$/);
   await expect(page.getByLabel("Commanded duty value")).toHaveText(/^-?\d+\.\d %$/);
@@ -40,6 +53,7 @@ test("the simulated servo boots in open loop, with the warning and the duty read
 
 test("each mode shows its own goal control and the warning is open loop only", async ({ page }) => {
   await openLive(page);
+  await expect(page.getByLabel("Goal readout")).toHaveText(/ deg$/);
   await pickMode(page, "Current");
   await expect(page.getByLabel("Goal readout")).toHaveText(/ mA$/);
   await expect(page.getByRole("alert")).toHaveCount(0);

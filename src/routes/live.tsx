@@ -72,7 +72,7 @@ import {
   velocityDegPerS,
   type Display,
 } from "@/lib/units";
-import { useUnitsPref } from "@/lib/use-pref";
+import { useModePref, useUnitsPref } from "@/lib/use-pref";
 
 export const Route = createFileRoute("/live")({ component: LivePage });
 
@@ -522,17 +522,23 @@ function Controls({
   latest: Sample | undefined;
 }) {
   const bus = useBus();
+  const { servos } = useSession();
   const snapshot = useRegisters(id, CONTROL_REGISTERS, "fast");
   const limitRead = useReadOnce(id, LIMIT_REGISTERS, [modeField]);
   const [draft, setDraft] = useState<Draft>();
   const [error, setError] = useState<string>();
+  const [modePref, setModePref] = useModePref();
   const writes = useRef(0);
   const seen = useRef(0);
+  /** The servo and preference the sync last wrote, so it asks once. */
+  const asked = useRef<string>(undefined);
   const modeId = useId();
   const torqueId = useId();
   const goalId = useId();
 
   const state = snapshot === undefined || snapshot.stale ? undefined : decodeControl(snapshot.read);
+  /** The preference as the servo's `mode` enum writes it. */
+  const wanted = modeField?.variants.find((v) => v.name === modePref)?.value;
   useEffect(() => {
     if (snapshot !== undefined) seen.current = snapshot.seq;
   }, [snapshot]);
@@ -557,6 +563,22 @@ function Controls({
       },
     );
   };
+
+  // The app owns the mode: the preference goes to the servo, never the other
+  // way round. One write per servo and preference, re-armed the moment the
+  // servo reports it, so a reboot back to the firmware default is corrected
+  // once and a refusal is not retried in a loop.
+  useEffect(() => {
+    if (state === undefined || wanted === undefined) return;
+    if (state.mode === wanted) {
+      asked.current = undefined;
+      return;
+    }
+    const key = `${id}:${modePref}`;
+    if (asked.current === key) return;
+    asked.current = key;
+    write("mode", { kind: "enum", value: wanted });
+  });
 
   const spec =
     mode === undefined || limits === undefined
@@ -589,6 +611,9 @@ function Controls({
   };
 
   const fmt = (c: number) => (spec === undefined ? "" : spec.toDisplay(c).toFixed(spec.digits));
+  // A latched fault holds the motor off whatever torque_enable says
+  // (firmware kernel/faults.rs); the switch alone does not say so.
+  const faulted = servos.find((s) => s.id === id)?.fault !== undefined;
   const problem = error ?? limitRead.error;
 
   return (
@@ -598,12 +623,18 @@ function Controls({
           Mode
         </Label>
         <Select
-          value={state === undefined ? "" : String(state.mode)}
+          value={wanted === undefined ? "" : String(wanted)}
           onValueChange={(v) => {
-            write("mode", { kind: "enum", value: Number(v) });
+            const value = Number(v);
+            const name = modeName(modeField?.variants ?? [], value);
+            if (name !== undefined) {
+              setModePref(name);
+              asked.current = `${id}:${name}`;
+            }
+            write("mode", { kind: "enum", value });
           }}
         >
-          <SelectTrigger id={modeId} className="flex-1" disabled={state === undefined}>
+          <SelectTrigger id={modeId} className="flex-1" disabled={modeField === undefined}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -694,6 +725,11 @@ function Controls({
         />
         <span className="font-mono text-xs text-text-3">torque_enable</span>
       </div>
+      {faulted && (
+        <p className="text-sm text-warning">
+          Motor is off: a fault is latched. Switch torque off and on to clear it.
+        </p>
+      )}
       {problem !== undefined && <p className="text-sm text-danger">{problem}</p>}
     </section>
   );

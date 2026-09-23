@@ -1,3 +1,5 @@
+import { isMode, type ModeName } from "./control";
+
 export type Theme = "light" | "dark" | "system";
 export type Pane = "open" | "collapsed";
 export type Units = "real" | "raw";
@@ -5,6 +7,7 @@ export type Units = "real" | "raw";
 export const THEME_KEY = "osc-theme";
 export const PANE_KEY = "osc-pane";
 export const UNITS_KEY = "osc-units";
+export const MODE_KEY = "osc-mode";
 
 export interface StorageLike {
   getItem(key: string): string | null;
@@ -53,6 +56,16 @@ export function readUnits(storage: StorageLike): Units {
 
 export function writeUnits(storage: StorageLike, value: Units): void {
   storage.setItem(UNITS_KEY, value);
+}
+
+/** The control mode the app intends; it is written to the servo, never read from it. */
+export function readMode(storage: StorageLike): ModeName {
+  const value = storage.getItem(MODE_KEY);
+  return value !== null && isMode(value) ? value : "Position";
+}
+
+export function writeMode(storage: StorageLike, value: ModeName): void {
+  storage.setItem(MODE_KEY, value);
 }
 
 export function applyTheme(root: ThemeRoot, theme: Theme): void {

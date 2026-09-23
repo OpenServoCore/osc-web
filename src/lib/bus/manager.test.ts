@@ -664,3 +664,34 @@ test("a subscription before its layout loads is planned on `layoutChanged`", asy
   expect(client.reads()).toEqual([[1, 10, 2]]);
   expect(seen.seen).toHaveLength(1);
 });
+
+test("a disconnect-class failure reports lost once and no probe follows the session's detach", async () => {
+  const clock = new FakeClock();
+  const client = new FakeClient(clock);
+  const layout = makeLayout();
+  const manager = new BusManager(clock);
+  const lost: string[] = [];
+  manager.attach(
+    client as unknown as OscClient & BusClient,
+    () => layout,
+    (error) => {
+      lost.push(error);
+      manager.detach(error);
+    },
+  );
+  const seen = collect();
+  manager.subscribe({ id: 1, registers: ["pos"], rate: "fast" }, seen.listener);
+  manager.subscribe({ id: 2, registers: ["pos"], rate: "fast" }, () => undefined);
+  client.failures.set(
+    "read:1",
+    "pipe: NotFoundError: Failed to execute 'transferOut' on 'USBDevice': The device was disconnected.",
+  );
+  await clock.advance(0);
+  expect(lost).toHaveLength(1);
+  expect(seen.seen.at(-1)?.stale).toBe(true);
+  const reads = client.reads().length;
+  await clock.advance(5000);
+  expect(client.reads()).toHaveLength(reads);
+  expect(lost).toHaveLength(1);
+  expect(manager.stats().perServo.get(1)?.probing).toBe(false);
+});

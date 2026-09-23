@@ -1,5 +1,6 @@
-import { readFileSync } from "node:fs";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import type { Field } from "@openservocore/client";
+import { expect, test } from "vitest";
+import descriptor from "../../../open-servo-core/descriptors/osc-servo/0.1.json";
 import fixture from "../../tests/fixtures/stall-24mhz.json";
 import {
   clampGoal,
@@ -11,7 +12,6 @@ import {
   goalSpec,
   isMode,
   isWindow,
-  LatestWins,
   LIMIT_REGISTERS,
   limitsFromTable,
   MODES,
@@ -21,15 +21,11 @@ import {
   type GoalContext,
   type Limits,
 } from "./control";
-import { spanOver, type FieldInfo, type Sample } from "./telemetry-poll";
+import { decodeSpan, planSpans } from "./bus/spans";
+import type { Sample } from "./telemetry";
 import { ADC_MAX_COUNT, ampsPerCount, senseFromTable, type Calibration } from "./units";
 
-const { fields } = JSON.parse(
-  readFileSync(
-    new URL("../../../open-servo-core/descriptors/osc-servo/0.1.json", import.meta.url),
-    "utf8",
-  ),
-) as { fields: (FieldInfo & { variants?: { name: string; value: number }[] })[] };
+const fields = descriptor.fields as Field[];
 
 const sense = senseFromTable((name) => {
   const v = (fixture.meta.sense as Record<string, number>)[name];
@@ -47,13 +43,13 @@ const swapped: Calibration = { ...cal, rawMin: 3800, rawMax: 200 };
 const limits: Limits = { dutyMaxQ15: 30000, velocityLimitCps: 4000, currentLimitCounts: 280 };
 const ctx: GoalContext = { cal, sense, limits, raw: false };
 
-test("the control and limit spans over the 0.1 descriptor fit one READ each", () => {
-  expect(spanOver(fields, CONTROL_REGISTERS)).toMatchObject({ addr: 384, count: 18 });
-  expect(spanOver(fields, LIMIT_REGISTERS)).toMatchObject({ addr: 54, count: 20 });
+test("the control and limit registers plan one read each", () => {
+  expect(planSpans(fields, CONTROL_REGISTERS)).toEqual([{ addr: 384, count: 18 }]);
+  expect(planSpans(fields, LIMIT_REGISTERS)).toEqual([{ addr: 54, count: 20 }]);
 });
 
 test("decodeControl reads the switch, the mode and every goal", () => {
-  const span = spanOver(fields, CONTROL_REGISTERS);
+  const span = { addr: 384, count: 18 };
   const bytes = new Uint8Array(span.count);
   const view = new DataView(bytes.buffer);
   const at = (name: string) => {
@@ -67,7 +63,7 @@ test("decodeControl reads the switch, the mode and every goal", () => {
   view.setInt32(at("goal_position"), 2048, true);
   view.setInt32(at("goal_velocity"), -600, true);
   view.setInt16(at("goal_current"), 150, true);
-  expect(decodeControl(span, bytes)).toEqual({
+  expect(decodeControl(decodeSpan(fields, span, bytes))).toEqual({
     torque: true,
     mode: 2,
     goals: { goal_duty: -1234, goal_position: 2048, goal_velocity: -600, goal_current: 150 },
@@ -166,102 +162,4 @@ test("isWindow accepts the listed windows only", () => {
   expect(isWindow(4)).toBe(true);
   expect(isWindow(30)).toBe(true);
   expect(isWindow(5)).toBe(false);
-});
-
-beforeEach(() => {
-  vi.useFakeTimers();
-});
-
-afterEach(() => {
-  vi.useRealTimers();
-});
-
-function deferredSender() {
-  const sent: number[] = [];
-  const resolvers: (() => void)[] = [];
-  const send = (v: number) =>
-    new Promise<void>((resolve) => {
-      sent.push(v);
-      resolvers.push(resolve);
-    });
-  const settle = async () => {
-    resolvers.shift()?.();
-    await vi.advanceTimersByTimeAsync(0);
-  };
-  return { sent, send, settle };
-}
-
-test("the first value goes out at once and a burst collapses to its newest", async () => {
-  const { sent, send, settle } = deferredSender();
-  const errors: unknown[] = [];
-  const w = new LatestWins(send, 200, (e) => errors.push(e));
-  w.push(1);
-  expect(sent).toEqual([1]);
-  w.push(2);
-  w.push(3);
-  w.push(4);
-  expect(sent).toEqual([1]);
-  await settle();
-  await vi.advanceTimersByTimeAsync(199);
-  expect(sent).toEqual([1]);
-  await vi.advanceTimersByTimeAsync(1);
-  expect(sent).toEqual([1, 4]);
-  await settle();
-  await vi.advanceTimersByTimeAsync(200);
-  expect(sent).toEqual([1, 4]);
-  expect(errors).toEqual([]);
-});
-
-test("a value pushed within the gap after a settled send waits for the gap", async () => {
-  const { sent, send, settle } = deferredSender();
-  const w = new LatestWins(send, 200, () => undefined);
-  w.push(1);
-  await settle();
-  await vi.advanceTimersByTimeAsync(50);
-  w.push(2);
-  expect(sent).toEqual([1]);
-  await vi.advanceTimersByTimeAsync(150);
-  expect(sent).toEqual([1, 2]);
-});
-
-test("a value pushed after the gap has passed goes out at once", async () => {
-  const { sent, send, settle } = deferredSender();
-  const w = new LatestWins(send, 200, () => undefined);
-  w.push(1);
-  await settle();
-  await vi.advanceTimersByTimeAsync(200);
-  w.push(2);
-  expect(sent).toEqual([1, 2]);
-});
-
-test("a rejected send reports the error and the next value still goes out", async () => {
-  const errors: unknown[] = [];
-  const sent: number[] = [];
-  const w = new LatestWins<number>(
-    (v) => {
-      sent.push(v);
-      return v === 1 ? Promise.reject(new Error("boom")) : Promise.resolve();
-    },
-    200,
-    (e) => errors.push(e),
-  );
-  w.push(1);
-  await vi.advanceTimersByTimeAsync(0);
-  expect(errors).toHaveLength(1);
-  w.push(2);
-  await vi.advanceTimersByTimeAsync(200);
-  expect(sent).toEqual([1, 2]);
-});
-
-test("stop drops the pending value and ignores later pushes", async () => {
-  const { sent, send, settle } = deferredSender();
-  const w = new LatestWins(send, 200, () => undefined);
-  w.push(1);
-  w.push(2);
-  w.stop();
-  await settle();
-  await vi.advanceTimersByTimeAsync(500);
-  w.push(3);
-  await vi.advanceTimersByTimeAsync(500);
-  expect(sent).toEqual([1]);
 });

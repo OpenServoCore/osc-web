@@ -1,8 +1,7 @@
 // The Live page's control cluster, minus React: the servo's mode and goal
-// registers, each goal's range and unit conversion, and the write policy
-// behind a slider drag.
+// registers, and each goal's range and unit conversion.
 
-import { decodeSpan, type Sample, type Span } from "./telemetry-poll";
+import type { Sample } from "./telemetry";
 import {
   ADC_MAX_COUNT,
   ampsPerCount,
@@ -24,9 +23,6 @@ export type WindowS = (typeof WINDOWS_S)[number];
 export function isWindow(value: number): value is WindowS {
   return WINDOWS_S.some((w) => w === value);
 }
-
-/** Gap between goal writes while a slider drags: at most 5 per second. */
-export const GOAL_WRITE_GAP_MS = 200;
 
 /** Duties are q15 fractions of full drive (firmware regions/control.rs). */
 const Q15 = 2 ** 15;
@@ -78,8 +74,7 @@ export interface Limits {
   currentLimitCounts: number;
 }
 
-export function decodeControl(span: Span, bytes: Uint8Array): ControlState {
-  const read = decodeSpan(span, bytes);
+export function decodeControl(read: ReadRegister): ControlState {
   return {
     torque: read("torque_enable") !== 0,
     mode: read("mode"),
@@ -229,55 +224,4 @@ export interface GoalSpec extends GoalUnits {
 
 export function goalSpec(mode: ModeName, ctx: GoalContext): GoalSpec {
   return { ...goalUnits(mode, ctx), range: goalRange(mode, ctx.cal, ctx.limits) };
-}
-
-/**
- * Latest wins: a burst of values collapses to the newest, one send runs at a
- * time, and the next starts no sooner than `gapMs` after the previous settled.
- * The first value of a burst goes out at once.
- */
-export class LatestWins<T> {
-  private next: { value: T } | undefined;
-  private busy = false;
-  private timer: ReturnType<typeof setTimeout> | undefined;
-  private stopped = false;
-
-  constructor(
-    private readonly send: (value: T) => Promise<void>,
-    private readonly gapMs: number,
-    private readonly onError: (error: unknown) => void,
-  ) {}
-
-  push(value: T): void {
-    if (this.stopped) return;
-    this.next = { value };
-    if (!this.busy && this.timer === undefined) this.flush();
-  }
-
-  /** Drops what has not been sent; a send already running finishes. */
-  stop(): void {
-    this.stopped = true;
-    this.next = undefined;
-    clearTimeout(this.timer);
-    this.timer = undefined;
-  }
-
-  private flush(): void {
-    const next = this.next;
-    if (next === undefined) return;
-    this.next = undefined;
-    this.busy = true;
-    this.send(next.value)
-      .catch((e: unknown) => {
-        if (!this.stopped) this.onError(e);
-      })
-      .finally(() => {
-        this.busy = false;
-        if (this.stopped) return;
-        this.timer = setTimeout(() => {
-          this.timer = undefined;
-          this.flush();
-        }, this.gapMs);
-      });
-  }
 }

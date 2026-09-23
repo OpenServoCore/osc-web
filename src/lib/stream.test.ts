@@ -14,7 +14,7 @@ import {
   toCsv,
   unitsFor,
 } from "./stream";
-import type { TelemetryConfig } from "./telemetry-poll";
+import type { TelemetryConfig } from "./telemetry";
 import { calibrationFromTable, senseFromTable } from "./units";
 
 /** Mirrors core tel.rs `sample(i)`: every field, window_valid on even i. */

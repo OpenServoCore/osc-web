@@ -3,7 +3,7 @@
 // that mirrors the ident host's StreamAssembler, and the CSV export.
 
 import { dutyPercent } from "./control";
-import type { TelemetryConfig } from "./telemetry-poll";
+import type { TelemetryConfig } from "./telemetry";
 import {
   busV,
   currentMa,

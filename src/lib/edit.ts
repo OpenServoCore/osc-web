@@ -1,4 +1,4 @@
-import type { Field } from "@openservocore/client";
+import type { Field, Value } from "@openservocore/client";
 
 /** `min`/`max` are the descriptor's bounds in counts; `scale` is display units per count. */
 export interface NumberKind {
@@ -39,6 +39,24 @@ export type ValueOf<K extends FieldKind> = K extends BoolKind
     : number;
 
 export type ParseResult<T> = { ok: true; value: T } | { ok: false; reason: string };
+
+/** The codec's tagged value for a parsed edit; the tag follows the field, so `raw` must match it. */
+export function toValue(field: Pick<Field, "name" | "kind">, raw: EditValue): Value {
+  switch (field.kind) {
+    case "uint":
+    case "int":
+    case "enum":
+      if (typeof raw === "number") return { kind: field.kind, value: raw };
+      break;
+    case "bool":
+      if (typeof raw === "boolean") return { kind: "bool", value: raw };
+      break;
+    case "bytes":
+      if (raw instanceof Uint8Array) return { kind: "bytes", value: raw };
+      break;
+  }
+  throw new Error(`${field.name} is ${field.kind}, not ${typeof raw}`);
+}
 
 export function fieldKind(field: Field): FieldKind {
   switch (field.kind) {

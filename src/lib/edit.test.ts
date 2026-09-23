@@ -8,6 +8,7 @@ import {
   parseInput,
   rangeHint,
   toRaw,
+  toValue,
   type NumberKind,
 } from "./edit";
 
@@ -212,4 +213,14 @@ describe("round trips", () => {
       value: bytes,
     });
   });
+});
+
+test("toValue tags a parsed edit by the field's kind and rejects a mismatch", () => {
+  expect(toValue(id, 7)).toEqual({ kind: "uint", value: 7 });
+  expect(toValue(goal, -3)).toEqual({ kind: "int", value: -3 });
+  expect(toValue(mode, 2)).toEqual({ kind: "enum", value: 2 });
+  expect(toValue(torque, true)).toEqual({ kind: "bool", value: true });
+  const bytes = new Uint8Array([1, 2, 3, 4]);
+  expect(toValue(words, bytes)).toEqual({ kind: "bytes", value: bytes });
+  expect(() => toValue(torque, 1)).toThrow("torque_enable is bool, not number");
 });

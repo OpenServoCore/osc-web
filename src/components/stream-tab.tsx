@@ -1,5 +1,5 @@
 import { CircleQuestionMark, Download, Zap } from "lucide-react";
-import { useEffect, useId, useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import type uPlot from "uplot";
 import { Chart, type ChartOptions } from "@/components/uplot";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useBus, useReadOnce } from "@/lib/bus/hooks";
 import { useChartTokens, type ChartTokens } from "@/lib/chart-theme";
 import { hex16 } from "@/lib/format";
 import { useSession } from "@/lib/session";
@@ -37,16 +38,10 @@ import {
 import {
   BIAS_REGISTERS,
   CONFIG_REGISTERS,
-  decodeSpan,
-  spanOver,
+  configFrom,
   type TelemetryConfig,
-} from "@/lib/telemetry-poll";
-import {
-  biasesFromTable,
-  calibrationFromTable,
-  calibrationStatus,
-  senseFromTable,
-} from "@/lib/units";
+} from "@/lib/telemetry";
+import { calibrationStatus } from "@/lib/units";
 import { useUnitsPref } from "@/lib/use-pref";
 
 const DEFAULT_COUNT = 120;
@@ -57,6 +52,8 @@ const COUNT_MAX = 65535;
 const WINDOW_MAX_MS = 4_294_967;
 const DASH = [6, 4];
 const COLORS: readonly (keyof ChartTokens)[] = ["series1", "series2", "series3", "ctx"];
+/** The conversion registers plus the tick rate a burst's time axis needs. */
+const STREAM_REGISTERS: readonly string[] = [...CONFIG_REGISTERS, ...BIAS_REGISTERS, "tick_hz"];
 
 interface StreamConfig extends TelemetryConfig {
   tickHz: number;
@@ -125,8 +122,9 @@ function saveCsv(text: string, name: string): void {
 }
 
 export function StreamTab({ id }: { id: number }) {
-  const { descriptor, descriptorError, run } = useSession();
-  const [config, setConfig] = useState<StreamConfig>();
+  const { descriptor, descriptorError } = useSession();
+  const bus = useBus();
+  const stream = useReadOnce(id, STREAM_REGISTERS, [descriptor]);
   const [fields, setFields] = useState<readonly FieldKey[]>(DEFAULT_FIELDS);
   const [count, setCount] = useState(String(DEFAULT_COUNT));
   const [windowMs, setWindowMs] = useState(String(DEFAULT_WINDOW_MS));
@@ -139,33 +137,14 @@ export function StreamTab({ id }: { id: number }) {
   const windowId = useId();
   const fieldsId = useId();
 
-  useEffect(() => {
-    if (descriptor === undefined) return;
-    const all = descriptor.fields();
-    const config = spanOver(all, [...CONFIG_REGISTERS, "tick_hz"]);
-    const biases = spanOver(all, BIAS_REGISTERS);
-    let live = true;
-    run(async (c) => {
-      const read = decodeSpan(config, await c.read(id, config.addr, config.count));
-      const bias = decodeSpan(biases, await c.read(id, biases.addr, biases.count));
-      return {
-        sense: senseFromTable(read),
-        cal: calibrationFromTable(read),
-        biases: biasesFromTable(bias),
-        tickHz: read("tick_hz"),
-      };
-    }).then(
-      (c) => {
-        if (live) setConfig(c);
-      },
-      (e: unknown) => {
-        if (live) setError(message(e));
-      },
-    );
-    return () => {
-      live = false;
-    };
-  }, [descriptor, id, run]);
+  const { snapshot } = stream;
+  const config = useMemo<StreamConfig | undefined>(
+    () =>
+      snapshot === undefined
+        ? undefined
+        : { ...configFrom(snapshot.read), tickHz: snapshot.read("tick_hz") },
+    [snapshot],
+  );
 
   const calibrated = config !== undefined && calibrationStatus(config.cal).valid;
   const raw = !calibrated || unitsPref === "raw";
@@ -199,7 +178,8 @@ export function StreamTab({ id }: { id: number }) {
       return;
     }
     setPending(true);
-    run((c) => c.telBurst(id, descriptor, mask, samples, window * 1000))
+    bus
+      .command((c) => c.telBurst(id, descriptor, mask, samples, window * 1000))
       .then(
         (burst) => {
           const rows = decodeBurst(burst.frames, mask);
@@ -215,7 +195,7 @@ export function StreamTab({ id }: { id: number }) {
       });
   };
 
-  const problem = error ?? descriptorError;
+  const problem = error ?? (descriptor === undefined ? undefined : stream.error) ?? descriptorError;
   const heading = `${fieldsId}-chart`;
   const title = (family: "position" | "electrical") =>
     [...new Set(units.filter((u) => familyOf(u.key) === family).map((u) => u.unit))].join(", ");

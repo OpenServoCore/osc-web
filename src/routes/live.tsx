@@ -1,4 +1,4 @@
-import type { Descriptor, Field } from "@openservocore/client";
+import type { Field, Value } from "@openservocore/client";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Pause, Play, TriangleAlert } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
@@ -28,42 +28,39 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useBus, useReadOnce, useRegisters, useRing } from "@/lib/bus/hooks";
 import { useChartTokens, type ChartTokens } from "@/lib/chart-theme";
 import {
   clampGoal,
   CONTROL_REGISTERS,
   decodeControl,
   dutyPercent,
-  GOAL_WRITE_GAP_MS,
   goalOf,
   goalSpec,
   goalUnits,
   isWindow,
-  LatestWins,
   LIMIT_REGISTERS,
   limitsFromTable,
   modeLabel,
   modeName,
   WINDOWS_S,
-  type ControlState,
   type GoalRegister,
   type GoalUnits,
-  type Limits,
   type ModeName,
   type WindowS,
 } from "@/lib/control";
 import { isUnits, type Units } from "@/lib/prefs";
-import { useSession, type Session } from "@/lib/session";
+import { useSession } from "@/lib/session";
 import {
-  decodeSpan,
+  BIAS_REGISTERS,
+  CONFIG_REGISTERS,
+  configFrom,
+  decodeSample,
   POLL_HZ,
-  SampleRing,
-  spanOver,
-  startTelemetry,
+  SAMPLE_REGISTERS,
   type Sample,
-  type Span,
   type TelemetryConfig,
-} from "@/lib/telemetry-poll";
+} from "@/lib/telemetry";
 import {
   busV,
   calibrationStatus,
@@ -101,6 +98,10 @@ interface PanelDef {
 const DASH = [6, 4];
 /** The ring keeps the longest window, so a shorter one is a view over the same samples. */
 const RING_S: WindowS = 30;
+/** One read behind every conversion the panels and the goal units need. */
+const CONVERSION_REGISTERS: readonly string[] = [...CONFIG_REGISTERS, ...BIAS_REGISTERS];
+/** Inside the sample span, so the mode costs no exchange of its own. */
+const MODE_REGISTERS: readonly string[] = ["mode"];
 
 const POSITION: SeriesDef = { key: "position", label: "Position", token: "series1" };
 const VELOCITY: SeriesDef = { key: "velocity", label: "Velocity", token: "series2", right: true };
@@ -281,49 +282,25 @@ function LivePage() {
 }
 
 function Telemetry({ id }: { id: number }) {
-  const { descriptor, descriptorError, run } = useSession();
-  const [config, setConfig] = useState<TelemetryConfig>();
-  const [samples, setSamples] = useState<Sample[]>([]);
-  /** The samples on screen while paused; the poll keeps filling the ring behind them. */
+  const { descriptor, descriptorError } = useSession();
+  const snapshots = useRing(id, SAMPLE_REGISTERS, "fast", RING_S);
+  const conversion = useReadOnce(id, CONVERSION_REGISTERS, [descriptor]);
+  const modeSnapshot = useRegisters(id, MODE_REGISTERS, "fast");
+  /** The samples on screen while paused; the subscription keeps filling the ring behind them. */
   const [frozen, setFrozen] = useState<Sample[]>();
   const [windowS, setWindowS] = useState<WindowS>(RING_S);
-  const [error, setError] = useState<string>();
   const [shown, setShown] = useState(initialShown);
-  /** The servo's mode, switch and goals as last read back. */
-  const [control, setControl] = useState<ControlState>();
   const [unitsPref, setUnitsPref] = useUnitsPref();
   const tokens = useChartTokens();
 
-  useEffect(() => {
-    if (descriptor === undefined) return;
-    const ring = new SampleRing(RING_S);
-    let pending = false;
-    return startTelemetry({
-      fields: descriptor.fields(),
-      // A tick due while the last read is still queued is skipped, so a busy
-      // bus never piles reads up behind the writes.
-      read: async (addr, count) => {
-        if (pending) return undefined;
-        pending = true;
-        try {
-          return await run((c) => c.read(id, addr, count));
-        } finally {
-          pending = false;
-        }
-      },
-      now: () => performance.now() / 1000,
-      periodMs: 1000 / POLL_HZ,
-      onConfig: setConfig,
-      onSample: (s) => {
-        ring.push(s);
-        setSamples(ring.samples);
-      },
-      onError: (e: unknown) => {
-        setError(message(e));
-      },
-    });
-  }, [descriptor, id, run]);
-
+  const config = useMemo(
+    () => (conversion.snapshot === undefined ? undefined : configFrom(conversion.snapshot.read)),
+    [conversion.snapshot],
+  );
+  const samples = useMemo(
+    () => snapshots.filter((s) => !s.stale).map((s) => decodeSample(s.read, s.t)),
+    [snapshots],
+  );
   const calibrated = config !== undefined && calibrationStatus(config.cal).valid;
   const raw = !calibrated || unitsPref === "raw";
   const shownSamples = frozen ?? samples;
@@ -336,9 +313,9 @@ function Telemetry({ id }: { id: number }) {
   // mode_active from it within one slow tick, and the simulated fleet never
   // runs the kernel that would.
   const mode =
-    modeField === undefined || control === undefined
+    modeField === undefined || modeSnapshot === undefined || modeSnapshot.stale
       ? undefined
-      : modeName(modeField.variants, control.mode);
+      : modeName(modeField.variants, modeSnapshot.read("mode"));
   const active =
     modeField === undefined || latestSample === undefined
       ? undefined
@@ -355,8 +332,12 @@ function Telemetry({ id }: { id: number }) {
     () => (config === undefined ? [] : toRows(shownSamples, config, raw, goal, windowS)),
     [shownSamples, config, raw, goal, windowS],
   );
+  const newest = snapshots.at(-1);
   const latest = rows.at(-1);
-  const problem = error ?? descriptorError;
+  const problem =
+    (descriptor === undefined ? undefined : conversion.error) ??
+    (newest?.stale === true ? newest.error : undefined) ??
+    descriptorError;
   const windowId = useId();
 
   return (
@@ -427,18 +408,15 @@ function Telemetry({ id }: { id: number }) {
       <aside className="sticky top-4 w-[300px] shrink-0">
         <Card size="sm">
           <CardContent className="flex flex-col gap-4">
-            {descriptor !== undefined && config !== undefined && (
+            {config !== undefined && (
               <Controls
                 id={id}
-                descriptor={descriptor}
+                modeField={modeField}
                 config={config}
                 raw={raw}
-                control={control}
-                setControl={setControl}
                 mode={mode}
                 active={active}
                 latest={latestSample}
-                run={run}
               />
             )}
             <section className="border-t pt-3">
@@ -517,122 +495,61 @@ function Panel({
   );
 }
 
-interface Spans {
-  control: Span;
-  limits: Span;
-  fields: Map<string, Field>;
-}
-
-function spansOver(descriptor: Descriptor): Spans {
-  const fields = descriptor.fields();
-  return {
-    control: spanOver(fields, CONTROL_REGISTERS),
-    limits: spanOver(fields, LIMIT_REGISTERS),
-    fields: new Map(fields.map((f) => [f.name, f])),
-  };
-}
-
-/** One write, then the control span read back in the same turn on the queue. */
-function writeControl(
-  run: Session["run"],
-  id: number,
-  spans: Spans,
-  name: string,
-  bytes: Uint8Array,
-): Promise<ControlState> {
-  const field = spans.fields.get(name);
-  if (field === undefined) return Promise.reject(new Error(`descriptor has no ${name}`));
-  return run(async (c) => {
-    await c.write(id, field.addr, bytes);
-    return decodeControl(spans.control, await c.read(id, spans.control.addr, spans.control.count));
-  });
+/** The slider's own goal while a burst of writes is out; the servo's goal otherwise. */
+interface Draft {
+  register: GoalRegister;
+  counts: number;
+  /** The snapshot seq the burst's last write acked past; unset while writes are out. */
+  until?: number;
 }
 
 function Controls({
   id,
-  descriptor,
+  modeField,
   config,
   raw,
-  control: state,
-  setControl: setState,
   mode,
   active,
   latest,
-  run,
 }: {
   id: number;
-  descriptor: Descriptor;
+  modeField: Field | undefined;
   config: TelemetryConfig;
   raw: boolean;
-  control: ControlState | undefined;
-  setControl: (state: ControlState) => void;
   mode: ModeName | undefined;
   /** What the servo reports running, from the newest sample on screen. */
   active: ModeName | undefined;
   latest: Sample | undefined;
-  run: Session["run"];
 }) {
-  const spans = useMemo(() => spansOver(descriptor), [descriptor]);
-  const [limits, setLimits] = useState<Limits>();
-  /** The slider's own goal while it is being moved; the servo's goal otherwise. */
-  const [draft, setDraft] = useState<{ register: GoalRegister; counts: number }>();
+  const bus = useBus();
+  const snapshot = useRegisters(id, CONTROL_REGISTERS, "fast");
+  const limitRead = useReadOnce(id, LIMIT_REGISTERS, [modeField]);
+  const [draft, setDraft] = useState<Draft>();
   const [error, setError] = useState<string>();
+  const writes = useRef(0);
+  const seen = useRef(0);
   const modeId = useId();
   const torqueId = useId();
   const goalId = useId();
 
-  const write = (name: string, bytes: Uint8Array) => writeControl(run, id, spans, name, bytes);
-
-  // Lives with the effect, not in state: React mounts effects twice in
-  // development and a stopped writer must not survive the first unmount.
-  const writer = useRef<LatestWins<{ register: GoalRegister; counts: number }>>(undefined);
+  const state = snapshot === undefined || snapshot.stale ? undefined : decodeControl(snapshot.read);
   useEffect(() => {
-    const w = new LatestWins<{ register: GoalRegister; counts: number }>(
-      async ({ register, counts }) => {
-        const bytes = descriptor.encode(register, { kind: "int", value: counts });
-        setState(await writeControl(run, id, spans, register, bytes));
-      },
-      GOAL_WRITE_GAP_MS,
-      (e) => {
-        setError(message(e));
-      },
-    );
-    writer.current = w;
-    return () => {
-      w.stop();
-      writer.current = undefined;
-    };
-  }, [descriptor, id, run, spans, setState]);
+    if (snapshot !== undefined) seen.current = snapshot.seq;
+  }, [snapshot]);
+  // The draft outlives the burst that wrote it: it clears on the first snapshot
+  // the servo answered past the last write, so a drag never snaps back mid-way.
+  if (draft?.until !== undefined && snapshot !== undefined && snapshot.seq > draft.until) {
+    setDraft(undefined);
+  }
 
-  useEffect(() => {
-    let live = true;
-    run(async (c) => {
-      const bytes = await c.read(id, spans.limits.addr, spans.limits.count);
-      const control = await c.read(id, spans.control.addr, spans.control.count);
-      return {
-        limits: limitsFromTable(decodeSpan(spans.limits, bytes)),
-        state: decodeControl(spans.control, control),
-      };
-    }).then(
-      (r) => {
-        if (!live) return;
-        setLimits(r.limits);
-        setState(r.state);
-      },
-      (e: unknown) => {
-        if (live) setError(message(e));
-      },
-    );
-    return () => {
-      live = false;
-    };
-  }, [id, run, spans, setState]);
+  const limits = useMemo(
+    () => (limitRead.snapshot === undefined ? undefined : limitsFromTable(limitRead.snapshot.read)),
+    [limitRead.snapshot],
+  );
 
-  const apply = (next: Promise<ControlState>) => {
-    next.then(
-      (s) => {
-        setState(s);
-        setDraft(undefined);
+  const write = (register: string, value: Value) => {
+    bus.write(id, register, value).then(
+      () => {
         setError(undefined);
       },
       (e: unknown) => {
@@ -641,7 +558,6 @@ function Controls({
     );
   };
 
-  const modeField = spans.fields.get("mode");
   const spec =
     mode === undefined || limits === undefined
       ? undefined
@@ -657,10 +573,23 @@ function Controls({
     if (spec === undefined) return;
     const clamped = clampGoal(next, spec.range);
     setDraft({ register: spec.register, counts: clamped });
-    writer.current?.push({ register: spec.register, counts: clamped });
+    writes.current++;
+    bus.write(id, spec.register, { kind: "int", value: clamped }).then(
+      () => {
+        setError(undefined);
+        if (--writes.current > 0) return;
+        const until = seen.current;
+        setDraft((d) => (d === undefined ? d : { ...d, until }));
+      },
+      (e: unknown) => {
+        setError(message(e));
+        if (--writes.current === 0) setDraft(undefined);
+      },
+    );
   };
 
   const fmt = (c: number) => (spec === undefined ? "" : spec.toDisplay(c).toFixed(spec.digits));
+  const problem = error ?? limitRead.error;
 
   return (
     <section className="flex flex-col gap-3">
@@ -671,7 +600,7 @@ function Controls({
         <Select
           value={state === undefined ? "" : String(state.mode)}
           onValueChange={(v) => {
-            apply(write("mode", descriptor.encode("mode", { kind: "enum", value: Number(v) })));
+            write("mode", { kind: "enum", value: Number(v) });
           }}
         >
           <SelectTrigger id={modeId} className="flex-1" disabled={state === undefined}>
@@ -760,17 +689,12 @@ function Controls({
           checked={state?.torque ?? false}
           disabled={state === undefined}
           onCheckedChange={(on) => {
-            apply(
-              write(
-                "torque_enable",
-                descriptor.encode("torque_enable", { kind: "bool", value: on }),
-              ),
-            );
+            write("torque_enable", { kind: "bool", value: on });
           }}
         />
         <span className="font-mono text-xs text-text-3">torque_enable</span>
       </div>
-      {error !== undefined && <p className="text-sm text-danger">{error}</p>}
+      {problem !== undefined && <p className="text-sm text-danger">{problem}</p>}
     </section>
   );
 }

@@ -1,8 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import { gotoSim } from "./helpers";
 
-async function openLive(page: Page): Promise<void> {
-  await gotoSim(page, [1, 2]);
+async function openLive(page: Page, opts: { debug?: boolean } = {}): Promise<void> {
+  await gotoSim(page, [1, 2], opts);
   await page.getByRole("button", { name: "ID 1" }).click();
   // The servo page proves the selection landed: leaving for Live while that
   // navigation is still compiling on a cold dev server races the two.
@@ -127,4 +127,32 @@ test("pause freezes the readouts while the poll runs on, resume lets them move",
   await page.getByRole("button", { name: "Resume" }).click();
   // The replayed current is noisy every tick, so it moves within a few polls.
   await expect(current).not.toHaveText(c0 ?? "", { timeout: 5000 });
+});
+
+test("a burst of goal changes lands on the last one and coalesces into the bus", async ({
+  page,
+}) => {
+  await openLive(page, { debug: true });
+  await pickMode(page, "Velocity");
+  await setGoal(page, "50");
+  const readout = page.getByLabel("Goal readout");
+  await expect(readout).toHaveText("50 deg/s");
+  const thumb = page.getByRole("slider");
+  await thumb.focus();
+  // One microtask between steps is enough for the slider to see the new value
+  // and far too little for an exchange to settle, so the steps outrun the bus
+  // the way a drag does on hardware.
+  await thumb.evaluate(async (el) => {
+    for (let i = 0; i < 20; i++) {
+      el.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      await Promise.resolve();
+    }
+  });
+  // Twenty counts of goal_velocity is one deg/s at the fleet's calibration.
+  await expect(readout).toHaveText("51 deg/s");
+  // The servo's own read-back, off the telemetry ring.
+  await expect(page.getByLabel("Goal value")).toHaveText("51 deg/s");
+  const panel = page.getByRole("region", { name: "Bus statistics" });
+  await expect(panel.locator('dt:text-is("coalesced") + dd')).not.toHaveText("0");
+  await expect(panel.locator('dt:text-is("errors") + dd')).toHaveText("0");
 });

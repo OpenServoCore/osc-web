@@ -1,14 +1,12 @@
-import type { Health } from "@openservocore/client";
 import { CircleAlert, CircleCheck, HeartPulse, TriangleAlert } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useBus, useRegisters } from "@/lib/bus/hooks";
+import { healthFrom, HEALTH_REGISTERS } from "@/lib/bus/spans";
 import { countersLine, statements, trimLine, type Level } from "@/lib/health";
-import { useSession } from "@/lib/session";
-
-const POLL_MS = 1000;
 
 const icons = { fault: CircleAlert, warn: TriangleAlert, ok: CircleCheck };
 const tone: Record<Level, string> = {
@@ -18,44 +16,22 @@ const tone: Record<Level, string> = {
 };
 
 export function HealthCard({ id }: { id: number }) {
-  const { run } = useSession();
-  const [health, setHealth] = useState<Health>();
+  const bus = useBus();
+  const snapshot = useRegisters(id, HEALTH_REGISTERS, "slow");
   const [error, setError] = useState<string>();
   const [clearing, setClearing] = useState(false);
 
-  useEffect(() => {
-    let live = true;
-    // One read in flight at a time: a poll that outlasts its period is skipped
-    // rather than queued behind itself.
-    let busy = false;
-    async function poll() {
-      if (busy || !live) return;
-      busy = true;
-      try {
-        const read = await run((c) => c.health(id));
-        if (live) {
-          setHealth(read);
-          setError(undefined);
-        }
-      } catch (e) {
-        if (live) setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        busy = false;
-      }
-    }
-    void poll();
-    const timer = window.setInterval(() => void poll(), POLL_MS);
-    return () => {
-      live = false;
-      window.clearInterval(timer);
-    };
-  }, [run, id]);
+  // A stale snapshot carries what the cache still holds, which may be nothing.
+  const complete =
+    snapshot !== undefined && HEALTH_REGISTERS.every((name) => snapshot.values.has(name));
+  const health = complete ? healthFrom(snapshot.read) : undefined;
+  const problem = error ?? (snapshot?.stale === true ? snapshot.error : undefined);
 
   async function clear() {
     setClearing(true);
     try {
-      await run((c) => c.clearCounters(id));
-      setHealth(await run((c) => c.health(id)));
+      // The counters come back on the subscription's next read.
+      await bus.command((c) => c.clearCounters(id));
       setError(undefined);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -73,7 +49,7 @@ export function HealthCard({ id }: { id: number }) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {error !== undefined && <p className="text-danger">{error}</p>}
+        {problem !== undefined && <p className="text-danger">{problem}</p>}
         {health === undefined ? (
           <>
             <Skeleton className="h-5 w-full" />

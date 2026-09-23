@@ -9,12 +9,12 @@ import { useSession } from "@/lib/session";
 export const Route = createFileRoute("/servo")({ component: ServoPage });
 
 function ServoPage() {
-  const { status, client, servos, selected } = useSession();
+  const { status, servos, selected } = useSession();
   // A rescan keeps the page on its servo: falling back to the placeholder
   // would unmount the cards, and with them the feedback an action just landed.
   const live = status === "ready" || status === "scanning";
   const servo = live ? servos.find((s) => s.id === selected) : undefined;
-  if (client === undefined || servo === undefined) {
+  if (servo === undefined) {
     return <p className="text-text-3">Pick a servo in the left pane.</p>;
   }
   return (

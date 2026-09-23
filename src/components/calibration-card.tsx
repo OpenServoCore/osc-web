@@ -1,6 +1,6 @@
-import type { Field, OscClient } from "@openservocore/client";
+import type { Field } from "@openservocore/client";
 import { Check, CircleQuestionMark, Ruler } from "lucide-react";
-import { useId, useState } from "react";
+import { useId } from "react";
 import { ValueEditor } from "@/components/value-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,39 +8,22 @@ import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/componen
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useBus } from "@/lib/bus/hooks";
 import { CALIBRATION_REGISTERS, editReason, type CalibrationRegister } from "@/lib/calibration";
-import { decodeSpan, span } from "@/lib/bus/spans";
 import { hexAddr } from "@/lib/format";
 import { useSession } from "@/lib/session";
-import { calibrationFromTable, calibrationStatus, type Calibration } from "@/lib/units";
-
-const NAMES = CALIBRATION_REGISTERS.map((r) => r.name);
-
-async function readCalibration(
-  client: OscClient,
-  id: number,
-  fields: readonly Field[],
-): Promise<Calibration> {
-  const block = span(fields, NAMES);
-  const bytes = await client.read(id, block.addr, block.count);
-  return calibrationFromTable(decodeSpan(fields, block, bytes));
-}
+import { calibrationStatus, type Calibration } from "@/lib/units";
 
 export function CalibrationCard({ id, uid }: { id: number; uid: string }) {
-  const { descriptor, descriptorError, values, run, refreshConstants } = useSession();
-  const [own, setOwn] = useState<Calibration>();
-  const cal = own ?? values.get(uid)?.constants.calibration;
+  const { descriptor, descriptorError, values, refreshConstants } = useSession();
+  const bus = useBus();
+  const cal = values.get(uid)?.constants.calibration;
   const fields = descriptor?.fields();
 
   async function apply(field: Field, raw: number) {
-    if (descriptor === undefined || fields === undefined) return;
-    const kind = field.kind === "int" ? "int" : "uint";
-    const bytes = descriptor.encode(field.name, { kind, value: raw });
-    const fresh = await run(async (c) => {
-      await c.write(id, field.addr, bytes);
-      return readCalibration(c, id, fields);
-    });
-    setOwn(fresh);
+    await bus.write(id, field.name, { kind: field.kind === "int" ? "int" : "uint", value: raw });
+    // The write dirties the CALIB span; the session re-reads the constants
+    // every card on the page shows.
     refreshConstants(uid);
   }
 

@@ -1,4 +1,3 @@
-import type { Descriptor } from "@openservocore/client";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronRight, CircleHelp, Cog, Download, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -9,11 +8,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TableSearch } from "@/components/table-search";
 import { ValueEditor } from "@/components/value-editor";
+import { useBus, useReadOnce, useRegisters } from "@/lib/bus/hooks";
+import type { Snapshot } from "@/lib/bus/manager";
 import { toValue, type EditValue } from "@/lib/edit";
 import { hexAddr } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import {
   buildTable,
+  editValues,
   formatRow,
   searchIndex,
   type Group,
@@ -23,6 +25,7 @@ import {
   type Tab,
   type TabName,
   type TableModel,
+  type Values,
 } from "@/lib/table-model";
 import {
   expandFor,
@@ -32,10 +35,11 @@ import {
   type OpenGroups,
   type SearchTarget,
 } from "@/lib/table-search";
-import { FLASH_MS, LIVE_POLL_MS, spanHolding, startPoll } from "@/lib/table-live";
-import { decodeSpan, readRows, readSpans, type Values } from "@/lib/table-read";
 
 export const Route = createFileRoute("/table")({ component: TablePage });
+
+/** How long a row stays green after a jump or a write lands. */
+const FLASH_MS = 800;
 
 const HELP: ReadonlyMap<string, string> = new Map([
   [
@@ -118,7 +122,6 @@ function TablePage() {
       ) : (
         <Table
           id={selected}
-          descriptor={descriptor}
           model={model}
           tab={tab}
           onTab={setTab}
@@ -135,7 +138,6 @@ function TablePage() {
 
 function Table({
   id,
-  descriptor,
   model,
   tab,
   onTab,
@@ -144,7 +146,6 @@ function Table({
   jump,
 }: {
   id: number;
-  descriptor: Descriptor;
   model: TableModel;
   tab: TabName;
   onTab: (tab: TabName) => void;
@@ -186,7 +187,6 @@ function Table({
           <TabPanel
             key={id}
             id={id}
-            descriptor={descriptor}
             tab={t}
             refresh={refresh}
             open={open}
@@ -204,59 +204,89 @@ interface Flash {
   seq: number;
 }
 
-function TabPanel({
-  id,
-  descriptor,
-  tab,
-  refresh,
-  open,
-  onToggle,
-  jump,
-}: {
+/** A write waiting to show: its row flashes on the first snapshot past `after`. */
+interface Pending {
+  name: string;
+  after: number;
+}
+
+interface PanelProps {
   id: number;
-  descriptor: Descriptor;
   tab: Tab;
   refresh: number;
   open: OpenGroups;
   onToggle: (group: string, open: boolean) => void;
   jump: Jump | undefined;
+}
+
+function TabPanel(props: PanelProps) {
+  return props.tab.name === "Live values" ? <LivePanel {...props} /> : <StaticPanel {...props} />;
+}
+
+function useRegisterNames(tab: Tab): string[] {
+  return useMemo(() => tab.groups.flatMap((g) => g.rows).map((r) => r.field.name), [tab]);
+}
+
+function useRowValues(snapshot: Snapshot | undefined): Values | undefined {
+  return useMemo(
+    () => (snapshot === undefined ? undefined : editValues(snapshot.values)),
+    [snapshot],
+  );
+}
+
+/** A settled tab: read once on arrival, on Refresh and after an edit. */
+function StaticPanel(props: PanelProps) {
+  const names = useRegisterNames(props.tab);
+  const { snapshot, error, reload } = useReadOnce(props.id, names, [props.refresh]);
+  const values = useRowValues(snapshot);
+  return <Panel {...props} values={values} error={error} seq={snapshot?.seq} onWrite={reload} />;
+}
+
+/** The Live values tab: a slow subscription, which carries a write back itself. */
+function LivePanel(props: PanelProps) {
+  const names = useRegisterNames(props.tab);
+  const snapshot = useRegisters(props.id, names, "slow");
+  const values = useRowValues(snapshot);
+  return (
+    <Panel
+      {...props}
+      values={values}
+      error={snapshot?.stale === true ? snapshot.error : undefined}
+      seq={snapshot?.seq}
+    />
+  );
+}
+
+function Panel({
+  id,
+  tab,
+  open,
+  onToggle,
+  jump,
+  values,
+  error,
+  seq,
+  onWrite,
+}: PanelProps & {
+  values: Values | undefined;
+  error: string | undefined;
+  seq: number | undefined;
+  /** Re-read after a write, for a source that does not carry one back itself. */
+  onWrite?: () => void;
 }) {
-  const { run } = useSession();
-  const [values, setValues] = useState<Values>();
-  const [error, setError] = useState<string>();
+  const bus = useBus();
+  const [pending, setPending] = useState<Pending>();
   const [flash, setFlash] = useState<Flash>();
   const body = useRef<HTMLDivElement>(null);
-  const holds = useRef(0);
-  const rows = useMemo(() => tab.groups.flatMap((g) => g.rows), [tab]);
-  const spans = useMemo(() => readSpans(rows), [rows]);
+  const seen = useRef(0);
 
   useEffect(() => {
-    let live = true;
-    const load = async () => {
-      const v = await run((c) =>
-        readRows(rows, descriptor, (addr, count) => c.read(id, addr, count)),
-      );
-      if (!live) return;
-      setValues(v);
-      setError(undefined);
-    };
-    const fail = (e: unknown) => {
-      if (live) setError(e instanceof Error ? e.message : String(e));
-    };
-    const stop =
-      tab.name === "Live values"
-        ? startPoll({
-            periodMs: LIVE_POLL_MS,
-            tick: load,
-            hold: () => holds.current > 0,
-            onError: fail,
-          })
-        : (load().catch(fail), undefined);
-    return () => {
-      live = false;
-      stop?.();
-    };
-  }, [run, id, descriptor, tab, rows, refresh]);
+    if (seq !== undefined) seen.current = seq;
+  }, [seq]);
+  if (pending !== undefined && seq !== undefined && seq > pending.after) {
+    setPending(undefined);
+    setFlash((f) => ({ name: pending.name, seq: (f?.seq ?? 0) + 1 }));
+  }
 
   // A collapsed group's rows reach the DOM only with the render that expands it.
   useEffect(() => {
@@ -275,20 +305,9 @@ function TabPanel({
   }, [flash]);
 
   async function apply(row: Row, raw: EditValue): Promise<void> {
-    const { field } = row;
-    const bytes = descriptor.encode(field.name, toValue(field, raw));
-    const span = spanHolding(spans, field);
-    holds.current++;
-    try {
-      const fresh = await run(async (c) => {
-        await c.write(id, field.addr, bytes);
-        return decodeSpan(descriptor, rows, span, await c.read(id, span.addr, span.count));
-      });
-      setValues((v) => new Map([...(v ?? []), ...fresh]));
-      setFlash((f) => ({ name: field.name, seq: (f?.seq ?? 0) + 1 }));
-    } finally {
-      holds.current--;
-    }
+    await bus.write(id, row.field.name, toValue(row.field, raw));
+    setPending({ name: row.field.name, after: seen.current });
+    onWrite?.();
   }
 
   return (

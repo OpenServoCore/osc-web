@@ -1,8 +1,9 @@
-import type { Field, Variant } from "@openservocore/client";
+import type { Field, Value, Variant } from "@openservocore/client";
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "vitest";
 import {
   buildTable,
+  editValues,
   formatRow,
   labelParts,
   matchRows,
@@ -279,4 +280,24 @@ describe("search", () => {
         .map((e) => e.name),
     );
   });
+});
+
+test("editValues keeps every decoded register under its own kind", () => {
+  const blob = new Uint8Array([1, 2]);
+  const values = editValues(
+    new Map<string, Value>([
+      ["pos", { kind: "uint", value: 2048 }],
+      ["trim_steps", { kind: "int", value: -3 }],
+      ["torque_enable", { kind: "bool", value: true }],
+      ["mode", { kind: "enum", value: 2 }],
+      ["words", { kind: "bytes", value: blob }],
+    ]),
+  );
+  expect([...values]).toEqual([
+    ["pos", 2048],
+    ["trim_steps", -3],
+    ["torque_enable", true],
+    ["mode", 2],
+    ["words", blob],
+  ]);
 });

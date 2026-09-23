@@ -47,10 +47,10 @@ test("spanOver rejects a missing register and a span over one READ", () => {
   ).toThrow("do not fit one READ");
 });
 
-test("the sample span over the 0.1 descriptor is goal_position through ntc_raw", () => {
+test("the sample span over the 0.1 descriptor is goal_duty through ntc_raw", () => {
   const span = spanOver(fields, SAMPLE_REGISTERS);
-  expect(span.addr).toBe(392);
-  expect(span.count).toBe(208);
+  expect(span.addr).toBe(390);
+  expect(span.count).toBe(210);
 });
 
 test("the config and bias spans over the 0.1 descriptor fit one READ each", () => {
@@ -85,6 +85,10 @@ test("decodeSpan reads little-endian values by width and sign", () => {
   expect(read("u32")).toBe(0x12345678);
   expect(read("i32")).toBe(-3);
   expect(() => read("nope")).toThrow("span has no nope");
+  const flags = spanOver([field("on", 0, 1, "bool"), field("mode", 1, 1, "enum")], ["on", "mode"]);
+  const readFlags = decodeSpan(flags, new Uint8Array([1, 3]));
+  expect(readFlags("on")).toBe(1);
+  expect(readFlags("mode")).toBe(3);
   expect(() => decodeSpan(span, bytes.subarray(1))).toThrow("expected 14");
 });
 
@@ -97,8 +101,13 @@ test("decodeSample scales omega_hat_cps out of Q16 and keeps the rest in counts"
     if (f === undefined) throw new Error(name);
     return f.addr - span.addr;
   };
+  view.setInt16(at("goal_duty"), -1000, true);
   view.setInt32(at("goal_position"), 2048, true);
+  view.setInt32(at("goal_velocity"), -500, true);
+  view.setInt16(at("goal_current"), 250, true);
+  view.setUint8(at("mode_active"), 3);
   view.setInt32(at("omega_hat_cps"), -3 * 65536, true);
+  view.setInt16(at("duty_applied_q15"), -900, true);
   view.setUint16(at("pos"), 1234, true);
   view.setUint16(at("current"), 300, true);
   view.setUint16(at("vmotor_a"), 800, true);
@@ -109,6 +118,11 @@ test("decodeSample scales omega_hat_cps out of Q16 and keeps the rest in counts"
     t: 1.5,
     pos: 1234,
     goal: 2048,
+    goalVelocity: -500,
+    goalCurrent: 250,
+    goalDuty: -1000,
+    dutyApplied: -900,
+    modeActive: 3,
     velocity: -3,
     current: 300,
     vbus: 3600,
@@ -122,6 +136,11 @@ const sampleAt = (t: number): Sample => ({
   t,
   pos: 0,
   goal: 0,
+  goalVelocity: 0,
+  goalCurrent: 0,
+  goalDuty: 0,
+  dutyApplied: 0,
+  modeActive: 0,
   velocity: 0,
   current: 0,
   vbus: 0,
@@ -201,7 +220,7 @@ test("startTelemetry reads config, then biases, then samples on every tick", asy
   expect(configs[0]?.biases.currentBiasCounts).toBe(0x5352);
   now = 7;
   await vi.advanceTimersByTimeAsync(100);
-  expect(fake.calls.at(-1)).toEqual([392, 208]);
+  expect(fake.calls.at(-1)).toEqual([390, 210]);
   settle(fake);
   await vi.advanceTimersByTimeAsync(0);
   expect(samples).toHaveLength(1);

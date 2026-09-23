@@ -13,7 +13,6 @@ import {
 } from "./units";
 
 export const POLL_HZ = 10;
-export const WINDOW_S = 30;
 /** Largest READ reply one frame carries (protocol sec 3.1). */
 export const READ_MAX = 252;
 /** omega_hat_cps is csQ16, (counts/s) x 2^16 (firmware regions/telemetry.rs). */
@@ -34,11 +33,19 @@ export interface Span {
   fields: FieldInfo[];
 }
 
-/** One poll in device counts: `velocity` is counts/s, `t` seconds. */
+/**
+ * One poll in device counts: `velocity` and `goalVelocity` are counts/s, the
+ * duties q15, `modeActive` the `mode` enum's discriminant, `t` seconds.
+ */
 export interface Sample {
   t: number;
   pos: number;
   goal: number;
+  goalVelocity: number;
+  goalCurrent: number;
+  goalDuty: number;
+  dutyApplied: number;
+  modeActive: number;
   velocity: number;
   current: number;
   vbus: number;
@@ -54,8 +61,13 @@ export interface TelemetryConfig {
 }
 
 export const SAMPLE_REGISTERS: readonly string[] = [
+  "goal_duty",
   "goal_position",
+  "goal_velocity",
+  "goal_current",
+  "mode_active",
   "omega_hat_cps",
+  "duty_applied_q15",
   "pos",
   "current",
   "vmotor_a",
@@ -106,8 +118,9 @@ export function decodeSpan(span: Span, bytes: Uint8Array): ReadRegister {
   };
 }
 
+/** Bools and enums decode as their unsigned byte. */
 function decodeField(view: DataView, offset: number, { name, width, kind }: FieldInfo): number {
-  if (kind !== "uint" && kind !== "int") throw new Error(`${name} is ${kind}, not a number`);
+  if (kind === "bytes") throw new Error(`${name} is ${kind}, not a number`);
   const signed = kind === "int";
   switch (width) {
     case 1:
@@ -127,6 +140,11 @@ export function decodeSample(span: Span, bytes: Uint8Array, t: number): Sample {
     t,
     pos: read("pos"),
     goal: read("goal_position"),
+    goalVelocity: read("goal_velocity"),
+    goalCurrent: read("goal_current"),
+    goalDuty: read("goal_duty"),
+    dutyApplied: read("duty_applied_q15"),
+    modeActive: read("mode_active"),
     velocity: read("omega_hat_cps") / Q16,
     current: read("current"),
     vbus: read("vbus_raw"),

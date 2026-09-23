@@ -7,6 +7,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TableSearch } from "@/components/table-search";
 import { ValueEditor } from "@/components/value-editor";
 import { toValue, type EditValue } from "@/lib/edit";
 import { hexAddr } from "@/lib/format";
@@ -14,12 +15,23 @@ import { useSession } from "@/lib/session";
 import {
   buildTable,
   formatRow,
+  searchIndex,
   type Group,
   type Link as LinkTarget,
   type Row,
+  type SearchEntry,
   type Tab,
   type TabName,
+  type TableModel,
 } from "@/lib/table-model";
+import {
+  expandFor,
+  initialOpen,
+  searchTarget,
+  withOpen,
+  type OpenGroups,
+  type SearchTarget,
+} from "@/lib/table-search";
 import { FLASH_MS, LIVE_POLL_MS, spanHolding, startPoll } from "@/lib/table-live";
 import { decodeSpan, readRows, readSpans, type Values } from "@/lib/table-read";
 
@@ -38,9 +50,45 @@ const HELP: ReadonlyMap<string, string> = new Map([
 
 const linkClass = "text-sm text-accent underline-offset-4 hover:underline";
 
+/** A search hit to jump to; `seq` separates repeat jumps to the same row. */
+interface Jump extends SearchTarget {
+  seq: number;
+}
+
 function TablePage() {
   const { status, selected, descriptor, descriptorError } = useSession();
   const picked = status === "ready" && selected !== undefined;
+  const model = useMemo(
+    () => (descriptor === undefined ? undefined : buildTable(descriptor)),
+    [descriptor],
+  );
+  const index = useMemo(() => (model === undefined ? [] : searchIndex(model)), [model]);
+  const defaults = useMemo(
+    () => initialOpen(model === undefined ? [] : model.tabs.flatMap((t) => t.groups)),
+    [model],
+  );
+  const [tab, setTab] = useState<TabName>("Settings");
+  const [toggled, setToggled] = useState<OpenGroups>();
+  const [jump, setJump] = useState<Jump>();
+  const open = toggled ?? defaults;
+
+  useEffect(() => {
+    if (jump === undefined) return;
+    const timer = setTimeout(() => {
+      setJump(undefined);
+    }, FLASH_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [jump]);
+
+  function pick(entry: SearchEntry) {
+    const target = searchTarget(entry);
+    setTab(target.tab);
+    setToggled(expandFor(open, target.group));
+    setJump((j) => ({ ...target, seq: (j?.seq ?? 0) + 1 }));
+  }
+
   return (
     <>
       <div className="mb-4 flex items-baseline gap-3">
@@ -55,29 +103,61 @@ function TablePage() {
             ID {selected}
           </Link>
         )}
+        {picked && model !== undefined && (
+          <div className="ml-auto self-center">
+            <TableSearch index={index} onPick={pick} />
+          </div>
+        )}
       </div>
       {!picked ? (
         <p>Pick a servo in the sidebar.</p>
       ) : descriptorError !== undefined ? (
         <p className="text-danger">{descriptorError}</p>
-      ) : descriptor === undefined ? (
+      ) : descriptor === undefined || model === undefined ? (
         <Skeleton className="h-9 w-80" />
       ) : (
-        <Table id={selected} descriptor={descriptor} />
+        <Table
+          id={selected}
+          descriptor={descriptor}
+          model={model}
+          tab={tab}
+          onTab={setTab}
+          open={open}
+          onToggle={(group, next) => {
+            setToggled(withOpen(open, group, next));
+          }}
+          jump={jump}
+        />
       )}
     </>
   );
 }
 
-function Table({ id, descriptor }: { id: number; descriptor: Descriptor }) {
-  const model = useMemo(() => buildTable(descriptor), [descriptor]);
-  const [tab, setTab] = useState<TabName>("Settings");
+function Table({
+  id,
+  descriptor,
+  model,
+  tab,
+  onTab,
+  open,
+  onToggle,
+  jump,
+}: {
+  id: number;
+  descriptor: Descriptor;
+  model: TableModel;
+  tab: TabName;
+  onTab: (tab: TabName) => void;
+  open: OpenGroups;
+  onToggle: (group: string, open: boolean) => void;
+  jump: Jump | undefined;
+}) {
   const [refresh, setRefresh] = useState(0);
   return (
     <Tabs
       value={tab}
       onValueChange={(v) => {
-        setTab(v as TabName);
+        onTab(v as TabName);
       }}
     >
       <div className="flex items-center justify-between">
@@ -103,7 +183,16 @@ function Table({ id, descriptor }: { id: number; descriptor: Descriptor }) {
       </div>
       {model.tabs.map((t) => (
         <TabsContent key={t.name} value={t.name}>
-          <TabPanel key={id} id={id} descriptor={descriptor} tab={t} refresh={refresh} />
+          <TabPanel
+            key={id}
+            id={id}
+            descriptor={descriptor}
+            tab={t}
+            refresh={refresh}
+            open={open}
+            onToggle={onToggle}
+            jump={jump?.tab === t.name ? jump : undefined}
+          />
         </TabsContent>
       ))}
     </Tabs>
@@ -120,16 +209,23 @@ function TabPanel({
   descriptor,
   tab,
   refresh,
+  open,
+  onToggle,
+  jump,
 }: {
   id: number;
   descriptor: Descriptor;
   tab: Tab;
   refresh: number;
+  open: OpenGroups;
+  onToggle: (group: string, open: boolean) => void;
+  jump: Jump | undefined;
 }) {
   const { run } = useSession();
   const [values, setValues] = useState<Values>();
   const [error, setError] = useState<string>();
   const [flash, setFlash] = useState<Flash>();
+  const body = useRef<HTMLDivElement>(null);
   const holds = useRef(0);
   const rows = useMemo(() => tab.groups.flatMap((g) => g.rows), [tab]);
   const spans = useMemo(() => readSpans(rows), [rows]);
@@ -162,6 +258,12 @@ function TabPanel({
     };
   }, [run, id, descriptor, tab, rows, refresh]);
 
+  // A collapsed group's rows reach the DOM only with the render that expands it.
+  useEffect(() => {
+    if (jump === undefined) return;
+    body.current?.querySelector(`[data-row="${jump.row}"]`)?.scrollIntoView({ block: "center" });
+  }, [jump, open]);
+
   useEffect(() => {
     if (flash === undefined) return;
     const timer = setTimeout(() => {
@@ -190,15 +292,19 @@ function TabPanel({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div ref={body} className="flex flex-col gap-3">
       {error !== undefined && <p className="text-danger">{error}</p>}
       {tab.groups.map((group) => (
         <GroupSection
           key={group.label}
           group={group}
+          open={open.get(group.label) ?? group.expanded}
+          onOpenChange={(next) => {
+            onToggle(group.label, next);
+          }}
           values={values}
           loading={values === undefined && error === undefined}
-          flashed={flash?.name}
+          flashed={jump?.row ?? flash?.name}
           onApply={apply}
         />
       ))}
@@ -208,19 +314,23 @@ function TabPanel({
 
 function GroupSection({
   group,
+  open,
+  onOpenChange,
   values,
   loading,
   flashed,
   onApply,
 }: {
   group: Group;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   values: Values | undefined;
   loading: boolean;
   flashed: string | undefined;
   onApply: (row: Row, raw: EditValue) => Promise<void>;
 }) {
   return (
-    <Collapsible defaultOpen={group.expanded} className="rounded-lg border bg-card">
+    <Collapsible open={open} onOpenChange={onOpenChange} className="rounded-lg border bg-card">
       <div className="flex items-center gap-2 px-3 py-2">
         <CollapsibleTrigger className="flex flex-1 items-center gap-2 text-left font-medium [&[data-state=open]>svg]:rotate-90">
           <ChevronRight className="size-4 shrink-0 transition-transform" />
@@ -279,6 +389,7 @@ function RowLine({
 }) {
   return (
     <tr
+      data-row={row.field.name}
       className={`border-t first:border-t-0 ${flashed ? "bg-success-soft" : "transition-colors duration-700"}`}
     >
       <th scope="row" className="w-1/2 px-3 py-2 text-left align-top font-medium">

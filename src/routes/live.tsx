@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Pause, Play, TriangleAlert } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import type uPlot from "uplot";
+import { StreamTab } from "@/components/stream-tab";
 import { Chart, type ChartOptions } from "@/components/uplot";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -271,7 +272,7 @@ function LivePage() {
             <Telemetry key={selected} id={selected} />
           </TabsContent>
           <TabsContent value="stream">
-            <p className="text-text-3">Stream capture comes later.</p>
+            <StreamTab key={selected} id={selected} />
           </TabsContent>
         </Tabs>
       )}

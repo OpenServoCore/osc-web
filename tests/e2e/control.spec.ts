@@ -4,9 +4,13 @@ import { gotoSim } from "./helpers";
 async function openLive(page: Page): Promise<void> {
   await gotoSim(page, [1, 2]);
   await page.getByRole("button", { name: "ID 1" }).click();
+  // The servo page proves the selection landed: leaving for Live while that
+  // navigation is still compiling on a cold dev server races the two.
+  await expect(page.getByRole("heading", { name: "ID 1" })).toBeVisible();
   await page.getByRole("link", { name: "Live" }).click();
   // A cold dev server compiles the Live route chunk on this first request.
   await expect(page.getByRole("region", { name: /^Motion/ })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("waiting for data")).toHaveCount(0);
   await expect(page.getByRole("combobox", { name: "Mode" })).toBeEnabled();
 }
 
@@ -41,9 +45,9 @@ test("each mode shows its own goal control and the warning is open loop only", a
   await expect(page.getByRole("alert")).toHaveCount(0);
   await expect(page.getByLabel("Commanded duty value")).toHaveCount(0);
   await pickMode(page, "Velocity");
-  await expect(page.getByLabel("Goal readout")).toHaveText(/ counts\/s$/);
+  await expect(page.getByLabel("Goal readout")).toHaveText(/ deg\/s$/);
   await pickMode(page, "Position");
-  await expect(page.getByLabel("Goal readout")).toHaveText(/ counts$/);
+  await expect(page.getByLabel("Goal readout")).toHaveText(/ deg$/);
   await pickMode(page, "Open loop");
   await expect(page.getByLabel("Goal readout")).toHaveText(/ %$/);
   await expect(page.getByRole("alert")).toBeVisible();
@@ -54,11 +58,12 @@ test("a velocity goal reads back into the Motion goal readout in the mode's unit
 }) => {
   await openLive(page);
   await pickMode(page, "Velocity");
-  await setGoal(page, "600");
-  await expect(page.getByLabel("Goal readout")).toHaveText("600 counts/s");
+  // Inside velocity_limit_cps, which caps the slider at 74 deg/s.
+  await setGoal(page, "50");
+  await expect(page.getByLabel("Goal readout")).toHaveText("50 deg/s");
   const motion = page.getByRole("region", { name: /^Motion/ });
   await expect(motion).toBeVisible();
-  await expect(page.getByLabel("Goal value")).toHaveText("600 counts/s");
+  await expect(page.getByLabel("Goal value")).toHaveText("50 deg/s");
 });
 
 test("a current goal reads back in milliamps and the goal series moves to Electrical", async ({
@@ -71,17 +76,20 @@ test("a current goal reads back in milliamps and the goal series moves to Electr
   await expect(page.getByLabel("Goal value")).toHaveText("50 mA");
 });
 
-test("position mode shows the goal in counts and the servo's answer to a goal it rejects", async ({
+test("position mode shows the goal in degrees and a goal past the rail stops at it", async ({
   page,
 }) => {
   await openLive(page);
   await pickMode(page, "Position");
-  await expect(page.getByLabel("Goal value")).toHaveText("0 counts");
-  // The simulated servo's physical position limits are both 0, so any other
-  // goal fails the firmware's validator; the answer lands in the cluster.
-  await setGoal(page, "2000");
-  await expect(page.getByText("servo answered Validation")).toBeVisible();
-  await expect(page.getByLabel("Goal value")).toHaveText("0 counts");
+  // goal_position boots at 0, one count below the calibrated sensor floor.
+  await expect(page.getByLabel("Goal value")).toHaveText("-0.2 deg");
+  await setGoal(page, "100");
+  await expect(page.getByLabel("Goal value")).toHaveText("100.0 deg");
+  // The slider's range is the calibrated sensor span, which is also what the
+  // firmware validates against, so a goal beyond it clamps instead of nacking.
+  await setGoal(page, "500");
+  await expect(page.getByLabel("Goal value")).toHaveText("202.0 deg");
+  await expect(page.getByText(/servo answered/)).toHaveCount(0);
 });
 
 test("torque on reads back on and the servo keeps answering without a fault", async ({ page }) => {
@@ -91,7 +99,7 @@ test("torque on reads back on and the servo keeps answering without a fault", as
   await torque.click();
   await expect(torque).toHaveAttribute("aria-checked", "true");
   await page.waitForTimeout(1000);
-  await expect(page.getByRole("button", { name: "ID 1 raw", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "ID 1", exact: true })).toBeVisible();
   await expect(page.getByText(/servo answered/)).toHaveCount(0);
 });
 

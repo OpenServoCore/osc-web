@@ -26,15 +26,15 @@ One exchange is one SUBMIT record out over USB, the frames on the bus, and one o
 
 Wire time. A frame is `break + ID + LEN + INST + payload + CRC` = 6 characters plus the payload (protocol sec 3.1), 10 bits per character. Turnaround (instruction wire end to status break) is measured at 34 us at 1 M and 44 us at 3 M (protocol sec 7).
 
-| term                      | formula                          | 1 M         | 3 M         |
-| ------------------------- | -------------------------------- | ----------- | ----------- |
-| character                 | 10 / baud                        | 10.0 us     | 3.33 us     |
-| READ instruction          | (6 + 4) chars                    | 100 us      | 33 us       |
-| turnaround                | measured                         | 34 us       | 44 us       |
-| READ status, 210 B        | (6 + 210) chars                  | 2160 us     | 720 us      |
-| 210 B read, bus total     | sum                              | 2.29 ms     | 0.80 ms     |
-| 12 B read (health), total | 100/33 + turn + 18 chars         | 0.31 ms     | 0.14 ms     |
-| 2 B write + ack, total    | 12 chars + turn + 6 chars        | 0.21 ms     | 0.10 ms     |
+| term                      | formula                          | 1 M          | 3 M          |
+| ------------------------- | -------------------------------- | ------------ | ------------ |
+| character                 | 10 / baud                        | 10.0 us      | 3.33 us      |
+| READ instruction          | (6 + 4) chars                    | 100 us       | 33 us        |
+| turnaround                | measured                         | 34 us        | 44 us        |
+| READ status, 210 B        | (6 + 210) chars                  | 2160 us      | 720 us       |
+| 210 B read, bus total     | sum                              | 2.29 ms      | 0.80 ms      |
+| 12 B read (health), total | 100/33 + turn + 18 chars         | 0.31 ms      | 0.14 ms      |
+| 2 B write + ack, total    | 12 chars + turn + 6 chars        | 0.21 ms      | 0.10 ms      |
 | silent servo (timeout)    | 60 us + reply footprint + margin | about 1 read | about 1 read |
 
 The response deadline (`response_deadline_us`, default 60 us, protocol sec 7) is a break-lead window, not a reply-time budget: the adapter's await window for a read is deadline + the expected reply's wire time + a margin (`firmware/lib/host/src/engine/mod.rs`, `window_for`), so a servo that never answers costs about the same as one that does. Timeouts are cheap; nothing in this design fears them.
@@ -56,13 +56,13 @@ What dominates on WebUSB: at 3 M the wire is 0.8 ms of a 210-byte read, and t_ip
 
 Unknowns and how the manager exposes them (sec 3.9, `BusStats`):
 
-| unknown                          | measure                                                                                   |
-| -------------------------------- | ----------------------------------------------------------------------------------------- |
-| t_ipc (intercept)                | `run` p50 of the 12 B span vs the 210 B span at one baud: intercept of the line          |
-| t_char check (slope)             | the same line's slope per byte; expect 10 us at 1 M, 3.3 us at 3 M                        |
-| k (transfers per exchange)       | `transfersIn` counter divided by `exchanges` (needs the pipe counter, sec 7 Q2)           |
-| t_mainthread                     | `lag` p95 (event-loop lag probe) and the intercept's change between Dashboard and Live    |
-| guard hits                       | `stalled` count; a hit shows as `run` near 2000 ms                                        |
+| unknown                    | measure                                                                                |
+| -------------------------- | -------------------------------------------------------------------------------------- |
+| t_ipc (intercept)          | `run` p50 of the 12 B span vs the 210 B span at one baud: intercept of the line        |
+| t_char check (slope)       | the same line's slope per byte; expect 10 us at 1 M, 3.3 us at 3 M                     |
+| k (transfers per exchange) | `transfersIn` counter divided by `exchanges` (needs the pipe counter, sec 7 Q2)        |
+| t_mainthread               | `lag` p95 (event-loop lag probe) and the intercept's change between Dashboard and Live |
+| guard hits                 | `stalled` count; a hit shows as `run` near 2000 ms                                     |
 
 ## 3. Architecture
 
@@ -70,12 +70,12 @@ Files: `src/lib/bus/manager.ts` (scheduler), `src/lib/bus/spans.ts` (register to
 
 ### 3.1 Lanes and their ordering rule
 
-| lane      | carries                                                                | order inside the lane                         |
-| --------- | ---------------------------------------------------------------------- | --------------------------------------------- |
+| lane      | carries                                                                                                | order inside the lane                                              |
+| --------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
 | control   | register writes, management commands (save, reboot, factory, assign, clear counters, rails, tel burst) | submission order per servo; writes coalesced per (servo, register) |
-| refresh   | dirty spans after a write; one-shot reads (`readOnce`)                 | oldest first                                  |
-| live      | subscription spans, rate class fast (100 ms) or slow (1000 ms)         | earliest due first                            |
-| exclusive | scan, bus baud migration: the lanes freeze while it runs               | one at a time                                 |
+| refresh   | dirty spans after a write; one-shot reads (`readOnce`)                                                 | oldest first                                                       |
+| live      | subscription spans, rate class fast (100 ms) or slow (1000 ms)                                         | earliest due first                                                 |
+| exclusive | scan, bus baud migration: the lanes freeze while it runs                                               | one at a time                                                      |
 
 Decision rule, run every time the bus frees and every time an item arrives while the bus is idle:
 
@@ -132,7 +132,11 @@ Rule 6 above. The manager plans group reads by (addr, count) across servos, not 
 
 ```ts
 export type Rate = "fast" | "slow";
-export interface Subscription { id: number; registers: readonly string[]; rate: Rate }
+export interface Subscription {
+  id: number;
+  registers: readonly string[];
+  rate: Rate;
+}
 
 export interface Snapshot {
   id: number;
@@ -163,7 +167,11 @@ export interface Clock {
   after(ms: number, fn: () => void): () => void;
 }
 
-export interface Layout { encode: Descriptor["encode"]; decode: Descriptor["decode"]; fields: readonly Field[] }
+export interface Layout {
+  encode: Descriptor["encode"];
+  decode: Descriptor["decode"];
+  fields: readonly Field[];
+}
 
 export class BusManager {
   constructor(clock: Clock, options?: { fastMs?: number; slowMs?: number; target?: number });
@@ -182,21 +190,32 @@ export class BusManager {
 }
 
 export interface Exchange {
-  seq: number; lane: "control" | "refresh" | "live" | "exclusive";
+  seq: number;
+  lane: "control" | "refresh" | "live" | "exclusive";
   kind: "read" | "gread" | "write" | "command";
-  id: number | undefined; addr: number | undefined; bytes: number;
-  queuedAt: number; startedAt: number; settledAt: number;
+  id: number | undefined;
+  addr: number | undefined;
+  bytes: number;
+  queuedAt: number;
+  startedAt: number;
+  settledAt: number;
   outcome: "ok" | "timeout" | "stalled" | "error";
 }
 
 export interface BusStats {
-  exchanges: number; perSecond: number; bytesPerSecond: number;
+  exchanges: number;
+  perSecond: number;
+  bytesPerSecond: number;
   /** Milliseconds; p50 and p95 over the last 256 exchanges. */
   wait: { p50: number; p95: number };
   run: { small: Quantiles; medium: Quantiles; large: Quantiles };
   /** setTimeout(0) drift sampled twice a second: the event-loop lag probe. */
   lag: Quantiles;
-  timeouts: number; stalled: number; errors: number; coalesced: number; grouped: number;
+  timeouts: number;
+  stalled: number;
+  errors: number;
+  coalesced: number;
+  grouped: number;
   utilisation: number;
   effectivePeriodMs: { fast: number; slow: number };
   perServo: ReadonlyMap<number, { consecutiveFailures: number; probing: boolean }>;
@@ -210,13 +229,13 @@ Errors: a rejected write or command rejects its promise with the client's error;
 
 `src/lib/bus/store.ts` wraps one manager for `useSyncExternalStore`. Each hook owns a cell; the manager's listener writes `cell.next` and schedules one `requestAnimationFrame` flush for the whole store; the flush publishes `cell.current = cell.next` and notifies only the cells that changed. However many reads settle inside a frame, React renders once per frame, and only the components whose registers moved.
 
-| hook                                                    | returns                                                                       | re-renders when                                    |
-| ------------------------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------- |
-| `useRegisters(id, registers, rate)`                     | `Snapshot \| undefined`                                                       | a read covering the registers settled              |
-| `useRing(id, registers, rate, windowS)`                 | `readonly Snapshot[]`, fresh array per frame, trimmed to the window            | once per frame while samples land                  |
-| `useReadOnce(id, registers, deps)`                      | `{ snapshot, error, reload }`                                                  | the read settled or `reload` was called            |
-| `useBus()`                                              | `{ write, command, exclusive }` (stable identities)                            | never                                              |
-| `useBusStats()`                                         | `BusStats`                                                                    | twice a second while `?debug` is set               |
+| hook                                    | returns                                                             | re-renders when                         |
+| --------------------------------------- | ------------------------------------------------------------------- | --------------------------------------- |
+| `useRegisters(id, registers, rate)`     | `Snapshot \| undefined`                                             | a read covering the registers settled   |
+| `useRing(id, registers, rate, windowS)` | `readonly Snapshot[]`, fresh array per frame, trimmed to the window | once per frame while samples land       |
+| `useReadOnce(id, registers, deps)`      | `{ snapshot, error, reload }`                                       | the read settled or `reload` was called |
+| `useBus()`                              | `{ write, command, exclusive }` (stable identities)                 | never                                   |
+| `useBusStats()`                         | `BusStats`                                                          | twice a second while `?debug` is set    |
 
 The telemetry ring moves out of the Live page into the store (`useRing`); `SampleRing` is deleted. The chart converts rows in a `useMemo` keyed on the ring array and calls `uPlot.setData` once per render, so chart work is bounded to one pass per frame regardless of bus rate.
 
@@ -224,18 +243,18 @@ The session keeps owning connection state and the roster and becomes the manager
 
 ## 4. Failure and edge behaviour
 
-| situation                          | behaviour                                                                                                                                                                                                                                       |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| "busy" from the wasm client        | Impossible by construction: the client reference lives in one private field of the manager, every call to it is made from one `dispatch` loop that `await`s each call before choosing the next item, and `command`/`exclusive` callbacks receive the client only for the duration of their turn. A development assertion throws if `dispatch` is re-entered. The unit suite runs against a fake client with the same `RefCell` gate. |
+| situation                                 | behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "busy" from the wasm client               | Impossible by construction: the client reference lives in one private field of the manager, every call to it is made from one `dispatch` loop that `await`s each call before choosing the next item, and `command`/`exclusive` callbacks receive the client only for the duration of their turn. A development assertion throws if `dispatch` is re-entered. The unit suite runs against a fake client with the same `RefCell` gate.              |
 | failed exchange (servo error, link error) | A write or command rejects its promise. A subscription read delivers a snapshot with `stale: true` and the message, keeps the subscription, and counts a failure for that servo. After three consecutive failures the servo drops to a probe cadence: one 4-byte read per second in place of all its spans; the first success restores every span. A timeout is followed by a 1 ms pause before the next exchange (protocol sec 8, fault pacing). |
-| unplug mid-read                    | The transfer rejects; the item in flight fails as above; the session sees the pipe error, calls `detach("unplugged")`, releases the client. Pending writes reject "not connected"; every snapshot goes stale; subscriptions stay. Reconnect calls `attach` and they resume. |
-| rescan while subscriptions exist   | `exclusive(scan)` freezes the lanes; after it `roster(ids)` stops scheduling ids that vanished and re-plans ids whose layout changed. Components keyed on id remount on their own. Due times restart, so no burst follows the scan.                 |
-| servo disappears                   | Its reads time out at about the cost of one read each (sec 2); the probe cadence caps the cost at one small exchange per second; its snapshots carry `stale` and the sidebar derives "not answering" from `perServo.probing`.                     |
-| write whose read-back disagrees    | The servo is the truth: the refresh snapshot carries what it holds (a clamped goal, a rejected enum). The manager keeps no expected value. The control cluster clears its draft when the refresh snapshot lands, so the slider snaps to the servo's value. A `validation` result rejects the write itself and dirties nothing. |
-| the 2 s guard                      | `recv_guarded` (`client.rs`) is a watchdog on the pipe, orders of magnitude above every protocol window; a hit means the adapter delivered nothing for 2 s. The manager counts it as `stalled`, treats it as a failure (probe cadence after three), and shows it in `run` as a value near 2000 ms. It cannot be shortened from TS today (sec 7 Q2). |
-| slow main thread                   | `run` already includes the wait for the continuation, so stretching (sec 3.6) responds automatically; the `lag` probe distinguishes it from a slow adapter. Rendering is bounded to one pass per frame (sec 3.10). Control items still go first, so a goal write waits one exchange, not a queue. |
-| descriptor not loaded              | Subscriptions naming registers wait for `layoutChanged`; `readOnce` rejects with "no layout for ID n".                                                                                                                                            |
-| more than 252 B requested at once  | `readOnce` splits into several spans and merges the maps into one snapshot; a subscription does the same per rate class.                                                                                                                          |
+| unplug mid-read                           | The transfer rejects; the item in flight fails as above; the session sees the pipe error, calls `detach("unplugged")`, releases the client. Pending writes reject "not connected"; every snapshot goes stale; subscriptions stay. Reconnect calls `attach` and they resume.                                                                                                                                                                       |
+| rescan while subscriptions exist          | `exclusive(scan)` freezes the lanes; after it `roster(ids)` stops scheduling ids that vanished and re-plans ids whose layout changed. Components keyed on id remount on their own. Due times restart, so no burst follows the scan.                                                                                                                                                                                                               |
+| servo disappears                          | Its reads time out at about the cost of one read each (sec 2); the probe cadence caps the cost at one small exchange per second; its snapshots carry `stale` and the sidebar derives "not answering" from `perServo.probing`.                                                                                                                                                                                                                     |
+| write whose read-back disagrees           | The servo is the truth: the refresh snapshot carries what it holds (a clamped goal, a rejected enum). The manager keeps no expected value. The control cluster clears its draft when the refresh snapshot lands, so the slider snaps to the servo's value. A `validation` result rejects the write itself and dirties nothing.                                                                                                                    |
+| the 2 s guard                             | `recv_guarded` (`client.rs`) is a watchdog on the pipe, orders of magnitude above every protocol window; a hit means the adapter delivered nothing for 2 s. The manager counts it as `stalled`, treats it as a failure (probe cadence after three), and shows it in `run` as a value near 2000 ms. It cannot be shortened from TS today (sec 7 Q2).                                                                                               |
+| slow main thread                          | `run` already includes the wait for the continuation, so stretching (sec 3.6) responds automatically; the `lag` probe distinguishes it from a slow adapter. Rendering is bounded to one pass per frame (sec 3.10). Control items still go first, so a goal write waits one exchange, not a queue.                                                                                                                                                 |
+| descriptor not loaded                     | Subscriptions naming registers wait for `layoutChanged`; `readOnce` rejects with "no layout for ID n".                                                                                                                                                                                                                                                                                                                                            |
+| more than 252 B requested at once         | `readOnce` splits into several spans and merges the maps into one snapshot; a subscription does the same per rate class.                                                                                                                                                                                                                                                                                                                          |
 
 ## 5. Migration plan
 
@@ -251,33 +270,33 @@ PR 3: Servo page and control table. `HealthCard` subscribes slow to the health f
 
 Unit suite, `src/lib/bus/manager.test.ts`, with a fake clock (manual advance) and a fake client whose latency and outcome are settable per call and which throws "busy" on overlap exactly like the wasm one:
 
-| test                                                                                                   | pins                                     |
-| ------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
-| three servos, fast and slow subscriptions, writes and commands interleaved: the client never sees an overlap | one exchange in flight (sec 4)      |
-| a write submitted mid-read starts when that read settles, ahead of every due read                      | rule 3                                   |
-| writes to one register while one is in flight collapse to the newest; both promises settle together    | sec 3.4                                  |
-| writes to different registers of one servo keep submission order                                       | sec 3.4                                  |
-| a command is never coalesced with a write or reordered past one                                        | sec 3.4                                  |
-| a write dirties its field; the refresh read runs before the next live read and reaches every subscriber covering the field | sec 3.5                      |
-| a dirty field inside a live span due within a fast period is served by that live read: one exchange    | rule 4                                   |
-| registers of one servo and rate merge into the fewest spans under 252 bytes, gaps read through          | sec 3.2                                  |
-| a slow field inside a fast span costs no exchange of its own                                           | sec 3.2                                  |
-| subscribers on one span receive the same Snapshot object; values are decoded once                       | sec 3.3                                  |
-| a 1 s stall of the bus is followed by one read per span, not ten                                       | rule 5, no backlog                       |
-| with latency above the fast period the slow class still gets its turn (earliest due first)             | rule 5                                   |
-| utilisation over target lengthens the fast period; two cycles under target shorten it back             | sec 3.6                                  |
-| nothing due: the clock is armed for the earliest due and no read is issued meanwhile                    | rule 7                                   |
-| the same span on three servos goes out as one gread; a silent slot marks only its servo stale          | sec 3.7                                  |
-| without `gread` the same subscriptions produce per-servo reads and identical snapshots                  | sec 3.7                                  |
-| a failed read marks the snapshot stale, keeps the subscription, three failures switch the servo to the probe cadence, one success restores it | sec 4 |
-| a timeout inserts the pacing pause before the next exchange                                            | sec 4                                    |
-| unsubscribe during an in-flight read: the cache updates, no listener fires                              | sec 3.8                                  |
-| detach rejects pending writes with "not connected", lets the in-flight settle, marks snapshots stale; attach resumes the same subscriptions | sec 3.8 |
-| exclusive runs after the in-flight exchange, freezes the lanes, and due times restart without a burst  | rule 2                                   |
-| roster drops a vanished id from scheduling; its subscriber sees stale                                   | sec 3.8                                  |
-| a validation rejection rejects the write and dirties nothing                                           | sec 4                                    |
-| stats record wait, run, lag, stalled, coalesced and grouped counts and the effective periods            | sec 3.9                                  |
-| a subscription before its layout loads is planned on `layoutChanged`                                   | sec 4                                    |
+| test                                                                                                                                          | pins                           |
+| --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| three servos, fast and slow subscriptions, writes and commands interleaved: the client never sees an overlap                                  | one exchange in flight (sec 4) |
+| a write submitted mid-read starts when that read settles, ahead of every due read                                                             | rule 3                         |
+| writes to one register while one is in flight collapse to the newest; both promises settle together                                           | sec 3.4                        |
+| writes to different registers of one servo keep submission order                                                                              | sec 3.4                        |
+| a command is never coalesced with a write or reordered past one                                                                               | sec 3.4                        |
+| a write dirties its field; the refresh read runs before the next live read and reaches every subscriber covering the field                    | sec 3.5                        |
+| a dirty field inside a live span due within a fast period is served by that live read: one exchange                                           | rule 4                         |
+| registers of one servo and rate merge into the fewest spans under 252 bytes, gaps read through                                                | sec 3.2                        |
+| a slow field inside a fast span costs no exchange of its own                                                                                  | sec 3.2                        |
+| subscribers on one span receive the same Snapshot object; values are decoded once                                                             | sec 3.3                        |
+| a 1 s stall of the bus is followed by one read per span, not ten                                                                              | rule 5, no backlog             |
+| with latency above the fast period the slow class still gets its turn (earliest due first)                                                    | rule 5                         |
+| utilisation over target lengthens the fast period; two cycles under target shorten it back                                                    | sec 3.6                        |
+| nothing due: the clock is armed for the earliest due and no read is issued meanwhile                                                          | rule 7                         |
+| the same span on three servos goes out as one gread; a silent slot marks only its servo stale                                                 | sec 3.7                        |
+| without `gread` the same subscriptions produce per-servo reads and identical snapshots                                                        | sec 3.7                        |
+| a failed read marks the snapshot stale, keeps the subscription, three failures switch the servo to the probe cadence, one success restores it | sec 4                          |
+| a timeout inserts the pacing pause before the next exchange                                                                                   | sec 4                          |
+| unsubscribe during an in-flight read: the cache updates, no listener fires                                                                    | sec 3.8                        |
+| detach rejects pending writes with "not connected", lets the in-flight settle, marks snapshots stale; attach resumes the same subscriptions   | sec 3.8                        |
+| exclusive runs after the in-flight exchange, freezes the lanes, and due times restart without a burst                                         | rule 2                         |
+| roster drops a vanished id from scheduling; its subscriber sees stale                                                                         | sec 3.8                        |
+| a validation rejection rejects the write and dirties nothing                                                                                  | sec 4                          |
+| stats record wait, run, lag, stalled, coalesced and grouped counts and the effective periods                                                  | sec 3.9                        |
+| a subscription before its layout loads is planned on `layoutChanged`                                                                          | sec 4                          |
 
 `src/lib/bus/store.test.ts`: listeners fire once per animation frame however many reads land; only changed cells notify; the ring publishes a fresh array per frame and trims to the window. `src/lib/bus/spans.test.ts` takes over the span and decode tests from `card-poll.test.ts`, `telemetry-poll.test.ts` and `table-read.test.ts`.
 

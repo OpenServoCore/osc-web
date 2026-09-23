@@ -55,3 +55,17 @@ test("Live values moves on its own", async ({ page }) => {
   await expect(cell).not.toHaveText(first, { timeout: 5000 });
   await expect(cell).toHaveText(/^\d+$/);
 });
+
+test("a Live values edit flashes its row and shows the written value", async ({ page }) => {
+  await openTable(page);
+  await page.getByRole("tab", { name: "Live values" }).click();
+  const row = tableRow(page, "stall_permit");
+  const cell = row.getByRole("cell");
+  await expect(cell).toHaveText(/^(On|Off)$/);
+  const was = await cell.textContent();
+  const editor = await openEditor(page, "stall_permit");
+  await editor.getByRole("switch").click();
+  await editor.getByRole("button", { name: "Apply" }).click();
+  await expect(row).toHaveClass(/bg-success-soft/);
+  await expect(cell).toHaveText(was === "On" ? "Off" : "On");
+});

@@ -3,6 +3,7 @@ import {
   type BaudRate,
   type Descriptor,
   type Found,
+  type LinkInfo,
   type OscClient,
   type Ping,
   type Rails,
@@ -48,7 +49,8 @@ export interface Session {
   error: string | undefined;
   baud: BaudRate | undefined;
   rails: Rails | undefined;
-  client: OscClient | undefined;
+  /** The open adapter's link info; undefined means no client. */
+  linkInfo: LinkInfo | undefined;
   simulated: boolean;
   servos: Servo[];
   selected: number | undefined;
@@ -66,12 +68,6 @@ export interface Session {
   setRails: (patch: Partial<Rails>) => Promise<void>;
   setBaud: (rate: BaudRate) => Promise<void>;
   select: (id: number | undefined) => void;
-  /**
-   * The bus manager's control lane under the name the pages still use: a
-   * command waits for at most the exchange in flight, and the client's
-   * "busy" can never surface.
-   */
-  run: <T>(fn: (client: OscClient) => Promise<T>) => Promise<T>;
   /** Re-reads a servo's CALIB constants, after a calibration write. */
   refreshConstants: (uid: string) => void;
 }
@@ -87,6 +83,7 @@ interface Model {
 interface Snap {
   state: SessionState;
   client: OscClient | undefined;
+  linkInfo: LinkInfo | undefined;
   simulated: boolean;
   models: ReadonlyMap<string, Model>;
   layoutErrors: ReadonlyMap<string, string>;
@@ -96,6 +93,7 @@ interface Snap {
 const initial: Snap = {
   state: idle,
   client: undefined,
+  linkInfo: undefined,
   simulated: false,
   models: new Map(),
   layoutErrors: new Map(),
@@ -168,9 +166,6 @@ class Controller {
     this.set({ state: reduce(this.snap.state, event) });
   }
 
-  // Stable so a card's effect can depend on it.
-  readonly run = <T,>(fn: (client: OscClient) => Promise<T>): Promise<T> => this.bus.command(fn);
-
   refreshConstants(uid: string): void {
     const servo = this.snap.state.servos.find((s) => s.uid === uid);
     if (servo === undefined) return;
@@ -239,7 +234,7 @@ class Controller {
       this.dispatch({ type: "fail", error: message(e) });
       return;
     }
-    this.set({ client, simulated: simRequested() });
+    this.set({ client, linkInfo: client.linkInfo(), simulated: simRequested() });
     this.bus.attach(client, this.layoutById);
     await this.scan(client);
   }
@@ -277,7 +272,7 @@ class Controller {
       return;
     }
     if (this.snap.client !== client) return;
-    this.set({ client: undefined, simulated: false });
+    this.set({ client: undefined, linkInfo: undefined, simulated: false });
     this.clearCards();
     this.dispatch({ type: "fail", error: message(failure) });
     await release(client);
@@ -393,7 +388,7 @@ class Controller {
   async disconnect(): Promise<void> {
     const { client } = this.snap;
     if (client === undefined) return;
-    this.set({ client: undefined, simulated: false });
+    this.set({ client: undefined, linkInfo: undefined, simulated: false });
     this.clearCards();
     this.dispatch({ type: "disconnect" });
     // Detaching from inside an exclusive turn: the exchange in flight has
@@ -440,7 +435,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     error: snap.state.error,
     baud: snap.state.baud,
     rails: snap.state.rails,
-    client: snap.client,
+    linkInfo: snap.linkInfo,
     simulated: snap.simulated,
     servos: snap.state.servos.map((s) => withHealth(s, snap.values.get(s.uid))),
     selected: snap.state.selected,
@@ -459,7 +454,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     select: (id) => {
       ctl.select(id);
     },
-    run: ctl.run,
     refreshConstants: (uid) => {
       ctl.refreshConstants(uid);
     },

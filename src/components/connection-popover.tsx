@@ -46,12 +46,12 @@ export function ConnectionPopover({
   children: ReactNode;
 }) {
   const session = useSession();
-  const { status, client, simulated, baud, rails, missing, error } = session;
+  const { status, linkInfo, simulated, baud, rails, missing, error } = session;
   const [confirming, setConfirming] = useState(false);
   const [choice, setChoice] = useState<BaudRate>();
   const [railsError, setRailsError] = useState<string>();
   const rate = choice ?? baud ?? "b1000000";
-  const connected = client !== undefined;
+  const connected = linkInfo !== undefined;
   const ready = status === "ready";
   const badge = chip(status);
 
@@ -92,8 +92,8 @@ export function ConnectionPopover({
             <span className="font-medium">{simulated ? "Simulated adapter" : "osc-adapter"}</span>
             <Badge className={badge.className}>{badge.text}</Badge>
           </div>
-          {connected && (
-            <span className="text-xs text-text-3">Firmware {client.linkInfo().version}</span>
+          {linkInfo !== undefined && (
+            <span className="text-xs text-text-3">Firmware {linkInfo.version}</span>
           )}
         </div>
 

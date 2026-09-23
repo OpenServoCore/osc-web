@@ -1,4 +1,4 @@
-import type { Descriptor, Field } from "@openservocore/client";
+import type { Descriptor, Field, Value } from "@openservocore/client";
 import { fieldKind, formatValue, type EditValue, type FieldKind } from "./edit";
 import { hexAddr } from "./format";
 
@@ -212,6 +212,15 @@ export function buildTable(descriptor: Pick<Descriptor, "fields">): TableModel {
     })),
   }));
   return { tabs };
+}
+
+export type Values = ReadonlyMap<string, EditValue>;
+
+/** A read's decoded registers as the values the rows show and edit. */
+export function editValues(values: ReadonlyMap<string, Value>): Values {
+  const rows = new Map<string, EditValue>();
+  for (const [name, value] of values) rows.set(name, value.value);
+  return rows;
 }
 
 export function summarizeBlob(bytes: Uint8Array): string {

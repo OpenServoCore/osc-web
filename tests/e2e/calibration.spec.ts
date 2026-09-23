@@ -74,3 +74,21 @@ test("an edit that inverts the sensor range is refused until cancelled", async (
   await page.getByRole("button", { name: "Cancel" }).click();
   await expect(highest.getByRole("button", { name: "4095 counts" })).toBeVisible();
 });
+
+// Angle lowest -150 then Angle highest -100 maps the whole sensor range onto
+// negative degrees, which the seeded 0 to 202 deg map could never show.
+test("an edit reaches the dashboard card without a reload", async ({ page }) => {
+  const card = await openCalibration(page, 1);
+  await edit(card, "Angle lowest", "0.00 deg", "-150");
+  await edit(card, "Angle highest", "202.00 deg", "-100");
+  await expect(
+    card.getByRole("group", { name: "Angle lowest" }).getByRole("button", { name: "-150.00 deg" }),
+  ).toBeVisible();
+  await expect(
+    card.getByRole("group", { name: "Angle highest" }).getByRole("button", { name: "-100.00 deg" }),
+  ).toBeVisible();
+
+  await page.getByRole("link", { name: "Dashboard" }).click();
+  const dashboard = page.getByRole("link", { name: /^ID 1\b/ });
+  await expect(dashboard.getByText(/^-1\d\d(\.\d)? deg$/)).toBeVisible();
+});

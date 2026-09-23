@@ -1,4 +1,4 @@
-import type { Descriptor, OscClient } from "@openservocore/client";
+import type { OscClient } from "@openservocore/client";
 import { LoaderCircle, RotateCcw, Save, SlidersHorizontal, TriangleAlert } from "lucide-react";
 import { useEffect, useId, useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
@@ -7,11 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useBus, useRegisters } from "@/lib/bus/hooks";
 import { ID_MAX, ID_MIN, idIssue, rescans, selectAfter, type ManageAction } from "@/lib/manage";
 import { useSession } from "@/lib/session";
 
-const POLL_MS = 1000;
 const NOTE_MS = 4000;
+/** Inside the cards' span on every servo, so the gate costs no exchange. */
+const TORQUE_REGISTERS: readonly string[] = ["torque_enable"];
 
 const HELP = {
   id: "Addressed by serial, so it also fixes two servos sharing an id. Ids 1 to 249.",
@@ -31,13 +33,14 @@ interface Note {
 }
 
 export function ManageCard({ id, uid }: { id: number; uid: string }) {
-  const { servos, descriptor, run, discover, select } = useSession();
+  const { servos, discover, select } = useSession();
+  const bus = useBus();
   const inputId = useId();
   const [text, setText] = useState(String(id));
   const [busy, setBusy] = useState<ManageAction>();
   const [note, setNote] = useState<Note>();
   const [confirming, setConfirming] = useState(false);
-  const torque = useTorque(id, descriptor);
+  const torque = useTorque(id);
 
   useEffect(() => {
     if (note === undefined || note.bad) return;
@@ -70,7 +73,7 @@ export function ManageCard({ id, uid }: { id: number; uid: string }) {
     setBusy(action);
     setNote(undefined);
     try {
-      await run(fn);
+      await bus.command(fn);
       if (rescans(action)) await discover();
       const pick = selectAfter(action, newId);
       if (pick !== undefined) select(pick);
@@ -246,39 +249,11 @@ function Hint({ note }: { note: Note }) {
   return <p className={`text-xs ${note.bad ? "text-danger" : "text-text-3"}`}>{note.text}</p>;
 }
 
-/** The Save gate: `torque_enable` read off the table on the cards' cadence. */
-function useTorque(id: number, descriptor: Descriptor | undefined): boolean | undefined {
-  const { run } = useSession();
-  const [on, setOn] = useState<boolean>();
-
-  useEffect(() => {
-    if (descriptor === undefined) return;
-    const table = descriptor;
-    const field = table.fields().find((f) => f.name === "torque_enable");
-    if (field === undefined) return;
-    const { name, addr, width } = field;
-    let live = true;
-    let busy = false;
-    async function poll() {
-      if (busy || !live) return;
-      busy = true;
-      try {
-        const bytes = await run((c) => c.read(id, addr, width));
-        const value = table.decode(name, bytes);
-        if (live && value.kind === "bool") setOn(value.value);
-      } catch {
-        // The gate holds its last reading; Health reports a servo gone quiet.
-      } finally {
-        busy = false;
-      }
-    }
-    void poll();
-    const timer = window.setInterval(() => void poll(), POLL_MS);
-    return () => {
-      live = false;
-      window.clearInterval(timer);
-    };
-  }, [run, id, descriptor]);
-
-  return on;
+/**
+ * The Save gate: `torque_enable` on the cards' cadence. A stale snapshot still
+ * carries the last reading; Health reports a servo gone quiet.
+ */
+function useTorque(id: number): boolean | undefined {
+  const value = useRegisters(id, TORQUE_REGISTERS, "slow")?.values.get("torque_enable");
+  return value?.kind === "bool" ? value.value : undefined;
 }

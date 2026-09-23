@@ -101,8 +101,41 @@ test("connect leaves error and clears the message", () => {
   expect(retry.error).toBeUndefined();
 });
 
+test("a lost adapter enters lost from connecting, scanning and ready", () => {
+  const connecting = reduce(idle, { type: "connect" });
+  const scanning = reduce(connecting, { type: "scan" });
+  for (const from of [connecting, scanning, reduce(ready, { type: "select", id: 1 })]) {
+    const gone = reduce(from, { type: "lost", error: "pipe: the device was disconnected" });
+    expect(gone.status).toBe("lost");
+    expect(gone.error).toBe("pipe: the device was disconnected");
+    expect(gone.servos).toEqual([]);
+    expect(gone.selected).toBeUndefined();
+    expect(gone.baud).toBeUndefined();
+  }
+});
+
+test("once lost, a late failure or a second loss changes nothing", () => {
+  const gone = reduce(ready, { type: "lost", error: "unplugged" });
+  expect(reduce(gone, { type: "fail", error: "not connected" })).toBe(gone);
+  expect(reduce(gone, { type: "lost", error: "again" })).toBe(gone);
+  expect(reduce(gone, { type: "scan" })).toBe(gone);
+  expect(reduce(idle, { type: "lost", error: "late" })).toBe(idle);
+});
+
+test("connect retries from lost and clears the reason", () => {
+  const gone = reduce(ready, { type: "lost", error: "unplugged" });
+  const retry = reduce(gone, { type: "connect" });
+  expect(retry.status).toBe("connecting");
+  expect(retry.error).toBeUndefined();
+});
+
 test("disconnect returns to idle from anywhere", () => {
-  for (const from of [ready, reduce(ready, { type: "scan" }), reduce(idle, { type: "connect" })]) {
+  for (const from of [
+    ready,
+    reduce(ready, { type: "scan" }),
+    reduce(idle, { type: "connect" }),
+    reduce(ready, { type: "lost", error: "unplugged" }),
+  ]) {
     expect(reduce(from, { type: "disconnect" })).toBe(idle);
   }
 });

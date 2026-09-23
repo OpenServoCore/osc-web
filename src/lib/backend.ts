@@ -30,6 +30,11 @@ export function permittedAdapter<T extends { vendorId: number; productId: number
   return devices.find((d) => d.vendorId === vendor && d.productId === product);
 }
 
+/** A device the browser reports is the adapter; `vid`/`pid` need the wasm loaded. */
+export function isAdapter(device: { vendorId: number; productId: number }): boolean {
+  return device.vendorId === vid() && device.productId === pid();
+}
+
 let wasmReady: Promise<unknown> | undefined;
 
 export async function openClient(): Promise<OscClient> {

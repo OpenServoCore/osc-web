@@ -154,6 +154,7 @@ function servosEmpty(status: Status, onConnect: () => void): ReactNode {
       return "No servos found";
     case "disconnected":
     case "error":
+    case "lost":
       return (
         <>
           <button type="button" className="underline underline-offset-4" onClick={onConnect}>
@@ -275,6 +276,8 @@ function connectionText(status: Status, baud: BaudRate | undefined): string {
     case "disconnected":
     case "error":
       return "Not connected";
+    case "lost":
+      return "Connection lost";
     case "connecting":
       return "Connecting ..";
     case "scanning":

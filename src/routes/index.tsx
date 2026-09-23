@@ -29,7 +29,7 @@ function Dashboard() {
   return (
     <>
       <h1 className="mb-4 text-xl font-semibold">Dashboard</h1>
-      {status === "disconnected" || status === "error" ? (
+      {status === "disconnected" || status === "error" || status === "lost" ? (
         <Empty>
           <Button
             size="lg"

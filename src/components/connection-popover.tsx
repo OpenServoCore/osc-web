@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { isDisconnect } from "@/lib/bus/stats";
 import { formatBaud } from "@/lib/format";
 import { useSession, type Status } from "@/lib/session";
 
@@ -29,7 +30,15 @@ function chip(status: Status): { text: string; className: string } {
     case "disconnected":
     case "error":
       return { text: "not connected", className: "bg-surface-3 text-text-2" };
+    case "lost":
+      return { text: "connection lost", className: "bg-warning-soft text-warning" };
   }
+}
+
+/** What ended the session, in words a hobbyist can act on. */
+function lostReason(error: string | undefined): string | undefined {
+  if (error === undefined) return undefined;
+  return isDisconnect(error) ? "The adapter was unplugged." : error;
 }
 
 function servos(n: number): string {
@@ -126,9 +135,13 @@ export function ConnectionPopover({
               }}
             >
               <Plug />
-              Connect adapter
+              {status === "lost" ? "Reconnect" : "Connect adapter"}
             </Button>
-            {error !== undefined && <p className="text-danger">{error}</p>}
+            {status === "lost" ? (
+              <p className="text-text-2">{lostReason(error)}</p>
+            ) : (
+              error !== undefined && <p className="text-danger">{error}</p>
+            )}
           </>
         )}
 

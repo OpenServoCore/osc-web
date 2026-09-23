@@ -30,7 +30,17 @@ test("several raised flags state one sentence each, lowest bit first", () => {
 });
 
 test("an undefined flag still states its bit", () => {
-  expect(statements({ ...clean, faultFlags: 1 << 7 })[0]?.text).toBe("Unknown fault, bit 7.");
+  expect(statements({ ...clean, faultFlags: 1 << 7 })[0]?.text).toContain("Unknown fault, bit 7.");
+});
+
+test("every fault statement says how to clear it: torque off and on", () => {
+  for (let bit = 0; bit < 8; bit++) {
+    const s = statements({ ...clean, faultFlags: 1 << bit });
+    expect(s[0]?.text).toContain("The motor stays off until torque is switched off and on again.");
+  }
+  expect(statements({ ...clean, faultFlags: 1 << 2 })[0]?.text).toBe(
+    "Stalled: holding current with no movement. The motor stays off until torque is switched off and on again.",
+  );
 });
 
 test("unsaved changes rank under the faults and above the all-clear", () => {

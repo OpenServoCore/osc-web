@@ -9,11 +9,11 @@ export interface Servo extends Found {
   calibrated?: boolean;
 }
 
-export type Status = "disconnected" | "connecting" | "scanning" | "ready" | "error";
+export type Status = "disconnected" | "connecting" | "scanning" | "ready" | "error" | "lost";
 
 export interface SessionState {
   status: Status;
-  /** The last failure; set only while `status` is "error". */
+  /** The last failure; set only while `status` is "error" or "lost". */
   error: string | undefined;
   baud: BaudRate | undefined;
   rails: Rails | undefined;
@@ -30,6 +30,7 @@ export type SessionEvent =
   | { type: "found"; servos: Servo[]; baud: BaudRate | undefined; rails: Rails }
   | { type: "rails"; rails: Rails }
   | { type: "fail"; error: string }
+  | { type: "lost"; error: string }
   | { type: "select"; id: number | undefined }
   | { type: "disconnect" };
 
@@ -43,14 +44,18 @@ export const idle: SessionState = {
   missing: [],
 };
 
+/** No client is open, so a failure arriving late changes nothing. */
+function ended(state: SessionState): boolean {
+  const { status } = state;
+  return status === "disconnected" || status === "error" || status === "lost";
+}
+
 // Events that do not apply in the current status leave it unchanged, so a
 // command that resolves after a disconnect cannot revive the session.
 export function reduce(state: SessionState, event: SessionEvent): SessionState {
   switch (event.type) {
     case "connect":
-      return state.status === "disconnected" || state.status === "error"
-        ? { ...idle, status: "connecting" }
-        : state;
+      return ended(state) ? { ...idle, status: "connecting" } : state;
     case "scan":
       return state.status === "connecting" || state.status === "ready"
         ? { ...state, status: "scanning", missing: [] }
@@ -75,9 +80,9 @@ export function reduce(state: SessionState, event: SessionEvent): SessionState {
     case "rails":
       return state.status === "ready" ? { ...state, rails: event.rails } : state;
     case "fail":
-      return state.status === "disconnected" || state.status === "error"
-        ? state
-        : { ...idle, status: "error", error: event.error };
+      return ended(state) ? state : { ...idle, status: "error", error: event.error };
+    case "lost":
+      return ended(state) ? state : { ...idle, status: "lost", error: event.error };
     case "select":
       return state.status === "ready" ? { ...state, selected: event.id } : state;
     case "disconnect":

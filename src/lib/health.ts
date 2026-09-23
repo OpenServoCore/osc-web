@@ -17,6 +17,12 @@ const FAULTS: readonly string[] = [
   "Under voltage: the bus rail sagged below the limit.",
 ];
 
+/**
+ * Every latched fault clears the same way: the torque_enable 0->1 edge is the
+ * only ack, and until it comes the motor stays off (firmware kernel/faults.rs).
+ */
+const CLEAR = "The motor stays off until torque is switched off and on again.";
+
 function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
@@ -26,7 +32,7 @@ export function statements(h: Health): Statement[] {
   const out: Statement[] = [];
   for (let bit = 0; bit < 8; bit++) {
     if ((h.faultFlags & (1 << bit)) === 0) continue;
-    out.push({ level: "fault", text: FAULTS[bit] ?? `Unknown fault, bit ${bit}.` });
+    out.push({ level: "fault", text: `${FAULTS[bit] ?? `Unknown fault, bit ${bit}.`} ${CLEAR}` });
   }
   if (h.configDirty) {
     out.push({ level: "warn", text: "Unsaved changes: settings differ from the saved ones." });

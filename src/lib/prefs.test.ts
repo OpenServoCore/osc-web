@@ -1,12 +1,15 @@
 import { expect, test } from "vitest";
 import {
   applyTheme,
+  MODE_KEY,
   PANE_KEY,
   readPane,
   readTheme,
+  readMode,
   readUnits,
   THEME_KEY,
   UNITS_KEY,
+  writeMode,
   writePane,
   writeTheme,
   writeUnits,
@@ -73,4 +76,17 @@ test("writeUnits round-trips through the storage", () => {
   writeUnits(s, "raw");
   expect(s.map.get(UNITS_KEY)).toBe("raw");
   expect(readUnits(s)).toBe("raw");
+});
+
+test("the mode preference defaults to Position and rejects unknown values", () => {
+  expect(readMode(stub())).toBe("Position");
+  expect(readMode(stub({ [MODE_KEY]: "Velocity" }))).toBe("Velocity");
+  expect(readMode(stub({ [MODE_KEY]: "Spin" }))).toBe("Position");
+});
+
+test("writeMode round-trips through the storage", () => {
+  const s = stub();
+  writeMode(s, "OpenLoop");
+  expect(s.map.get(MODE_KEY)).toBe("OpenLoop");
+  expect(readMode(s)).toBe("OpenLoop");
 });

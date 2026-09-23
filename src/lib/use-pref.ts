@@ -1,8 +1,11 @@
 import { useSyncExternalStore } from "react";
+import type { ModeName } from "./control";
 import {
+  readMode,
   readPane,
   readTheme,
   readUnits,
+  writeMode,
   writePane,
   writeTheme,
   writeUnits,
@@ -50,4 +53,8 @@ export function usePanePref(): [Pane, (pane: Pane) => void] {
 
 export function useUnitsPref(): [Units, (units: Units) => void] {
   return usePref(readUnits, writeUnits, "real");
+}
+
+export function useModePref(): [ModeName, (mode: ModeName) => void] {
+  return usePref(readMode, writeMode, "Position");
 }

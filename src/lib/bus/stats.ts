@@ -169,3 +169,15 @@ export function classify(error: unknown): Exclude<Outcome, "ok"> {
   }
   return "error";
 }
+
+/** What WebUSB rejects a transfer with once the adapter is gone. */
+export const DISCONNECTED = "The device was disconnected.";
+
+// WebUSB words it "The device was disconnected."; the pipe wraps that text and
+// the sim reuses it, so the class is read off the message either way.
+const GONE = /device (?:was |is |has been )?disconnected|pipe (?:is )?gone/;
+
+/** The adapter itself is gone: the session ends, no retry can reach it. */
+export function isDisconnect(error: unknown): boolean {
+  return GONE.test((error instanceof Error ? error.message : String(error)).toLowerCase());
+}

@@ -3,7 +3,8 @@ import { gotoSim } from "./helpers";
 
 const UID_1 = "c94b8419d1092aec87de5fd151ce290f";
 const UID_2 = "30634f42dde2095340c8d84f67f28244";
-const READOUT = /^-?\d+(\.\d+)? (deg|counts)$/;
+// The simulated fleet boots calibrated, so the position readout is degrees.
+const READOUT = /^-?\d+(\.\d+)? deg$/;
 
 test("each simulated servo gets a card with its identity and a position readout", async ({
   page,

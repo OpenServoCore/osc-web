@@ -1,11 +1,9 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { gotoSim } from "./helpers";
 
-// The simulated servos run the production stacks over a bus with no config
-// store behind them, so SAVE and FACTORY reach the servo and come back
-// `hardware` (firmware dispatch.rs: both need a store to write). REBOOT and
-// ASSIGN need no flash and land for real.
-const NO_FLASH = "servo answered Hardware";
+// The simulated servos run the production stacks over a bus with a config
+// store behind each of them, so all four actions land for real: SAVE writes
+// the store, FACTORY wipes it and reboots the servo onto board defaults.
 
 async function openManage(page: Page, id: number): Promise<Locator> {
   await gotoSim(page, [1, 2]);
@@ -56,8 +54,13 @@ test("Factory reset runs behind the confirm strip", async ({ page }) => {
   await card.getByRole("button", { name: "Factory reset" }).click();
   await erase.click();
   await expect(erase).toBeHidden();
-  await expect(card.getByText(NO_FLASH)).toBeVisible();
+  await expect(card.getByText("Erased. It comes back as ID 1 at 1 M.")).toBeVisible();
   await expect(page.getByRole("button", { name: "ID 2" })).toBeVisible();
+  // The seeded calibration is written into the servo's live table, never into
+  // its store, so the wipe reboots it onto board defaults and it reads blank.
+  await expect(
+    page.getByRole("region", { name: "Calibration" }).getByText("Not calibrated"),
+  ).toBeVisible();
 });
 
 test("Save settings reaches the servo while torque is off", async ({ page }) => {
@@ -65,6 +68,6 @@ test("Save settings reaches the servo while torque is off", async ({ page }) => 
   const save = card.getByRole("button", { name: "Save settings" });
   await expect(save).toBeEnabled();
   await save.click();
-  await expect(card.getByText(NO_FLASH)).toBeVisible();
+  await expect(card.getByText("Settings saved.")).toBeVisible();
   await expect(page.getByRole("button", { name: "ID 2" })).toBeVisible();
 });

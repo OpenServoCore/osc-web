@@ -5,6 +5,7 @@ import { CalibrationCard } from "@/components/calibration-card";
 import { DataStateBanner } from "@/components/data-state-banner";
 import { HealthCard } from "@/components/health-card";
 import { ManageCard } from "@/components/manage-card";
+import { PotLutCard } from "@/components/pot-lut-card";
 import { useSession } from "@/lib/session";
 
 export const Route = createFileRoute("/servo")({ component: ServoPage });
@@ -30,6 +31,7 @@ function ServoPage() {
         <AboutCard key={`about-${servo.id}`} id={servo.id} uid={servo.uid} />
         <HealthCard key={`health-${servo.id}`} id={servo.id} />
         <CalibrationCard key={`calibration-${servo.id}`} id={servo.id} uid={servo.uid} />
+        <PotLutCard key={`pot-lut-${servo.id}`} id={servo.id} uid={servo.uid} />
         <ManageCard key={`manage-${servo.uid}`} id={servo.id} uid={servo.uid} />
       </div>
     </>

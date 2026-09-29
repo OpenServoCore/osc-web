@@ -18,7 +18,7 @@ test("the sample registers plan one read, goal_duty through ntc_raw", () => {
 });
 
 test("the conversion registers plan one read each side of the table", () => {
-  expect(planSpans(fields, CONFIG_REGISTERS)).toEqual([{ addr: 128, count: 172 }]);
+  expect(planSpans(fields, CONFIG_REGISTERS)).toEqual([{ addr: 128, count: 64 }]);
   expect(planSpans(fields, BIAS_REGISTERS)).toEqual([{ addr: 594, count: 8 }]);
 });
 

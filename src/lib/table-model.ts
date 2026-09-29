@@ -67,15 +67,17 @@ const LIMITS = 0x048;
 const THERMAL = 0x05c;
 const FUSION = 0x068;
 const FAULT_CFG = 0x06e;
-const POT_LUT = 0x080;
-const SENSE = 0x0f2;
-const WINDING = 0x102;
-const MOTOR = 0x10a;
-const KINEMATICS = 0x11a;
-const SENSE_EXT = 0x120;
+const CALIB_POT = 0x080;
+const SENSE = 0x084;
+const WINDING = 0x094;
+const MOTOR = 0x09c;
+const KINEMATICS = 0x0ac;
+const STAMP = 0x0b2;
+const SENSE_EXT = 0x0b4;
 const LIFECYCLE = 0x180;
 const SYSTEM = 0x194;
 const BURST_REQUEST = 0x196;
+const POT_LUT = 0x19c;
 const TEL_COMMON = 0x200;
 const TEL_MODE = 0x220;
 const ESTIMATES = 0x224;
@@ -106,7 +108,7 @@ const TABS: readonly TabSpec[] = [
   },
   {
     name: "Calibration",
-    groups: [{ label: "Calibration", link: "servo", blocks: [POT_LUT, KINEMATICS] }],
+    groups: [{ label: "Calibration", link: "servo", blocks: [CALIB_POT, KINEMATICS, STAMP] }],
   },
   {
     name: "Board",
@@ -124,6 +126,7 @@ const TABS: readonly TabSpec[] = [
       // Identification aggregates are windowed raw counts, not estimator output.
       { label: "Raw samples", blocks: [SENSORS, IDENT] },
       { label: "Commands", blocks: [LIFECYCLE, SYSTEM, BURST_REQUEST] },
+      { label: "Pot table window", collapsed: true, blocks: [POT_LUT] },
       { label: "Profile/capture", help: true, collapsed: true, blocks: [PROFILE, BURST_WINDOW] },
     ],
   },

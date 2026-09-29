@@ -2,6 +2,7 @@
 // Pure: no client, no clock, no React.
 
 import type { Descriptor, Field, Health, Value } from "@openservocore/client";
+import { dutyPercent } from "../control";
 import type { DataState } from "../data-state";
 import {
   biasesFromTable,
@@ -257,4 +258,9 @@ export function limitText(limitFlags: number): string {
   const set = LIMITS.filter((_, bit) => (limitFlags & (1 << bit)) !== 0);
   if (set.length === 0) return limitFlags === 0 ? "None" : `Limit 0x${limitFlags.toString(16)}`;
   return set.join(", ");
+}
+
+/** `window_floor_q15` as percent of full duty; 0 until the firmware publishes it. */
+export function windowFloorText(q15: number): string {
+  return q15 === 0 ? "Not reported" : `${dutyPercent(q15).toFixed(1)} %`;
 }

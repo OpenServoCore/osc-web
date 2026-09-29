@@ -1,4 +1,5 @@
 import type { Descriptor, Field, Value } from "@openservocore/client";
+import { limitText } from "./bus/spans";
 import { fieldKind, formatValue, type EditValue, type FieldKind } from "./edit";
 import { hexAddr } from "./format";
 
@@ -83,6 +84,7 @@ const TEL_MODE = 0x220;
 const ESTIMATES = 0x224;
 const SENSORS = 0x240;
 const IDENT = 0x25a;
+const TEL_LIMITS = 0x266;
 const PROFILE = 0x280;
 const BURST_WINDOW = 0x2c0;
 
@@ -121,7 +123,7 @@ const TABS: readonly TabSpec[] = [
     name: "Live values",
     groups: [
       // Mode detail is the fault code's neighbour, not an estimate.
-      { label: "Status", blocks: [TEL_COMMON, TEL_MODE] },
+      { label: "Status", blocks: [TEL_COMMON, TEL_MODE, TEL_LIMITS] },
       { label: "Estimates", blocks: [ESTIMATES] },
       // Identification aggregates are windowed raw counts, not estimator output.
       { label: "Raw samples", blocks: [SENSORS, IDENT] },
@@ -234,6 +236,7 @@ export function summarizeBlob(bytes: Uint8Array): string {
 }
 
 export function formatRow(row: Row, value: EditValue): string {
+  if (row.field.name === "limit_flags" && typeof value === "number") return limitText(value);
   return row.blob && value instanceof Uint8Array
     ? summarizeBlob(value)
     : formatValue(row.kind, value);

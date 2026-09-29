@@ -249,3 +249,12 @@ export function faultText(faultFlags: number): string | undefined {
   if (set.length === 0) return faultFlags === 0 ? undefined : `Fault 0x${faultFlags.toString(16)}`;
   return set.join(", ");
 }
+
+/** `limit_flags` bits (firmware kernel/limits.rs), lowest bit first. */
+const LIMITS: readonly string[] = ["Current limit", "Stall yield", "End stop", "Stall permit"];
+
+export function limitText(limitFlags: number): string {
+  const set = LIMITS.filter((_, bit) => (limitFlags & (1 << bit)) !== 0);
+  if (set.length === 0) return limitFlags === 0 ? "None" : `Limit 0x${limitFlags.toString(16)}`;
+  return set.join(", ");
+}

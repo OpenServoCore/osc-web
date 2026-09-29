@@ -160,6 +160,8 @@ describe("buildTable", () => {
     expect(placement("trim_steps")).toEqual(["Live values", "Status"]);
     expect(placement("framing_drop_count")).toEqual(["Live values", "Status"]);
     expect(placement("fault_code")).toEqual(["Live values", "Status"]);
+    expect(placement("limit_flags")).toEqual(["Live values", "Status"]);
+    expect(rowOf("limit_flags").editable).toBe(false);
     expect(placement("theta_hat_q16")).toEqual(["Live values", "Estimates"]);
     expect(placement("sample_tick")).toEqual(["Live values", "Estimates"]);
     expect(placement("pos")).toEqual(["Live values", "Raw samples"]);
@@ -242,6 +244,8 @@ describe("values", () => {
     expect(formatRow(rowOf("goal_position"), -1200)).toBe("-1200");
     expect(formatRow(rowOf("mode"), 3)).toBe("Position");
     expect(formatRow(rowOf("torque_enable"), true)).toBe("On");
+    expect(formatRow(rowOf("limit_flags"), 0)).toBe("None");
+    expect(formatRow(rowOf("limit_flags"), 0b1001)).toBe("Current limit, Stall permit");
   });
 });
 

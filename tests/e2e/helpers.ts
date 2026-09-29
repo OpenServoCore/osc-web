@@ -12,6 +12,19 @@ export const MG90A = JSON.parse(
   ),
 ) as { points: number[] };
 
+/** The core crate's version: the simulated fleet stamps it into firmware_version. */
+export const CORE_VERSION = coreVersion();
+
+function coreVersion(): string {
+  const toml = readFileSync(
+    new URL("../../../open-servo-core/firmware/lib/core/Cargo.toml", import.meta.url),
+    "utf8",
+  );
+  const version = /^version\s*=\s*"(\d+\.\d+\.\d+)"/m.exec(toml)?.[1];
+  if (version === undefined) throw new Error("no version in the core Cargo.toml");
+  return version;
+}
+
 interface SimWindow {
   __osc?: { writePosLut: (id: number, points: number[]) => Promise<void> };
 }

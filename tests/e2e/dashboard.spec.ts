@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { gotoSim } from "./helpers";
+import { CORE_VERSION, gotoSim } from "./helpers";
 
 const UID_1 = "c94b8419d1092aec87de5fd151ce290f";
 const UID_2 = "30634f42dde2095340c8d84f67f28244";
@@ -18,7 +18,7 @@ test("each simulated servo gets a card with its identity and a position readout"
     await expect(card).toBeVisible();
     await expect(card.getByText(uid)).toBeVisible();
     await expect(card.getByText("0x0101")).toBeVisible();
-    await expect(card.getByText("0.1.0")).toBeVisible();
+    await expect(card.getByText(CORE_VERSION)).toBeVisible();
     await expect(card.getByText(READOUT)).toBeVisible();
   }
 });

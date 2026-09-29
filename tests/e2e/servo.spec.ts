@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { gotoSim } from "./helpers";
+import { CORE_VERSION, gotoSim } from "./helpers";
 
 const UID_1 = "c94b8419d1092aec87de5fd151ce290f";
 
@@ -11,7 +11,7 @@ test("the servo page reports the selected servo's identity and health", async ({
   const about = page.getByRole("region", { name: "About" });
   await about.getByText("osc-servo").hover();
   await expect(page.getByRole("tooltip")).toContainText("0x0101");
-  await expect(about.getByText("0.1.0")).toBeVisible();
+  await expect(about.getByText(CORE_VERSION)).toBeVisible();
   await expect(about.getByText("1", { exact: true })).toBeVisible();
   await expect(about.getByText(UID_1)).toBeVisible();
 

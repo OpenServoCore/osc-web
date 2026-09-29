@@ -8,17 +8,26 @@ import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/componen
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useBus } from "@/lib/bus/hooks";
+import { useBus, useClientOnce } from "@/lib/bus/hooks";
 import { CALIBRATION_REGISTERS, editReason, type CalibrationRegister } from "@/lib/calibration";
-import { hexAddr } from "@/lib/format";
+import { hex16, hexAddr } from "@/lib/format";
 import { useSession } from "@/lib/session";
+import { stampWords } from "@/lib/stamp";
 import { calibrationStatus, type Calibration } from "@/lib/units";
 
 export function CalibrationCard({ id, uid }: { id: number; uid: string }) {
   const { descriptor, descriptorError, values, refreshConstants } = useSession();
   const bus = useBus();
-  const cal = values.get(uid)?.constants.calibration;
+  const card = values.get(uid);
+  const cal = card?.constants.calibration;
   const fields = descriptor?.fields();
+  const stampField = fields?.find((f) => f.name === "plant_stamp");
+  // Re-read after every calibration write (the constants change) and at every
+  // checkpoint the servo reports (the data flags change).
+  const stamp = useClientOnce(
+    (c) => (descriptor === undefined ? Promise.resolve(undefined) : c.plantStamp(id, descriptor)),
+    [id, descriptor, cal, card?.data.flags],
+  );
 
   async function apply(field: Field, raw: number) {
     await bus.write(id, field.name, { kind: field.kind === "int" ? "int" : "uint", value: raw });
@@ -70,6 +79,22 @@ export function CalibrationCard({ id, uid }: { id: number; uid: string }) {
                 onApply={apply}
               />
             ))}
+            <div role="group" aria-label="Plant stamp" className="flex flex-col gap-0.5">
+              <span className="text-xs text-text-3">Plant stamp</span>
+              {stamp.error !== undefined ? (
+                <span className="text-danger">{stamp.error}</span>
+              ) : stamp.value === undefined ? (
+                <Skeleton className="h-6 w-56" />
+              ) : (
+                <span className="text-base">{stampWords(stamp.value)}</span>
+              )}
+              <span className="font-mono text-xs text-text-3">
+                plant_stamp {stampField === undefined ? "" : hexAddr(stampField.addr)}
+                {stamp.value === undefined
+                  ? ""
+                  : ` = ${hex16(stamp.value.stored)}, computed ${hex16(stamp.value.computed)}`}
+              </span>
+            </div>
           </div>
         )}
       </CardContent>

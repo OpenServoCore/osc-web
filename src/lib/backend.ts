@@ -3,11 +3,7 @@ import init, { OscClient, pid, requestDevice, vid, type Track } from "@openservo
 const ID_MIN = 1;
 const ID_MAX = 0xf9;
 
-/** `?sim` alone is a two-servo fleet; `?sim=1,2,3` names the ids. */
-export function parseSimIds(search: string): number[] | undefined {
-  const raw = new URLSearchParams(search).get("sim");
-  if (raw === null) return undefined;
-  if (raw === "") return [1, 2];
+function parseIds(raw: string): number[] {
   const ids = new Set<number>();
   for (const part of raw.split(",")) {
     if (!/^\d+$/.test(part)) continue;
@@ -15,6 +11,20 @@ export function parseSimIds(search: string): number[] | undefined {
     if (id >= ID_MIN && id <= ID_MAX) ids.add(id);
   }
   return [...ids];
+}
+
+/** `?sim` alone is a two-servo fleet; `?sim=1,2,3` names the ids. */
+export function parseSimIds(search: string): number[] | undefined {
+  const raw = new URLSearchParams(search).get("sim");
+  if (raw === null) return undefined;
+  if (raw === "") return [1, 2];
+  return parseIds(raw);
+}
+
+/** `&virgin=2` boots those ids factory-fresh: never calibrated, identified or saved. */
+export function parseSimVirgin(search: string): number[] {
+  const raw = new URLSearchParams(search).get("virgin");
+  return raw === null ? [] : parseIds(raw);
 }
 
 export function simRequested(): boolean {
@@ -43,7 +53,8 @@ export async function openClient(): Promise<OscClient> {
   const ids = parseSimIds(window.location.search);
   if (ids !== undefined) {
     const track = await simTrack();
-    return OscClient.fakeWithTracks(ids.map((id) => ({ id, track })));
+    const virgin = parseSimVirgin(window.location.search);
+    return OscClient.fakeWithTracks(ids.map((id) => ({ id, track, virgin: virgin.includes(id) })));
   }
   const device = permittedAdapter(await navigator.usb.getDevices(), vid(), pid());
   return OscClient.connect(device ?? (await requestDevice()));

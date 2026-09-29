@@ -2,6 +2,7 @@
 // Pure: no client, no clock, no React.
 
 import type { Descriptor, Field, Health, Value } from "@openservocore/client";
+import type { DataState } from "../data-state";
 import {
   biasesFromTable,
   calibrationFromTable,
@@ -165,6 +166,9 @@ export const HEALTH_REGISTERS: readonly string[] = [
   "framing_drop_count",
 ];
 
+/** TELEMETRY-MODE: the latched fault kind and the data state beside it. */
+export const DATA_REGISTERS: readonly string[] = ["fault_code", "data_flags"];
+
 export interface Plan {
   fields: Field[];
   constants: Span;
@@ -218,10 +222,15 @@ export function healthFrom(read: ReadRegister): Health {
   };
 }
 
+export function dataStateFrom(read: ReadRegister): DataState {
+  return { flags: read("data_flags"), faultCode: read("fault_code") };
+}
+
 export interface CardValues {
   constants: Constants;
   live: Live;
   health: Health;
+  data: DataState;
 }
 
 /** Kernel fault latch bits (firmware kernel/faults.rs), lowest bit first. */
@@ -232,6 +241,7 @@ const FAULTS: readonly string[] = [
   "Position error",
   "Sensor fault",
   "Undervoltage",
+  "Closed loop refused",
 ];
 
 export function faultText(faultFlags: number): string | undefined {

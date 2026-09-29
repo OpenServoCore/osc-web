@@ -6,7 +6,7 @@ WebUSB only exists in Chromium-based browsers, so this runs in Chrome (and Edge,
 
 ## Without hardware
 
-Open the dev server with `?sim=1,2,3` (any comma-separated list of servo ids; bare `?sim` gives ids 1 and 2) to drive a simulated fleet instead of an adapter. The servos run inside the wasm module, so every page works the same way it does on the bus.
+Open the dev server with `?sim=1,2,3` (any comma-separated list of servo ids; bare `?sim` gives ids 1 and 2) to drive a simulated fleet instead of an adapter. The servos run inside the wasm module, so every page works the same way it does on the bus. Every simulated servo boots calibrated, identified and stamped; `&virgin=2` boots the named ids factory-fresh instead, the way a servo comes off the line.
 
 ## Tests
 

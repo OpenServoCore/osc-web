@@ -1,5 +1,13 @@
 import type { OscClient, Value } from "@openservocore/client";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useState,
+} from "react";
 import { useSyncExternalStore } from "react";
 import type { BusManager, BusStats, Rate, Snapshot } from "./manager";
 import type { BusStore } from "./store";
@@ -106,6 +114,47 @@ export function useReadOnce(
       live = false;
     };
   }, [manager, id, names, key, generation]);
+  const reload = useCallback(() => {
+    setGeneration((g) => g + 1);
+  }, []);
+  return { ...result, reload };
+}
+
+export interface ClientOnce<T> {
+  value: T | undefined;
+  error: string | undefined;
+  reload: () => void;
+}
+
+/** One client command on mount and whenever `deps` change; the result, or why it failed. */
+export function useClientOnce<T>(
+  fn: (client: OscClient) => Promise<T>,
+  deps: readonly unknown[],
+): ClientOnce<T> {
+  const { manager } = useBusHost();
+  const key = JSON.stringify(deps);
+  const [generation, setGeneration] = useState(0);
+  const [result, setResult] = useState<Omit<ClientOnce<T>, "reload">>({
+    value: undefined,
+    error: undefined,
+  });
+  const call = useEffectEvent(fn);
+  useEffect(() => {
+    let live = true;
+    void manager
+      .command((c) => call(c))
+      .then(
+        (value) => {
+          if (live) setResult({ value, error: undefined });
+        },
+        (e: unknown) => {
+          if (live) setResult({ value: undefined, error: message(e) });
+        },
+      );
+    return () => {
+      live = false;
+    };
+  }, [manager, key, generation]);
   const reload = useCallback(() => {
     setGeneration((g) => g + 1);
   }, []);

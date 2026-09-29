@@ -1,4 +1,5 @@
 import type { Health } from "@openservocore/client";
+import { FAULT_DATA_BIT, reasons, type DataState } from "./data-state";
 
 export type Level = "fault" | "warn" | "ok";
 
@@ -15,6 +16,7 @@ const FAULTS: readonly string[] = [
   "Position error: the servo stayed away from its goal for too long.",
   "Sensor fault: the position readings jumped further than a step can.",
   "Under voltage: the bus rail sagged below the limit.",
+  "Closed loop refused: the servo's data state does not allow it.",
 ];
 
 /**
@@ -27,12 +29,19 @@ function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
+/** The data fault names the reason it refused, not just that it did. */
+function faultLine(bit: number, data: DataState | undefined): string {
+  const [reason] = data === undefined ? [] : reasons(data.flags);
+  if (bit === FAULT_DATA_BIT && reason !== undefined) return `Closed loop refused. ${reason.text}`;
+  return FAULTS[bit] ?? `Unknown fault, bit ${bit}.`;
+}
+
 /** Worst first: faults, then unsaved changes, then the all-clear. */
-export function statements(h: Health): Statement[] {
+export function statements(h: Health, data?: DataState): Statement[] {
   const out: Statement[] = [];
   for (let bit = 0; bit < 8; bit++) {
     if ((h.faultFlags & (1 << bit)) === 0) continue;
-    out.push({ level: "fault", text: `${FAULTS[bit] ?? `Unknown fault, bit ${bit}.`} ${CLEAR}` });
+    out.push({ level: "fault", text: `${faultLine(bit, data)} ${CLEAR}` });
   }
   if (h.configDirty) {
     out.push({ level: "warn", text: "Unsaved changes: settings differ from the saved ones." });

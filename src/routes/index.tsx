@@ -1,6 +1,15 @@
 import { unpackVersion } from "@openservocore/client";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Check, CircleAlert, CircleCheck, Cog, Pencil, Plug, RefreshCw } from "lucide-react";
+import {
+  Check,
+  CircleAlert,
+  CircleCheck,
+  Cog,
+  Pencil,
+  Plug,
+  RefreshCw,
+  ShieldAlert,
+} from "lucide-react";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +23,7 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { faultText, type CardValues } from "@/lib/bus/spans";
+import { reasons } from "@/lib/data-state";
 import { formatQuantity, formatVersion, hex16 } from "@/lib/format";
 import { useSession, type Servo } from "@/lib/session";
 import { busV, currentMa, DISPLAY, positionDeg, temperatureC } from "@/lib/units";
@@ -234,13 +244,23 @@ function ServoCard({
   );
 }
 
-// The pane's priority rule: fault, then unsaved changes, then calibration.
+// The pane's priority rule: fault, then the data state, then unsaved changes,
+// then calibration.
 function StatusLine({ values, fault }: { values: CardValues; fault: string | undefined }) {
   if (fault !== undefined) {
     return (
       <p className="flex items-center gap-1.5 text-danger">
         <CircleAlert className="size-4" />
         {fault}
+      </p>
+    );
+  }
+  const [reason] = reasons(values.data.flags);
+  if (reason !== undefined) {
+    return (
+      <p className="flex items-start gap-1.5 text-warning">
+        <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+        {reason.text}
       </p>
     );
   }

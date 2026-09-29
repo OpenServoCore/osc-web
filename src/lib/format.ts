@@ -17,9 +17,14 @@ export function hexAddr(addr: number): string {
   return `0x${addr.toString(16).padStart(3, "0")}`;
 }
 
+/** Fixed decimals; a value that rounds to zero carries no sign. */
+export function fixed(value: number, digits: number): string {
+  const text = value.toFixed(digits);
+  return text === `-${(0).toFixed(digits)}` ? text.slice(1) : text;
+}
+
 /** A readout with its unit; a value the sense chain cannot express reads "n/a". */
 export function formatQuantity(value: number, display: Display): string {
   if (!Number.isFinite(value)) return "n/a";
-  const text = value.toFixed(display.digits);
-  return `${text === `-${(0).toFixed(display.digits)}` ? text.slice(1) : text} ${display.unit}`;
+  return `${fixed(value, display.digits)} ${display.unit}`;
 }

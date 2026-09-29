@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { formatBaud, formatQuantity, formatVersion, hex16, hexAddr } from "./format";
+import { fixed, formatBaud, formatQuantity, formatVersion, hex16, hexAddr } from "./format";
 
 test("formatVersion joins major.minor.patch", () => {
   expect(formatVersion([1, 2, 3])).toBe("1.2.3");
@@ -22,6 +22,13 @@ test("formatBaud renders megabaud", () => {
 test("hexAddr zero-pads to three digits", () => {
   expect(hexAddr(0x20)).toBe("0x020");
   expect(hexAddr(0x3ff)).toBe("0x3ff");
+});
+
+test("fixed writes a value that rounds to zero without a sign", () => {
+  expect(fixed(-0.04, 1)).toBe("0.0");
+  expect(fixed(-0.004, 2)).toBe("0.00");
+  expect(fixed(-0.4, 0)).toBe("0");
+  expect(fixed(-0.06, 1)).toBe("-0.1");
 });
 
 test("formatQuantity rounds to the display digits with the unit", () => {

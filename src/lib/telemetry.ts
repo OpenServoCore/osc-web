@@ -23,6 +23,8 @@ const Q16 = 2 ** 16;
 export interface Sample {
   t: number;
   pos: number;
+  /** `lut_state`: the kernel linearizes `pos` only while it reads LIVE. */
+  lutState: number;
   goal: number;
   goalVelocity: number;
   goalCurrent: number;
@@ -51,6 +53,7 @@ export const SAMPLE_REGISTERS: readonly string[] = [
   "mode_active",
   "omega_hat_cps",
   "duty_applied_q15",
+  "lut_state",
   "pos",
   "current",
   "vmotor_a",
@@ -79,6 +82,7 @@ export function decodeSample(read: ReadRegister, t: number): Sample {
   return {
     t,
     pos: read("pos"),
+    lutState: read("lut_state"),
     goal: read("goal_position"),
     goalVelocity: read("goal_velocity"),
     goalCurrent: read("goal_current"),

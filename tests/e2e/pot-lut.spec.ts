@@ -1,29 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { readFileSync } from "node:fs";
-import { gotoSim } from "./helpers";
-
-// The table nb09 built for the bench MG90, as osc lut write takes it.
-const MG90A = JSON.parse(
-  readFileSync(
-    new URL(
-      "../../../open-servo-core/ident/testdata/lut/pot-lut-mg90-a-grid.json",
-      import.meta.url,
-    ),
-    "utf8",
-  ),
-) as { knots: number[] };
-
-interface SimWindow {
-  __osc?: { writePotLut: (id: number, knots: number[]) => Promise<void> };
-}
-
-/** Puts the table into servo `id` the way osc lut write does: STORE, COMMIT, readback. */
-export async function writeTable(page: Page, id: number, knots: number[]): Promise<void> {
-  await page.evaluate(([id, knots]) => (window as SimWindow).__osc?.writePotLut(id, knots), [
-    id,
-    knots,
-  ] as const);
-}
+import { gotoSim, MG90A, writeTable } from "./helpers";
 
 async function openServo(page: Page, id: number): Promise<void> {
   await page.getByRole("button", { name: `ID ${id}` }).click();

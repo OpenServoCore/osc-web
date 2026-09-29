@@ -31,6 +31,7 @@ function sampleBytes(mask: number, i: number): number[] {
     [8, 0x0b00 + i],
     [9, 0x0c00 + i],
     [10, 0x0d00 + i],
+    [11, (0x0800 + i) << 4],
   ];
   const out: number[] = [];
   for (const [bit, v] of all) {
@@ -55,6 +56,9 @@ const MASK_SIX = 0x3f;
 
 test("the field table is in mask bit order with two bytes per field", () => {
   expect(FIELDS.map((f) => f.bit)).toEqual([...FIELDS.keys()]);
+  expect(FIELDS.at(-1)?.key).toBe("pos_lin");
+  expect(maskIssue(1 << 11)).toBeUndefined();
+  expect(maskIssue(1 << 12)).toBe("mask has reserved bits set");
   expect(maskOf(DEFAULT_FIELDS)).toBe(0x3c1);
   expect(fieldsOf(0x3c1).map((f) => f.key)).toEqual(DEFAULT_FIELDS);
   expect(sampleLen(0x3c1)).toBe(10);
@@ -64,7 +68,7 @@ test("the field table is in mask bit order with two bytes per field", () => {
 test("mask rules mirror the firmware's mask_valid", () => {
   expect(maskIssue(0)).toBe("pick at least one field");
   expect(maskIssue(MASK_SIX)).toBeUndefined();
-  expect(maskIssue(1 << 11)).toBe("mask has reserved bits set");
+  expect(maskIssue(1 << 12)).toBe("mask has reserved bits set");
   expect(maskIssue(MASK_SIX | (1 << 6))).toBe("at most 6 fields fit one sample");
 });
 
@@ -185,5 +189,21 @@ test("the CSV has a header naming the selected fields with their units and one l
   // Without a config every column is counts.
   expect(toCsv(rows, unitsFor(mask, undefined, false)).split("\n")[0]).toBe(
     "sample,valid,pos (counts),current_raw (counts)",
+  );
+});
+
+test("pos_lin is the Q4 word over 16, in degrees through the same angle map as pos", () => {
+  const mask = maskOf(["pos", "pos_lin"]);
+  const rows = decodeBurst([frame(mask, 0, true, 1)], mask);
+  expect(rows[0]?.values).toEqual({ pos: 0x1000, pos_lin: 0x0800 << 4 });
+  const [pos, lin] = unitsFor(mask, config, false);
+  expect(lin?.unit).toBe("deg");
+  expect(lin?.convert(0x0800 << 4)).toBe(pos?.convert(0x0800));
+  const [, rawLin] = unitsFor(mask, config, true);
+  expect(rawLin).toMatchObject({ unit: "counts", digits: 1 });
+  expect(rawLin?.convert((0x1000 << 4) + 8)).toBe(4096.5);
+  expect(unitsFor(mask, undefined, false)[1]?.convert(16)).toBe(1);
+  expect(toCsv(rows, unitsFor(mask, config, false)).split("\n")[0]).toBe(
+    "sample,valid,pos (deg),pos_lin (deg)",
   );
 });

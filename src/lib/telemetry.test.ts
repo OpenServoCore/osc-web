@@ -43,6 +43,7 @@ test("decodeSample scales omega_hat_cps out of Q16 and keeps the rest in counts"
   view.setInt32(at("omega_hat_cps"), -3 * 65536, true);
   view.setInt16(at("duty_applied_q15"), -900, true);
   view.setUint16(at("pos"), 1234, true);
+  view.setUint8(at("lut_state"), 2);
   view.setUint16(at("current"), 300, true);
   view.setUint16(at("vmotor_a"), 800, true);
   view.setUint16(at("vmotor_b"), 700, true);
@@ -51,6 +52,7 @@ test("decodeSample scales omega_hat_cps out of Q16 and keeps the rest in counts"
   expect(decodeSample(decodeSpan(fields, span, bytes), 1.5)).toEqual({
     t: 1.5,
     pos: 1234,
+    lutState: 2,
     goal: 2048,
     goalVelocity: -500,
     goalCurrent: 250,

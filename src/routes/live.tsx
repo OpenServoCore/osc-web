@@ -28,7 +28,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useBus, useReadOnce, useRegisters, useRing } from "@/lib/bus/hooks";
+import { useBus, useClientOnce, useReadOnce, useRegisters, useRing } from "@/lib/bus/hooks";
 import { useChartTokens, type ChartTokens } from "@/lib/chart-theme";
 import {
   clampGoal,
@@ -50,6 +50,7 @@ import {
   type WindowS,
 } from "@/lib/control";
 import { closedLoopAllowed, openLoopAllowed, reasons } from "@/lib/data-state";
+import { counts as linearized, STATE as LUT } from "@/lib/pot-lut";
 import { isUnits, type Units } from "@/lib/prefs";
 import { useSession } from "@/lib/session";
 import {
@@ -105,6 +106,8 @@ const CONVERSION_REGISTERS: readonly string[] = [...CONFIG_REGISTERS, ...BIAS_RE
 const MODE_REGISTERS: readonly string[] = ["mode"];
 
 const POSITION: SeriesDef = { key: "position", label: "Position", token: "series1" };
+/** The same series through a live pot table: what the kernel controls on (protocol sec 5.7). */
+const POSITION_LIN: SeriesDef = { ...POSITION, label: "Position (linearized)" };
 const VELOCITY: SeriesDef = { key: "velocity", label: "Velocity", token: "series2", right: true };
 const CURRENT: SeriesDef = { key: "current", label: "Current", token: "series3" };
 const BUS_V: SeriesDef = { key: "busVoltage", label: "Bus V", token: "ctx", right: true };
@@ -121,15 +124,16 @@ const TEMPERATURE: SeriesDef = { key: "temperature", label: "Temperature", token
  * The dashed goal sits with the series it is the setpoint of, in that series'
  * hue: nowhere in open loop, which has no duty axis.
  */
-function panelsFor(mode: ModeName | undefined): PanelDef[] {
+function panelsFor(mode: ModeName | undefined, lin = false): PanelDef[] {
   const goal = (of: SeriesDef): SeriesDef => ({ ...of, key: "goal", label: "Goal", dash: DASH });
+  const position = lin ? POSITION_LIN : POSITION;
   return [
     {
       key: "motion",
       title: "Motion",
       series: [
-        POSITION,
-        ...(mode === "Position" ? [goal(POSITION)] : []),
+        position,
+        ...(mode === "Position" ? [goal(position)] : []),
         VELOCITY,
         ...(mode === "Velocity" ? [goal(VELOCITY)] : []),
       ],
@@ -148,7 +152,8 @@ const OFF_BY_DEFAULT: readonly SeriesKey[] = ["motorVoltage", "temperature"];
 const RAW_FAMILY: readonly SeriesKey[] = ["position", "goal", "velocity"];
 
 type Shown = Record<SeriesKey, boolean>;
-type Row = Record<SeriesKey, number> & { t: number };
+/** `raw` is the pot sample as read; `position` is it through the live table, if any. */
+type Row = Record<SeriesKey, number> & { t: number; raw: number };
 
 function initialShown(): Shown {
   const shown = {} as Shown;
@@ -163,10 +168,13 @@ function convert(
   { sense, cal, biases }: TelemetryConfig,
   raw: boolean,
   goal: GoalUnits | undefined,
+  knots: readonly number[] | undefined,
 ): Row {
+  const pos = knots === undefined ? s.pos : linearized(knots, s.pos);
   return {
     t: s.t,
-    position: raw ? s.pos : positionDeg(s.pos, cal),
+    raw: s.pos,
+    position: raw ? pos : positionDeg(pos, cal),
     goal: goal === undefined ? NaN : goal.toDisplay(goalOf(s, goal.register)),
     velocity: raw ? s.velocity : velocityDegPerS(s.velocity, cal),
     current: currentMa(s.current, biases.currentBiasCounts, sense),
@@ -183,18 +191,21 @@ function toRows(
   raw: boolean,
   goal: GoalUnits | undefined,
   windowS: number,
+  knots: readonly number[] | undefined,
 ): Row[] {
   const last = samples.at(-1);
   if (last === undefined) return [];
   return samples
     .filter((s) => s.t >= last.t - windowS)
-    .map((s) => ({ ...convert(s, config, raw, goal), t: s.t - last.t }));
+    .map((s) => ({ ...convert(s, config, raw, goal, knots), t: s.t - last.t }));
 }
 
-function display(key: SeriesKey, raw: boolean, goal: GoalUnits | undefined): Display {
+function display(key: SeriesKey, raw: boolean, goal: GoalUnits | undefined, lin = false): Display {
   if (key === "goal" && goal !== undefined) return { unit: goal.unit, digits: goal.digits };
   if (!raw || !RAW_FAMILY.includes(key)) return DISPLAY[key];
   if (key === "velocity") return { unit: `${DISPLAY.raw.unit}/s`, digits: DISPLAY.raw.digits };
+  // Linearized counts carry a 1/16 fraction.
+  if (key === "position" && lin) return { unit: DISPLAY.raw.unit, digits: 1 };
   return DISPLAY.raw;
 }
 
@@ -306,6 +317,18 @@ function Telemetry({ id }: { id: number }) {
   const raw = !calibrated || unitsPref === "raw";
   const shownSamples = frozen ?? samples;
   const latestSample = shownSamples.at(-1);
+  // The table is read once it goes LIVE and again whenever it does so anew;
+  // until it is in hand the pot is shown as read, which is what the kernel
+  // controls on outside LIVE.
+  const lutLive = samples.at(-1)?.lutState === LUT.LIVE;
+  const lut = useClientOnce(
+    (c) =>
+      descriptor !== undefined && lutLive
+        ? c.readPotLut(id, descriptor)
+        : Promise.resolve(undefined),
+    [id, descriptor, lutLive],
+  );
+  const knots = lutLive && lut.value?.live === true ? lut.value.knots : undefined;
   const modeField = useMemo(
     () => descriptor?.fields().find((f) => f.name === "mode"),
     [descriptor],
@@ -328,16 +351,17 @@ function Telemetry({ id }: { id: number }) {
         : goalUnits(mode, { cal: config.cal, sense: config.sense, raw }),
     [mode, config, raw],
   );
-  const panels = useMemo(() => panelsFor(mode), [mode]);
+  const panels = useMemo(() => panelsFor(mode, knots !== undefined), [mode, knots]);
   const rows = useMemo(
-    () => (config === undefined ? [] : toRows(shownSamples, config, raw, goal, windowS)),
-    [shownSamples, config, raw, goal, windowS],
+    () => (config === undefined ? [] : toRows(shownSamples, config, raw, goal, windowS, knots)),
+    [shownSamples, config, raw, goal, windowS, knots],
   );
   const newest = snapshots.at(-1);
   const latest = rows.at(-1);
   const problem =
     (descriptor === undefined ? undefined : conversion.error) ??
     (newest?.stale === true ? newest.error : undefined) ??
+    lut.error ??
     descriptorError;
   const windowId = useId();
 
@@ -444,7 +468,15 @@ function Telemetry({ id }: { id: number }) {
                     series={s}
                     checked={shown[s.key]}
                     color={tokens[s.token]}
-                    readout={format(latest?.[s.key], display(s.key, raw, goal))}
+                    readout={format(
+                      latest?.[s.key],
+                      display(s.key, raw, goal, knots !== undefined),
+                    )}
+                    sub={
+                      s.key === "position" && knots !== undefined && latest !== undefined
+                        ? { label: "Position raw", text: `raw ${latest.raw} counts` }
+                        : undefined
+                    }
                     onChange={(checked) => {
                       setShown({ ...shown, [s.key]: checked });
                     }}
@@ -853,26 +885,39 @@ function SeriesRow({
   checked,
   color,
   readout,
+  sub,
   onChange,
 }: {
   series: SeriesDef;
   checked: boolean;
   color: string;
   readout: string;
+  /** A grey line under the readout: the same sample another way. */
+  sub?: { label: string; text: string };
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className="flex h-7 cursor-pointer items-center gap-2 text-sm">
-      <Switch size="sm" aria-label={series.label} checked={checked} onCheckedChange={onChange} />
-      <span
-        aria-hidden
-        className="w-3 shrink-0 border-t-2"
-        style={{ borderColor: color, borderStyle: series.dash === undefined ? "solid" : "dashed" }}
-      />
-      <span>{series.label}</span>
-      <span aria-label={`${series.label} value`} className="ml-auto font-mono tabular-nums">
-        {readout}
-      </span>
-    </label>
+    <div className="flex flex-col">
+      <label className="flex h-7 cursor-pointer items-center gap-2 text-sm">
+        <Switch size="sm" aria-label={series.label} checked={checked} onCheckedChange={onChange} />
+        <span
+          aria-hidden
+          className="w-3 shrink-0 border-t-2"
+          style={{
+            borderColor: color,
+            borderStyle: series.dash === undefined ? "solid" : "dashed",
+          }}
+        />
+        <span>{series.label}</span>
+        <span aria-label={`${series.label} value`} className="ml-auto font-mono tabular-nums">
+          {readout}
+        </span>
+      </label>
+      {sub !== undefined && (
+        <span aria-label={sub.label} className="self-end font-mono text-xs text-text-3">
+          {sub.text}
+        </span>
+      )}
+    </div>
   );
 }

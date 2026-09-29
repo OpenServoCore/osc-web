@@ -59,7 +59,7 @@ const REASONS: readonly (Reason & { bit: number })[] = [
   {
     bit: 1 << 4,
     name: "STAMP_MISMATCH",
-    text: "Closed loop is off: the pot table and the identified values are not one set (edited, rebuilt or partly written). Run osc ident, or re-run the tool that was interrupted.",
+    text: "Closed loop is off: the position table and the identified values are not one set (edited, rebuilt or partly written). Run osc ident, or re-run the tool that was interrupted.",
   },
   {
     bit: 1 << 5,

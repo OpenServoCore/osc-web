@@ -77,7 +77,7 @@ const SENSE_EXT = 0x0b4;
 const LIFECYCLE = 0x180;
 const SYSTEM = 0x194;
 const BURST_REQUEST = 0x196;
-const POT_LUT = 0x19c;
+const POS_LUT = 0x19c;
 const TEL_COMMON = 0x200;
 const TEL_MODE = 0x220;
 const ESTIMATES = 0x224;
@@ -126,7 +126,7 @@ const TABS: readonly TabSpec[] = [
       // Identification aggregates are windowed raw counts, not estimator output.
       { label: "Raw samples", blocks: [SENSORS, IDENT] },
       { label: "Commands", blocks: [LIFECYCLE, SYSTEM, BURST_REQUEST] },
-      { label: "Pot table window", collapsed: true, blocks: [POT_LUT] },
+      { label: "Position table window", collapsed: true, blocks: [POS_LUT] },
       { label: "Profile/capture", help: true, collapsed: true, blocks: [PROFILE, BURST_WINDOW] },
     ],
   },

@@ -50,7 +50,7 @@ import {
   type WindowS,
 } from "@/lib/control";
 import { closedLoopAllowed, openLoopAllowed, reasons } from "@/lib/data-state";
-import { counts as linearized, STATE as LUT } from "@/lib/pot-lut";
+import { counts as linearized, STATE as LUT } from "@/lib/pos-lut";
 import { isUnits, type Units } from "@/lib/prefs";
 import { useSession } from "@/lib/session";
 import {
@@ -106,7 +106,7 @@ const CONVERSION_REGISTERS: readonly string[] = [...CONFIG_REGISTERS, ...BIAS_RE
 const MODE_REGISTERS: readonly string[] = ["mode"];
 
 const POSITION: SeriesDef = { key: "position", label: "Position", token: "series1" };
-/** The same series through a live pot table: what the kernel controls on (protocol sec 5.7). */
+/** The same series through a live position table: what the kernel controls on (protocol sec 5.7). */
 const POSITION_LIN: SeriesDef = { ...POSITION, label: "Position (linearized)" };
 const VELOCITY: SeriesDef = { key: "velocity", label: "Velocity", token: "series2", right: true };
 const CURRENT: SeriesDef = { key: "current", label: "Current", token: "series3" };
@@ -168,9 +168,9 @@ function convert(
   { sense, cal, biases }: TelemetryConfig,
   raw: boolean,
   goal: GoalUnits | undefined,
-  knots: readonly number[] | undefined,
+  points: readonly number[] | undefined,
 ): Row {
-  const pos = knots === undefined ? s.pos : linearized(knots, s.pos);
+  const pos = points === undefined ? s.pos : linearized(points, s.pos);
   return {
     t: s.t,
     raw: s.pos,
@@ -191,13 +191,13 @@ function toRows(
   raw: boolean,
   goal: GoalUnits | undefined,
   windowS: number,
-  knots: readonly number[] | undefined,
+  points: readonly number[] | undefined,
 ): Row[] {
   const last = samples.at(-1);
   if (last === undefined) return [];
   return samples
     .filter((s) => s.t >= last.t - windowS)
-    .map((s) => ({ ...convert(s, config, raw, goal, knots), t: s.t - last.t }));
+    .map((s) => ({ ...convert(s, config, raw, goal, points), t: s.t - last.t }));
 }
 
 function display(key: SeriesKey, raw: boolean, goal: GoalUnits | undefined, lin = false): Display {
@@ -320,15 +320,15 @@ function Telemetry({ id }: { id: number }) {
   // The table is read once it goes LIVE and again whenever it does so anew;
   // until it is in hand the pot is shown as read, which is what the kernel
   // controls on outside LIVE.
-  const lutLive = samples.at(-1)?.lutState === LUT.LIVE;
+  const lutLive = samples.at(-1)?.posLutState === LUT.LIVE;
   const lut = useClientOnce(
     (c) =>
       descriptor !== undefined && lutLive
-        ? c.readPotLut(id, descriptor)
+        ? c.readPosLut(id, descriptor)
         : Promise.resolve(undefined),
     [id, descriptor, lutLive],
   );
-  const knots = lutLive && lut.value?.live === true ? lut.value.knots : undefined;
+  const points = lutLive && lut.value?.live === true ? lut.value.points : undefined;
   const modeField = useMemo(
     () => descriptor?.fields().find((f) => f.name === "mode"),
     [descriptor],
@@ -351,10 +351,10 @@ function Telemetry({ id }: { id: number }) {
         : goalUnits(mode, { cal: config.cal, sense: config.sense, raw }),
     [mode, config, raw],
   );
-  const panels = useMemo(() => panelsFor(mode, knots !== undefined), [mode, knots]);
+  const panels = useMemo(() => panelsFor(mode, points !== undefined), [mode, points]);
   const rows = useMemo(
-    () => (config === undefined ? [] : toRows(shownSamples, config, raw, goal, windowS, knots)),
-    [shownSamples, config, raw, goal, windowS, knots],
+    () => (config === undefined ? [] : toRows(shownSamples, config, raw, goal, windowS, points)),
+    [shownSamples, config, raw, goal, windowS, points],
   );
   const newest = snapshots.at(-1);
   const latest = rows.at(-1);
@@ -470,10 +470,10 @@ function Telemetry({ id }: { id: number }) {
                     color={tokens[s.token]}
                     readout={format(
                       latest?.[s.key],
-                      display(s.key, raw, goal, knots !== undefined),
+                      display(s.key, raw, goal, points !== undefined),
                     )}
                     sub={
-                      s.key === "position" && knots !== undefined && latest !== undefined
+                      s.key === "position" && points !== undefined && latest !== undefined
                         ? { label: "Position raw", text: `raw ${latest.raw} counts` }
                         : undefined
                     }

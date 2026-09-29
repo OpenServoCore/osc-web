@@ -3,6 +3,7 @@
 // that mirrors the ident host's StreamAssembler, and the CSV export.
 
 import { dutyPercent } from "./control";
+import { q4ToCounts } from "./pot-lut";
 import type { TelemetryConfig } from "./telemetry";
 import {
   busV,
@@ -22,7 +23,7 @@ export const SAMPLES_PER_FRAME = 16;
 /** A 16-sample batch must clear the wire in its own tick window at 3 M. */
 export const FIELDS_MAX = 6;
 const FLAG_LAST = 1;
-const MASK_ALL = 0x7ff;
+const MASK_ALL = 0xfff;
 /** Every v1 field is two bytes. */
 const FIELD_BYTES = 2;
 
@@ -44,6 +45,8 @@ export const FIELDS = [
   { key: "vmotor_b", label: "Motor B", bit: 8, signed: false, family: "electrical" },
   { key: "vbus_raw", label: "Bus raw", bit: 9, signed: false, family: "electrical" },
   { key: "ntc_raw", label: "NTC raw", bit: 10, signed: false, family: "electrical" },
+  // The Q4 word the kernel controlled on that tick (protocol sec 5.7).
+  { key: "pos_lin", label: "Position (linearized)", bit: 11, signed: false, family: "position" },
 ] as const satisfies readonly {
   key: string;
   label: string;
@@ -189,6 +192,8 @@ export interface Unit extends Display {
 
 const COUNTS: Display = DISPLAY.raw;
 const PERCENT: Display = { unit: "%", digits: 1 };
+/** Linearized counts carry a 1/16 fraction. */
+const LIN_COUNTS: Display = { unit: "counts", digits: 1 };
 
 /**
  * Real units through the servo's own sense chain and calibration; the raw
@@ -198,6 +203,9 @@ const PERCENT: Display = { unit: "%", digits: 1 };
 export function unitsFor(mask: number, config: TelemetryConfig | undefined, raw: boolean): Unit[] {
   return fieldsOf(mask).map((f) => {
     const counts: Unit = { key: f.key, ...COUNTS, convert: (c) => c };
+    if (f.key === "pos_lin" && (config === undefined || raw)) {
+      return { key: f.key, ...LIN_COUNTS, convert: q4ToCounts };
+    }
     if (config === undefined) return counts;
     const { sense, cal, biases } = config;
     switch (f.key) {
@@ -205,6 +213,9 @@ export function unitsFor(mask: number, config: TelemetryConfig | undefined, raw:
         return raw
           ? counts
           : { key: f.key, ...DISPLAY.position, convert: (c) => positionDeg(c, cal) };
+      // The stops map to themselves, so the same angle map applies.
+      case "pos_lin":
+        return { key: f.key, ...DISPLAY.position, convert: (c) => positionDeg(q4ToCounts(c), cal) };
       // The kernel's own bias-subtracted sample: no bias to take out again.
       case "current":
         return { key: f.key, ...DISPLAY.current, convert: (c) => currentMa(c, 0, sense) };

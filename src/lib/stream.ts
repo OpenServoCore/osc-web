@@ -3,6 +3,7 @@
 // that mirrors the ident host's StreamAssembler, and the CSV export.
 
 import { dutyPercent } from "./control";
+import { fixed } from "./format";
 import { q4ToCounts } from "./pos-lut";
 import type { TelemetryConfig } from "./telemetry";
 import {
@@ -260,7 +261,7 @@ export function toCsv(rows: readonly Row[], units: readonly Unit[]): string {
   for (const row of rows) {
     const cells = units.map((u) => {
       const counts = row.values[u.key];
-      return counts === undefined ? "" : u.convert(counts).toFixed(u.digits);
+      return counts === undefined ? "" : fixed(u.convert(counts), u.digits);
     });
     lines.push([row.sample, row.valid ? 1 : 0, ...cells].join(","));
   }

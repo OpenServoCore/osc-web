@@ -35,7 +35,7 @@ export interface Sense {
   vmotorBiasNomCounts: number;
 }
 
-/** Count-to-angle calibration, from the CALIB pot_lut and kinematics blocks. */
+/** Count-to-angle calibration, from the CALIB pot and kinematics blocks. */
 export interface Calibration {
   rawMin: number;
   rawMax: number;

@@ -1,4 +1,4 @@
-// The pot linearization table (protocol sec 5.7) minus React: the firmware's
+// The position linearization table (protocol sec 5.7) minus React: the firmware's
 // interpolation ported bit for bit, the sensor error the table removes at each
 // position, and the advisory grade the CLI prints (osc lut grade). The
 // firmware judges physics only; quality is the operator's call.
@@ -8,12 +8,12 @@ import { ADC_FULL_SCALE, ADC_MAX_COUNT, degPerCount, positionDeg, type Calibrati
 export const GRID_SHIFT = 4;
 /** Raw counts per interval. */
 export const GRID = 1 << GRID_SHIFT;
-/** Host-written knots; knot INTERVALS sits at 4096 and is fixed 0. */
+/** Host-written points; point INTERVALS sits at 4096 and is fixed 0. */
 export const INTERVALS = 256;
 const ADC_MASK = 4095;
 const FRAC_MASK = GRID - 1;
 
-/** `lut_state` values. */
+/** `pos_lut_state` values. */
 export const STATE = {
   IDENTITY: 0,
   LOADING: 1,
@@ -61,15 +61,15 @@ export function interpQ4(raw: number, c0: number, c1: number): number {
   return (((r + c0) << GRID_SHIFT) + (c1 - c0) * f) & 0xffff;
 }
 
-/** The Q4 word the kernel computes through `knots` (256 host-written corrections). */
-export function q4(knots: readonly number[], raw: number): number {
+/** The Q4 word the kernel computes through `points` (256 host-written corrections). */
+export function q4(points: readonly number[], raw: number): number {
   const i = index(raw);
-  return interpQ4(raw, knots[i] ?? 0, knots[i + 1] ?? 0);
+  return interpQ4(raw, points[i] ?? 0, points[i + 1] ?? 0);
 }
 
 /** Linearized counts as the firmware sees them: the Q4 word over GRID. */
-export function counts(knots: readonly number[], raw: number): number {
-  return q4(knots, raw) / GRID;
+export function counts(points: readonly number[], raw: number): number {
+  return q4(points, raw) / GRID;
 }
 
 /** Q4 word to counts, for a TEL `pos_lin` sample. */
@@ -77,8 +77,8 @@ export function q4ToCounts(word: number): number {
   return word / GRID;
 }
 
-export function isIdentity(knots: readonly number[]): boolean {
-  return knots.every((c) => c === 0);
+export function isIdentity(points: readonly number[]): boolean {
+  return points.every((c) => c === 0);
 }
 
 export interface Windows {
@@ -89,7 +89,7 @@ export interface Windows {
 
 export interface Report {
   nonzero: number;
-  /** Raw counts from the first nonzero knot to the last. */
+  /** Raw counts from the first nonzero point to the last. */
   span?: [number, number];
   maxAbs: number;
   /** The raw counts the table changes a reading in, and the windows ran over. */
@@ -102,12 +102,12 @@ function rawOf(k: number): number {
   return k * GRID;
 }
 
-export function report(knots: readonly number[]): Report {
+export function report(points: readonly number[]): Report {
   const nonzero: number[] = [];
-  for (let i = 0; i < INTERVALS; i++) if ((knots[i] ?? 0) !== 0) nonzero.push(i);
+  for (let i = 0; i < INTERVALS; i++) if ((points[i] ?? 0) !== 0) nonzero.push(i);
   const r: Report = {
     nonzero: nonzero.length,
-    maxAbs: knots.reduce((m, c) => Math.max(m, Math.abs(c)), 0),
+    maxAbs: points.reduce((m, c) => Math.max(m, Math.abs(c)), 0),
   };
   const first = nonzero[0];
   const last = nonzero.at(-1);
@@ -119,7 +119,7 @@ export function report(knots: readonly number[]): Report {
   let min = Infinity;
   let max = -Infinity;
   for (let r0 = lo; r0 <= hi - WINDOW; r0++) {
-    const g = (counts(knots, r0 + WINDOW) - counts(knots, r0)) / WINDOW;
+    const g = (counts(points, r0 + WINDOW) - counts(points, r0)) / WINDOW;
     min = Math.min(min, g);
     max = Math.max(max, g);
   }
@@ -129,7 +129,7 @@ export function report(knots: readonly number[]): Report {
   return r;
 }
 
-/** `lut_state` in words: what the kernel applies and, for a refusal, what to do. */
+/** `pos_lut_state` in words: what the kernel applies and, for a refusal, what to do. */
 export function stateWords(state: number): string {
   switch (state) {
     case STATE.IDENTITY:
@@ -172,8 +172,8 @@ export interface ErrorSeries {
  * the angle map the app shows real units through; without one the axes stay
  * in counts and percent is of the converter's full scale.
  */
-export function errorSeries(knots: readonly number[], cal: Calibration | undefined): ErrorSeries {
-  const r = report(knots);
+export function errorSeries(points: readonly number[], cal: Calibration | undefined): ErrorSeries {
+  const r = report(points);
   const scale = cal === undefined ? 1 : degPerCount(cal);
   const toX = (raw: number) => (cal === undefined ? raw : positionDeg(raw, cal));
   const [lo, hi] = cal === undefined ? [0, ADC_MAX_COUNT] : [cal.rawMin, cal.rawMax];
@@ -181,7 +181,7 @@ export function errorSeries(knots: readonly number[], cal: Calibration | undefin
   const y: number[] = [];
   let maxAbs = 0;
   for (let raw = lo; raw <= hi; raw++) {
-    const e = (raw - counts(knots, raw)) * scale;
+    const e = (raw - counts(points, raw)) * scale;
     x.push(toX(raw));
     y.push(e);
     maxAbs = Math.max(maxAbs, Math.abs(e));

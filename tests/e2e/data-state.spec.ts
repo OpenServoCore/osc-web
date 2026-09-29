@@ -88,7 +88,9 @@ test("a calibration edit on a stamped servo marks the set changed until it is re
   await page.getByRole("textbox").fill("4000");
   await page.getByRole("button", { name: "Apply" }).click();
   const banner = page.getByRole("status", { name: "Data state" });
-  await expect(banner).toContainText("the pot table and the identified values are not one set");
+  await expect(banner).toContainText(
+    "the position table and the identified values are not one set",
+  );
   await expect(page.getByRole("group", { name: "Plant stamp" })).toContainText(
     "Changed since it was stamped",
   );

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
-import { counts, GRID } from "../../src/lib/pot-lut";
+import { counts, GRID } from "../../src/lib/pos-lut";
 import { gotoSim, MG90A, writeTable } from "./helpers";
 
 async function openLive(page: Page): Promise<void> {
@@ -25,7 +25,7 @@ test("with a live table the position is read through it, the raw sample beside i
   page,
 }) => {
   await gotoSim(page, [1, 2]);
-  await writeTable(page, 1, MG90A.knots);
+  await writeTable(page, 1, MG90A.points);
   await openLive(page);
   await expect(page.getByRole("switch", { name: "Position (linearized)" })).toBeVisible();
   await expect(page.getByLabel("Position (linearized) value")).toHaveText(/ deg$/);
@@ -37,7 +37,7 @@ test("with a live table the position is read through it, the raw sample beside i
   const readout = page.getByLabel("Position (linearized) value");
   await expect(readout).toHaveText(/^\d+\.\d counts$/);
   const raw = Number(/\d+/.exec((await page.getByLabel("Position raw").textContent()) ?? "")?.[0]);
-  expect(await readout.textContent()).toBe(`${counts(MG90A.knots, raw).toFixed(1)} counts`);
+  expect(await readout.textContent()).toBe(`${counts(MG90A.points, raw).toFixed(1)} counts`);
   expect(GRID).toBe(16);
 });
 

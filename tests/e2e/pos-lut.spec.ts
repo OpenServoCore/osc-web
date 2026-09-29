@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { errorSeries, hoverWords } from "../../src/lib/pot-lut";
+import { errorSeries, hoverWords } from "../../src/lib/pos-lut";
 import { gotoSim, MG90A, writeTable } from "./helpers";
 
 /** The simulated servo's angle map: stops 5..4095 read 0..202 deg. */
@@ -27,14 +27,14 @@ test("a servo without a table says so, with nothing to grade", async ({ page }) 
   await expect(card.getByLabel("Table facts")).toContainText("Stops at raw 5 and 4095");
   await expect(card.getByLabel("Grade")).toHaveCount(0);
   await expect(card.getByRole("region", { name: "Error vs position" })).toHaveCount(0);
-  await expect(card.getByText("lut_state 0x1de = 0 IDENTITY")).toBeVisible();
+  await expect(card.getByText("pos_lut_state 0x1de = 0 IDENTITY")).toBeVisible();
 });
 
 test("the mg90-a table reads live, graded A, its error in degrees and percent of travel", async ({
   page,
 }) => {
   await gotoSim(page, [1, 2]);
-  await writeTable(page, 1, MG90A.knots);
+  await writeTable(page, 1, MG90A.points);
   await openServo(page, 1);
   const card = page.getByRole("region", { name: "Position calibration" });
   await expect(card.getByLabel("Table state")).toHaveText(
@@ -51,7 +51,7 @@ test("the mg90-a table reads live, graded A, its error in degrees and percent of
   );
   await expect(card.getByRole("region", { name: "Local gain" })).toHaveCount(0);
   await expect(card.getByRole("region", { name: "Correction curve" })).toHaveCount(0);
-  await expect(card.getByText("lut_state 0x1de = 2 LIVE")).toBeVisible();
+  await expect(card.getByText("pos_lut_state 0x1de = 2 LIVE")).toBeVisible();
   await card.getByLabel("Grade").hover();
   await expect(page.getByRole("tooltip")).toContainText("0.5x..2x");
   // Hovering the plot reads the position under the cursor and the error the
@@ -65,7 +65,7 @@ test("the mg90-a table reads live, graded A, its error in degrees and percent of
   );
   const text = (await readout.textContent()) ?? "";
   const deg = Number(/^(-?\d+\.\d) deg:/.exec(text)?.[1]);
-  const s = errorSeries(MG90A.knots, SIM);
+  const s = errorSeries(MG90A.points, SIM);
   const raw = Math.round(SIM.rawMin + deg / (202 / 4090));
   const candidates = [-2, -1, 0, 1, 2].map((d) => hoverWords(s, raw + d - SIM.rawMin));
   expect(candidates).toContain(text);
@@ -73,7 +73,7 @@ test("the mg90-a table reads live, graded A, its error in degrees and percent of
   // A new table re-defines the domain the constants were fitted in: the
   // COMMIT checkpoint leaves the set unstamped until osc ident runs.
   await expect(page.getByRole("status", { name: "Data state" })).toContainText(
-    "the pot table and the identified values are not one set",
+    "the position table and the identified values are not one set",
   );
   await expect(page.getByRole("group", { name: "Plant stamp" })).toContainText(
     "Changed since it was stamped",

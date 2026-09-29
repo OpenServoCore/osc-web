@@ -5,22 +5,22 @@ import { readFileSync } from "node:fs";
 export const MG90A = JSON.parse(
   readFileSync(
     new URL(
-      "../../../open-servo-core/ident/testdata/lut/pot-lut-mg90-a-grid.json",
+      "../../../open-servo-core/ident/testdata/lut/pos-lut-mg90-a-grid.json",
       import.meta.url,
     ),
     "utf8",
   ),
-) as { knots: number[] };
+) as { points: number[] };
 
 interface SimWindow {
-  __osc?: { writePotLut: (id: number, knots: number[]) => Promise<void> };
+  __osc?: { writePosLut: (id: number, points: number[]) => Promise<void> };
 }
 
 /** Puts a table into simulated servo `id` the way osc lut write does: STORE, COMMIT, readback. */
-export async function writeTable(page: Page, id: number, knots: number[]): Promise<void> {
-  await page.evaluate(([id, knots]) => (window as SimWindow).__osc?.writePotLut(id, knots), [
+export async function writeTable(page: Page, id: number, points: number[]): Promise<void> {
+  await page.evaluate(([id, points]) => (window as SimWindow).__osc?.writePosLut(id, points), [
     id,
-    knots,
+    points,
   ] as const);
 }
 

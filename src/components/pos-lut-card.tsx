@@ -21,12 +21,12 @@ import {
   stateWords,
   type ErrorSeries,
   type Report,
-} from "@/lib/pot-lut";
+} from "@/lib/pos-lut";
 import { useSession } from "@/lib/session";
 import { calibrationStatus } from "@/lib/units";
 
 /** A byte beside the cards' span, on their cadence, so a COMMIT elsewhere shows within a second. */
-const STATE_REGISTERS: readonly string[] = ["lut_state"];
+const STATE_REGISTERS: readonly string[] = ["pos_lut_state"];
 const PAD = 0.1;
 const LABEL_MIN_PX = 100;
 /** Color stops across -max..+max; the mapping itself is `diverging`. */
@@ -158,25 +158,25 @@ function chartOptions(
   };
 }
 
-export function PotLutCard({ id, uid }: { id: number; uid: string }) {
+export function PosLutCard({ id, uid }: { id: number; uid: string }) {
   const { descriptor, descriptorError, values } = useSession();
   const tokens = useChartTokens();
   const stateSnapshot = useRegisters(id, STATE_REGISTERS, "slow");
   const state =
     stateSnapshot === undefined || stateSnapshot.stale
       ? undefined
-      : stateSnapshot.read("lut_state");
+      : stateSnapshot.read("pos_lut_state");
   const lut = useClientOnce(
-    (c) => (descriptor === undefined ? Promise.resolve(undefined) : c.readPotLut(id, descriptor)),
+    (c) => (descriptor === undefined ? Promise.resolve(undefined) : c.readPosLut(id, descriptor)),
     [id, descriptor, state],
   );
-  const stateField = descriptor?.fields().find((f) => f.name === "lut_state");
+  const stateField = descriptor?.fields().find((f) => f.name === "pos_lut_state");
   const stops = values.get(uid)?.constants.calibration;
   const map = stops !== undefined && calibrationStatus(stops).valid ? stops : undefined;
   const table = lut.value;
-  const r = useMemo(() => (table === undefined ? undefined : report(table.knots)), [table]);
+  const r = useMemo(() => (table === undefined ? undefined : report(table.points)), [table]);
   const series = useMemo(
-    () => (table === undefined ? undefined : errorSeries(table.knots, map)),
+    () => (table === undefined ? undefined : errorSeries(table.points, map)),
     [table, map],
   );
   const [hover, setHover] = useState<number | undefined>(undefined);
@@ -232,7 +232,8 @@ export function PotLutCard({ id, uid }: { id: number; uid: string }) {
               </section>
             )}
             <p className="font-mono text-xs text-text-3">
-              lut_state {stateField === undefined ? "" : hexAddr(stateField.addr)} = {table.state}
+              pos_lut_state {stateField === undefined ? "" : hexAddr(stateField.addr)} ={" "}
+              {table.state}
               {table.stateName === undefined ? "" : ` ${table.stateName}`}; tables are written with
               osc lut write
             </p>

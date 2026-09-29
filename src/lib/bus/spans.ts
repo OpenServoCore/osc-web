@@ -127,7 +127,7 @@ export function decodeSpan(fields: readonly Field[], span: Span, bytes: Uint8Arr
   };
 }
 
-/** CALIB pot_lut, kinematics, sense and sense_ext: read once per servo. */
+/** CALIB pot, kinematics, sense and sense_ext: read once per servo. */
 export const CONSTANT_REGISTERS: readonly string[] = [
   "raw_min",
   "raw_max",

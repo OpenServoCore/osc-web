@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import image from "../../../open-servo-core/ident/testdata/lut/pot-lut-mg90-a-grid.json";
+import image from "../../../open-servo-core/ident/testdata/lut/pos-lut-mg90-a-grid.json";
 import {
   counts,
   errorSeries,
@@ -16,10 +16,10 @@ import {
   STATE,
   stateWords,
   WINDOW,
-} from "./pot-lut";
+} from "./pos-lut";
 import type { Calibration } from "./units";
 
-const mg90a: number[] = image.knots;
+const mg90a: number[] = image.points;
 const IDENTITY: number[] = Array.from({ length: 256 }, () => 0);
 /** The bench MG90's angle map: stops 232..3849 read 0..183.06 deg. */
 const MG90: Calibration = {
@@ -30,7 +30,7 @@ const MG90: Calibration = {
   gearRatioCenti: 30805,
 };
 
-test("the identity is raw << 4 exactly, and a knot lands at raw + c[k]", () => {
+test("the identity is raw << 4 exactly, and a point lands at raw + c[k]", () => {
   for (const raw of [0, 1, 15, 16, 2048, 4095]) {
     expect(q4(IDENTITY, raw)).toBe(raw << 4);
     expect(counts(IDENTITY, raw)).toBe(raw);
@@ -100,16 +100,16 @@ test("without an angle map the error stays in counts, percent of the 12-bit rang
 });
 
 test("a table that adds counts at a raw reading means the sensor reads low there", () => {
-  const knots = [...IDENTITY];
-  knots[100] = 10;
-  knots[101] = -10;
-  const s = errorSeries(knots, undefined);
+  const points = [...IDENTITY];
+  points[100] = 10;
+  points[101] = -10;
+  const s = errorSeries(points, undefined);
   // The servo reports raw 1600 as 1610: the true position is 10 counts above the reading.
-  expect(counts(knots, 1600)).toBe(1610);
+  expect(counts(points, 1600)).toBe(1610);
   expect(s.y[1600]).toBe(-10);
   expect(hoverWords(s, 1600)).toMatch(/reads low by 10 counts/);
   // And raw 1616 as 1606: the sensor reads 10 counts high.
-  expect(counts(knots, 1616)).toBe(1606);
+  expect(counts(points, 1616)).toBe(1606);
   expect(s.y[1616]).toBe(10);
   expect(hoverWords(s, 1616)).toMatch(/reads high by 10 counts/);
 });
@@ -147,12 +147,12 @@ test("grade thresholds", () => {
 });
 
 test("a coarse SG90-class step, one 6x interval, is suspect", () => {
-  const knots = [...IDENTITY];
-  knots[100] = 80;
+  const points = [...IDENTITY];
+  points[100] = 80;
   [75, 60, 45, 30, 15].forEach((c, i) => {
-    knots[101 + i] = c;
+    points[101 + i] = c;
   });
-  const r = report(knots);
+  const r = report(points);
   expect(r.windows?.max).toBeGreaterThan(4);
   expect(r.grade).toBe("C");
 });

@@ -54,7 +54,7 @@ describe("buildTable", () => {
       ["Identity and bus", "Motion limits", "Control loops", "Safety", "Thermal"],
       ["Calibration"],
       ["Board constants", "Motor model"],
-      ["Status", "Estimates", "Raw samples", "Commands", "Profile/capture"],
+      ["Status", "Estimates", "Raw samples", "Commands", "Pot table window", "Profile/capture"],
     ]);
   });
 
@@ -88,6 +88,7 @@ describe("buildTable", () => {
       "Control loops",
       "Thermal",
       "Motor model",
+      "Pot table window",
       "Profile/capture",
     ]);
   });
@@ -122,16 +123,15 @@ describe("buildTable", () => {
     expect(group?.rows.map((r) => r.field.name)).toEqual([
       "raw_min",
       "raw_max",
-      "lut_corr",
       "angle_min_cdeg",
       "angle_max_cdeg",
       "gear_ratio_centi",
+      "plant_stamp",
     ]);
     for (const row of group?.rows ?? []) {
       expect(row.editable).toBe(false);
       expect(row.link).toBe("servo");
     }
-    expect(rowOf("lut_corr").blob).toBe(true);
   });
 
   test("board facts and the motor model", () => {
@@ -162,6 +162,11 @@ describe("buildTable", () => {
     expect(placement("goal_position")).toEqual(["Live values", "Commands"]);
     expect(placement("boot_mode")).toEqual(["Live values", "Commands"]);
     expect(placement("chans")).toEqual(["Live values", "Commands"]);
+    expect(placement("lut_cmd")).toEqual(["Live values", "Pot table window"]);
+    expect(placement("lut_state")).toEqual(["Live values", "Pot table window"]);
+    expect(rowOf("lut_cmd").editable).toBe(true);
+    expect(rowOf("lut_knots")).toMatchObject({ blob: true, editable: true });
+    expect(rowOf("lut_state").editable).toBe(false);
     expect(placement("words")).toEqual(["Live values", "Profile/capture"]);
     expect(placement("page_echo")).toEqual(["Live values", "Profile/capture"]);
     expect(placement("frame_len")).toEqual(["Live values", "Profile/capture"]);
@@ -175,7 +180,7 @@ describe("buildTable", () => {
     expect(rowOf("mode").kind).toMatchObject({ kind: "enum" });
     expect(rowOf("torque_enable").kind).toEqual({ kind: "bool" });
     expect(rowOf("goal_position").kind).toMatchObject({ kind: "number", signed: true, width: 4 });
-    expect(rowOf("lut_corr").kind).toEqual({ kind: "raw", width: 110 });
+    expect(rowOf("lut_knots").kind).toEqual({ kind: "raw", width: 64 });
   });
 });
 
@@ -226,7 +231,7 @@ describe("values", () => {
   });
 
   test("formatRow summarizes blobs and formats everything else", () => {
-    expect(formatRow(rowOf("lut_corr"), new Uint8Array(110))).toBe("110 bytes, 00 00 00 00 ..");
+    expect(formatRow(rowOf("lut_knots"), new Uint8Array(64))).toBe("64 bytes, 00 00 00 00 ..");
     expect(formatRow(rowOf("goal_position"), -1200)).toBe("-1200");
     expect(formatRow(rowOf("mode"), 3)).toBe("Position");
     expect(formatRow(rowOf("torque_enable"), true)).toBe("On");

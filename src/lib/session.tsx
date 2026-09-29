@@ -420,6 +420,14 @@ class Controller {
     this.lost(DISCONNECTED);
   }
 
+  /** Test hook: a table into a simulated servo, the way `osc lut write` puts one there. */
+  writePotLut(id: number, knots: number[]): Promise<void> {
+    const servo = this.snap.state.servos.find((s) => s.id === id);
+    const descriptor = servo === undefined ? undefined : this.modelFor(servo)?.descriptor;
+    if (descriptor === undefined) return Promise.reject(new Error(`no descriptor for ID ${id}`));
+    return this.bus.command((c) => c.writePotLut(id, descriptor, knots));
+  }
+
   /** Test hook: the simulated adapter fails with the text a real unplug produces. */
   sever(): void {
     this.lost(
@@ -462,9 +470,9 @@ function withHealth(servo: Servo, values: CardValues | undefined): Servo {
   };
 }
 
-/** `?sim` only: the handle a browser spec severs the fake adapter through. */
+/** `?sim` only: the handle a browser spec drives the fake adapter through. */
 interface SimWindow extends Window {
-  __osc?: { sever: () => void };
+  __osc?: { sever: () => void; writePotLut: (id: number, knots: number[]) => Promise<void> };
 }
 
 export function SessionProvider({ children }: { children: ReactNode }) {
@@ -485,6 +493,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         sever: () => {
           ctl.sever();
         },
+        writePotLut: (id, knots) => ctl.writePotLut(id, knots),
       };
       return () => {
         delete w.__osc;

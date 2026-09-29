@@ -23,6 +23,8 @@ import { BusManager, systemClock, type Snapshot } from "./bus/manager";
 import {
   CONSTANT_REGISTERS,
   constantsFrom,
+  DATA_REGISTERS,
+  dataStateFrom,
   faultText,
   healthFrom,
   HEALTH_REGISTERS,
@@ -296,7 +298,11 @@ class Controller {
         this.subscriptions.set(
           servo.uid,
           this.bus.subscribe(
-            { id: servo.id, registers: [...LIVE_REGISTERS, ...HEALTH_REGISTERS], rate: "slow" },
+            {
+              id: servo.id,
+              registers: [...LIVE_REGISTERS, ...HEALTH_REGISTERS, ...DATA_REGISTERS],
+              rate: "slow",
+            },
             (snapshot) => {
               this.onCard(servo.uid, snapshot);
             },
@@ -344,9 +350,11 @@ class Controller {
     if (snapshot.stale) {
       card.live = undefined;
       card.health = undefined;
+      card.data = undefined;
     } else {
       card.live = liveFrom(snapshot.read);
       card.health = healthFrom(snapshot.read);
+      card.data = dataStateFrom(snapshot.read);
       // A constants read that failed, or one a calibration write invalidated,
       // is retried on the next card snapshot.
       if (card.constants === undefined) {
@@ -360,9 +368,10 @@ class Controller {
   private publishCards(): void {
     const values = new Map<string, CardValues>();
     for (const [uid, card] of this.cards) {
-      const { constants, live, health } = card;
+      const { constants, live, health, data } = card;
       if (constants === undefined || live === undefined || health === undefined) continue;
-      values.set(uid, { constants, live, health });
+      if (data === undefined) continue;
+      values.set(uid, { constants, live, health, data });
     }
     this.set({ values });
   }

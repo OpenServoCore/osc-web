@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { parseSimIds, permittedAdapter } from "./backend";
+import { parseSimIds, parseSimVirgin, permittedAdapter } from "./backend";
 
 test("parseSimIds is undefined without ?sim", () => {
   expect(parseSimIds("")).toBeUndefined();
@@ -17,6 +17,12 @@ test("parseSimIds reads a comma list in order", () => {
 
 test("parseSimIds drops junk and out-of-range entries", () => {
   expect(parseSimIds("?sim=1,x,2.5,-3,,0,250,4")).toEqual([1, 4]);
+});
+
+test("parseSimVirgin names the factory-fresh ids, none by default", () => {
+  expect(parseSimVirgin("?sim=1,2")).toEqual([]);
+  expect(parseSimVirgin("?sim=1,2&virgin=2")).toEqual([2]);
+  expect(parseSimVirgin("?sim=1,2&virgin=2,x,300,1")).toEqual([2, 1]);
 });
 
 test("parseSimIds drops duplicates", () => {

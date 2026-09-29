@@ -18,7 +18,7 @@ const tone: Record<Level, string> = {
 
 export function HealthCard({ id }: { id: number }) {
   const bus = useBus();
-  const { servos, descriptorFor } = useSession();
+  const { servos, descriptorFor, values } = useSession();
   const snapshot = useRegisters(id, HEALTH_REGISTERS, "slow");
   const [error, setError] = useState<string>();
   const [clearing, setClearing] = useState(false);
@@ -31,6 +31,7 @@ export function HealthCard({ id }: { id: number }) {
   const problem = error ?? (snapshot?.stale === true ? snapshot.error : undefined);
   const servo = servos.find((s) => s.id === id);
   const descriptor = servo === undefined ? undefined : descriptorFor(servo);
+  const data = servo === undefined ? undefined : values.get(servo.uid)?.data;
   const faulted = health !== undefined && health.faultFlags !== 0;
 
   /** The ack is the torque_enable 0->1 edge; one turn, so nothing interleaves. */
@@ -83,7 +84,7 @@ export function HealthCard({ id }: { id: number }) {
           </>
         ) : (
           <>
-            {statements(health).map(({ level, text }) => {
+            {statements(health, data).map(({ level, text }) => {
               const Icon = icons[level];
               return (
                 <div key={text} className="flex items-start gap-2">

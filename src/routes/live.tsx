@@ -49,6 +49,7 @@ import {
   type ModeName,
   type WindowS,
 } from "@/lib/control";
+import { closedLoopAllowed, openLoopAllowed, reasons } from "@/lib/data-state";
 import { isUnits, type Units } from "@/lib/prefs";
 import { useSession } from "@/lib/session";
 import {
@@ -522,7 +523,7 @@ function Controls({
   latest: Sample | undefined;
 }) {
   const bus = useBus();
-  const { servos } = useSession();
+  const { servos, values } = useSession();
   const snapshot = useRegisters(id, CONTROL_REGISTERS, "fast");
   const limitRead = useReadOnce(id, LIMIT_REGISTERS, [modeField]);
   const [draft, setDraft] = useState<Draft>();
@@ -537,8 +538,20 @@ function Controls({
   const goalId = useId();
 
   const state = snapshot === undefined || snapshot.stale ? undefined : decodeControl(snapshot.read);
+  const servo = servos.find((s) => s.id === id);
+  // The kernel's entry verdict (protocol sec 5.7): a refused enable would latch
+  // the data fault, so the modes it refuses are not offered. Unread = no gate.
+  const flags = servo === undefined ? undefined : values.get(servo.uid)?.data.flags;
+  const allowed = (name: ModeName): boolean =>
+    flags === undefined ||
+    (name === "Velocity" || name === "Position"
+      ? closedLoopAllowed(flags)
+      : openLoopAllowed(flags));
+  const [gate] = flags === undefined ? [] : reasons(flags);
   /** The preference as the servo's `mode` enum writes it. */
-  const wanted = modeField?.variants.find((v) => v.name === modePref)?.value;
+  const wanted = allowed(modePref)
+    ? modeField?.variants.find((v) => v.name === modePref)?.value
+    : undefined;
   useEffect(() => {
     if (snapshot !== undefined) seen.current = snapshot.seq;
   }, [snapshot]);
@@ -613,7 +626,7 @@ function Controls({
   const fmt = (c: number) => (spec === undefined ? "" : spec.toDisplay(c).toFixed(spec.digits));
   // A latched fault holds the motor off whatever torque_enable says
   // (firmware kernel/faults.rs); the switch alone does not say so.
-  const faulted = servos.find((s) => s.id === id)?.fault !== undefined;
+  const faulted = servo?.fault !== undefined;
   const problem = error ?? limitRead.error;
 
   return (
@@ -623,7 +636,7 @@ function Controls({
           Mode
         </Label>
         <Select
-          value={wanted === undefined ? "" : String(wanted)}
+          value={String(wanted ?? state?.mode ?? "")}
           onValueChange={(v) => {
             const value = Number(v);
             const name = modeName(modeField?.variants ?? [], value);
@@ -641,7 +654,11 @@ function Controls({
             {(modeField?.variants ?? []).map((v) => {
               const name = modeName([v], v.value);
               return (
-                <SelectItem key={v.value} value={String(v.value)}>
+                <SelectItem
+                  key={v.value}
+                  value={String(v.value)}
+                  disabled={name !== undefined && !allowed(name)}
+                >
                   {name === undefined ? v.name : modeLabel(name)}
                 </SelectItem>
               );
@@ -649,6 +666,11 @@ function Controls({
           </SelectContent>
         </Select>
       </div>
+      {gate !== undefined && (
+        <p className="text-sm text-warning" aria-label="Mode gate">
+          {gate.text}
+        </p>
+      )}
       {active !== undefined && mode !== undefined && active !== mode && (
         <p className="text-sm text-text-3">running {modeLabel(active)}</p>
       )}

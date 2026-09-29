@@ -1,5 +1,5 @@
 import type { Descriptor, Field, Value } from "@openservocore/client";
-import { limitText } from "./bus/spans";
+import { limitText, windowFloorText } from "./bus/spans";
 import { fieldKind, formatValue, type EditValue, type FieldKind } from "./edit";
 import { hexAddr } from "./format";
 
@@ -165,6 +165,12 @@ const UNITS: ReadonlyMap<string, string> = new Map([
   ["q", "fixed point"],
 ]);
 
+/** Registers read as text; the text carries any unit, so the name's suffix hint is dropped. */
+const TEXT: ReadonlyMap<string, (value: number) => string> = new Map([
+  ["limit_flags", limitText],
+  ["window_floor_q15", windowFloorText],
+]);
+
 export function labelParts(name: string): { label: string; hint?: string } {
   let suffix = "";
   for (const key of UNITS.keys()) {
@@ -196,7 +202,7 @@ function toRow(field: Field, spec: GroupSpec): Row {
   return {
     field,
     label,
-    ...(hint !== undefined && { hint }),
+    ...(hint !== undefined && !TEXT.has(field.name) && { hint }),
     kind: fieldKind(field),
     editable: field.access === "rw" && link === undefined,
     ...(link !== undefined && { link }),
@@ -236,7 +242,8 @@ export function summarizeBlob(bytes: Uint8Array): string {
 }
 
 export function formatRow(row: Row, value: EditValue): string {
-  if (row.field.name === "limit_flags" && typeof value === "number") return limitText(value);
+  const text = TEXT.get(row.field.name);
+  if (text !== undefined && typeof value === "number") return text(value);
   return row.blob && value instanceof Uint8Array
     ? summarizeBlob(value)
     : formatValue(row.kind, value);

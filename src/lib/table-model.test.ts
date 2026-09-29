@@ -162,6 +162,9 @@ describe("buildTable", () => {
     expect(placement("fault_code")).toEqual(["Live values", "Status"]);
     expect(placement("limit_flags")).toEqual(["Live values", "Status"]);
     expect(rowOf("limit_flags").editable).toBe(false);
+    expect(placement("window_floor_q15")).toEqual(["Live values", "Status"]);
+    expect(rowOf("window_floor_q15")).toMatchObject({ label: "Window floor", editable: false });
+    expect(rowOf("window_floor_q15").hint).toBeUndefined();
     expect(placement("theta_hat_q16")).toEqual(["Live values", "Estimates"]);
     expect(placement("sample_tick")).toEqual(["Live values", "Estimates"]);
     expect(placement("pos")).toEqual(["Live values", "Raw samples"]);
@@ -246,6 +249,8 @@ describe("values", () => {
     expect(formatRow(rowOf("torque_enable"), true)).toBe("On");
     expect(formatRow(rowOf("limit_flags"), 0)).toBe("None");
     expect(formatRow(rowOf("limit_flags"), 0b1001)).toBe("Current limit, Stall permit");
+    expect(formatRow(rowOf("window_floor_q15"), 4356)).toBe("13.3 %");
+    expect(formatRow(rowOf("window_floor_q15"), 0)).toBe("Not reported");
   });
 });
 

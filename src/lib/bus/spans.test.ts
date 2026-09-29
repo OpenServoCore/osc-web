@@ -17,6 +17,7 @@ import {
   readerOver,
   READ_MAX,
   span,
+  windowFloorText,
   within,
   type Layout,
 } from "./spans";
@@ -244,4 +245,9 @@ test("limitText names what governs, lowest first", () => {
   expect(limitText((1 << 1) | (1 << 2))).toBe("Stall yield, End stop");
   expect(limitText((1 << 0) | (1 << 3))).toBe("Current limit, Stall permit");
   expect(limitText(1 << 6)).toBe("Limit 0x40");
+});
+
+test("windowFloorText is percent of full duty, or not reported at zero", () => {
+  expect(windowFloorText(4356)).toBe("13.3 %");
+  expect(windowFloorText(0)).toBe("Not reported");
 });

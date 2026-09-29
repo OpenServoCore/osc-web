@@ -18,3 +18,11 @@ test("the Live values tab reads an integer position", async ({ page }) => {
   await page.getByRole("tab", { name: "Live values" }).click();
   await expect(row(page, "pos").getByRole("cell")).toHaveText(/^\d+$/);
 });
+
+test("the Live values tab reads the sim's unpublished window floor as not reported", async ({
+  page,
+}) => {
+  await openTable(page);
+  await page.getByRole("tab", { name: "Live values" }).click();
+  await expect(row(page, "window_floor_q15").getByRole("cell")).toHaveText("Not reported");
+});

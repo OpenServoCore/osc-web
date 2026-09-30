@@ -79,12 +79,14 @@ const LIFECYCLE = 0x180;
 const SYSTEM = 0x194;
 const BURST_REQUEST = 0x196;
 const POS_LUT = 0x19c;
+const IDENT_CTRL = 0x1e0;
 const TEL_COMMON = 0x200;
 const TEL_MODE = 0x220;
 const ESTIMATES = 0x224;
 const SENSORS = 0x240;
 const IDENT = 0x25a;
 const TEL_LIMITS = 0x266;
+const HEALTH = 0x26a;
 const PROFILE = 0x280;
 const BURST_WINDOW = 0x2c0;
 
@@ -124,10 +126,11 @@ const TABS: readonly TabSpec[] = [
     groups: [
       // Mode detail is the fault code's neighbour, not an estimate.
       { label: "Status", blocks: [TEL_COMMON, TEL_MODE, TEL_LIMITS] },
+      { label: "Health", blocks: [HEALTH] },
       { label: "Estimates", blocks: [ESTIMATES] },
       // Identification aggregates are windowed raw counts, not estimator output.
       { label: "Raw samples", blocks: [SENSORS, IDENT] },
-      { label: "Commands", blocks: [LIFECYCLE, SYSTEM, BURST_REQUEST] },
+      { label: "Commands", blocks: [LIFECYCLE, SYSTEM, BURST_REQUEST, IDENT_CTRL] },
       { label: "Position table window", collapsed: true, blocks: [POS_LUT] },
       { label: "Profile/capture", help: true, collapsed: true, blocks: [PROFILE, BURST_WINDOW] },
     ],

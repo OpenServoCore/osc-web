@@ -56,6 +56,7 @@ describe("buildTable", () => {
       ["Board constants", "Motor model"],
       [
         "Status",
+        "Health",
         "Estimates",
         "Raw samples",
         "Commands",
@@ -170,6 +171,12 @@ describe("buildTable", () => {
     expect(placement("pos")).toEqual(["Live values", "Raw samples"]);
     expect(placement("vmotor_bias_counts")).toEqual(["Live values", "Raw samples"]);
     expect(placement("agg_seq")).toEqual(["Live values", "Raw samples"]);
+    expect(placement("ident_agg")).toEqual(["Live values", "Commands"]);
+    expect(rowOf("ident_agg").editable).toBe(true);
+    expect(placement("tick_load_mean_q15")).toEqual(["Live values", "Health"]);
+    expect(placement("stack_free_min")).toEqual(["Live values", "Health"]);
+    expect(rowOf("tick_load_mean_q15").editable).toBe(false);
+    expect(rowOf("tel_drop_count").editable).toBe(true);
     expect(placement("torque_enable")).toEqual(["Live values", "Commands"]);
     expect(placement("goal_position")).toEqual(["Live values", "Commands"]);
     expect(placement("boot_mode")).toEqual(["Live values", "Commands"]);

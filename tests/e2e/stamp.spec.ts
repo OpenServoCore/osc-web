@@ -6,7 +6,11 @@ test("a covered edit says why closed loop went off, and save and stamp leaves th
 }) => {
   await openTable(page);
   await page.getByRole("button", { name: /^Control loops/ }).click();
-  await tableRow(page, "velocity_limit_cps").getByRole("button", { expanded: false }).click();
+  const row = tableRow(page, "velocity_limit_cps");
+  await row.evaluate((el) => {
+    el.scrollIntoView({ block: "end" });
+  });
+  await row.getByRole("button", { expanded: false }).click();
   const editor = page.getByRole("dialog");
   const input = editor.getByRole("textbox");
   await expect(input).toHaveValue(/^\d+$/);
@@ -16,6 +20,19 @@ test("a covered edit says why closed loop went off, and save and stamp leaves th
 
   const notice = page.getByRole("status", { name: "Stamp" });
   await expect(notice).toContainText("Closed loop is off: the stamp no longer matches.");
+  const viewport = page.viewportSize();
+  // Scroll offsets are whole pixels, so a scrolled-to box can sit a fraction above y = 0.
+  await expect
+    .poll(async () => {
+      const box = await notice.boundingBox();
+      return (
+        box !== null &&
+        viewport !== null &&
+        Math.round(box.y) >= 0 &&
+        Math.round(box.y + box.height) <= viewport.height
+      );
+    })
+    .toBe(true);
   await notice.getByRole("button", { name: "Save and stamp" }).click();
   await expect(notice).toHaveCount(0);
 

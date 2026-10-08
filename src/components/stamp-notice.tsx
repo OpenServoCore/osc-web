@@ -1,5 +1,5 @@
 import { LoaderCircle, ShieldAlert } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useBus } from "@/lib/bus/hooks";
@@ -12,6 +12,10 @@ export function StampNotice({ id, onStamped }: { id: number; onStamped: () => vo
   const { descriptor } = useSession();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, []);
 
   async function stamp() {
     if (descriptor === undefined) return;
@@ -29,6 +33,7 @@ export function StampNotice({ id, onStamped }: { id: number; onStamped: () => vo
 
   return (
     <Alert
+      ref={ref}
       role="status"
       aria-label="Stamp"
       className="mb-4 border-warning bg-warning-soft text-warning"

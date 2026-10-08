@@ -5,6 +5,7 @@ import fixture from "../../tests/fixtures/stall-24mhz.json";
 import {
   clampGoal,
   CONTROL_REGISTERS,
+  goalAtStop,
   decodeControl,
   dutyPercent,
   goalOf,
@@ -40,12 +41,18 @@ const cal: Calibration = {
   gearRatioCenti: 100,
 };
 const swapped: Calibration = { ...cal, rawMin: 3800, rawMax: 200 };
-const limits: Limits = { dutyMaxQ15: 30000, velocityLimitCps: 4000, currentLimitCounts: 280 };
+const limits: Limits = {
+  posMinSoftCounts: 0,
+  posMaxSoftCounts: 4095,
+  dutyMaxQ15: 30000,
+  velocityLimitCps: 4000,
+  currentLimitCounts: 280,
+};
 const ctx: GoalContext = { cal, sense, limits, raw: false };
 
 test("the control and limit registers plan one read each", () => {
   expect(planSpans(fields, CONTROL_REGISTERS)).toEqual([{ addr: 384, count: 18 }]);
-  expect(planSpans(fields, LIMIT_REGISTERS)).toEqual([{ addr: 54, count: 20 }]);
+  expect(planSpans(fields, LIMIT_REGISTERS)).toEqual([{ addr: 40, count: 34 }]);
 });
 
 test("decodeControl reads the switch, the mode and every goal", () => {
@@ -70,8 +77,10 @@ test("decodeControl reads the switch, the mode and every goal", () => {
   });
 });
 
-test("limitsFromTable names the three ceilings", () => {
+test("limitsFromTable names the soft limits and the three ceilings", () => {
   const regs: Record<string, number> = {
+    pos_min_soft_counts: 0,
+    pos_max_soft_counts: 4095,
     duty_max_q15: 30000,
     velocity_limit_cps: 4000,
     current_limit_counts: 280,
@@ -101,6 +110,29 @@ test("the position goal spans the calibrated sensor, or the ADC while the calibr
   expect(positionRange(cal)).toEqual({ min: 200, max: 3800 });
   expect(positionRange(swapped)).toEqual({ min: 0, max: ADC_MAX_COUNT });
   expect(goalRange("Position", swapped, limits)).toEqual({ min: 0, max: ADC_MAX_COUNT });
+});
+
+test("a goal at or past either end of the calibrated span is at a stop", () => {
+  expect(goalAtStop(200, cal, limits)).toBe(true);
+  expect(goalAtStop(150, cal, limits)).toBe(true);
+  expect(goalAtStop(201, cal, limits)).toBe(false);
+  expect(goalAtStop(3799, cal, limits)).toBe(false);
+  expect(goalAtStop(3800, cal, limits)).toBe(true);
+  expect(goalAtStop(4000, cal, limits)).toBe(true);
+});
+
+test("soft limits inside the calibrated span are the stops the goal is judged by", () => {
+  const soft = { ...limits, posMinSoftCounts: 1000, posMaxSoftCounts: 3000 };
+  expect(goalAtStop(1000, cal, soft)).toBe(true);
+  expect(goalAtStop(1001, cal, soft)).toBe(false);
+  expect(goalAtStop(2999, cal, soft)).toBe(false);
+  expect(goalAtStop(3000, cal, soft)).toBe(true);
+});
+
+test("an unusable calibration judges the goal by the soft limits and the ADC", () => {
+  expect(goalAtStop(150, swapped, limits)).toBe(false);
+  expect(goalAtStop(0, swapped, limits)).toBe(true);
+  expect(goalAtStop(ADC_MAX_COUNT, swapped, limits)).toBe(true);
 });
 
 test("clampGoal rounds to whole counts and pins to the range", () => {

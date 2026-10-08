@@ -36,6 +36,7 @@ import {
   decodeControl,
   dutyPercent,
   goalOf,
+  goalAtStop,
   goalSpec,
   goalUnits,
   isWindow,
@@ -50,6 +51,8 @@ import {
   type WindowS,
 } from "@/lib/control";
 import { closedLoopAllowed, openLoopAllowed, reasons } from "@/lib/data-state";
+import { enableHolding } from "@/lib/fault-ack";
+import { latchedLine } from "@/lib/health";
 import { counts as linearized, STATE as LUT } from "@/lib/pos-lut";
 import { isUnits, type Units } from "@/lib/prefs";
 import { useSession } from "@/lib/session";
@@ -566,7 +569,7 @@ function Controls({
   latest: Sample | undefined;
 }) {
   const bus = useBus();
-  const { servos, values } = useSession();
+  const { servos, values, descriptorFor } = useSession();
   const snapshot = useRegisters(id, CONTROL_REGISTERS, "fast");
   const limitRead = useReadOnce(id, LIMIT_REGISTERS, [modeField]);
   const [draft, setDraft] = useState<Draft>();
@@ -584,7 +587,8 @@ function Controls({
   const servo = servos.find((s) => s.id === id);
   // The kernel's entry verdict (protocol sec 5.7): a refused enable would latch
   // the data fault, so the modes it refuses are not offered. Unread = no gate.
-  const flags = servo === undefined ? undefined : values.get(servo.uid)?.data.flags;
+  const card = servo === undefined ? undefined : values.get(servo.uid);
+  const flags = card?.data.flags;
   const allowed = (name: ModeName): boolean =>
     flags === undefined ||
     (name === "Velocity" || name === "Position"
@@ -609,8 +613,8 @@ function Controls({
     [limitRead.snapshot],
   );
 
-  const write = (register: string, value: Value) => {
-    bus.write(id, register, value).then(
+  const settle = (exchange: Promise<void>) => {
+    exchange.then(
       () => {
         setError(undefined);
       },
@@ -618,6 +622,9 @@ function Controls({
         setError(message(e));
       },
     );
+  };
+  const write = (register: string, value: Value) => {
+    settle(bus.write(id, register, value));
   };
 
   // The app owns the mode: the preference goes to the servo, never the other
@@ -670,7 +677,21 @@ function Controls({
   // A latched fault holds the motor off whatever torque_enable says
   // (firmware kernel/faults.rs); the switch alone does not say so.
   const faulted = servo?.fault !== undefined;
+  const atStop =
+    mode === "Position" &&
+    state !== undefined &&
+    limits !== undefined &&
+    goalAtStop(state.goals.goal_position, config.cal, limits);
   const problem = error ?? limitRead.error;
+
+  const setTorque = (on: boolean) => {
+    const descriptor = servo === undefined ? undefined : descriptorFor(servo);
+    if (!on || !faulted || descriptor === undefined) {
+      write("torque_enable", { kind: "bool", value: on });
+      return;
+    }
+    settle(bus.command((c) => enableHolding(c, id, descriptor)));
+  };
 
   return (
     <section className="flex flex-col gap-3">
@@ -784,16 +805,12 @@ function Controls({
           id={torqueId}
           checked={state?.torque ?? false}
           disabled={state === undefined}
-          onCheckedChange={(on) => {
-            write("torque_enable", { kind: "bool", value: on });
-          }}
+          onCheckedChange={setTorque}
         />
         <span className="font-mono text-xs text-text-3">torque_enable</span>
       </div>
       {faulted && (
-        <p className="text-sm text-warning">
-          Motor is off: a fault is latched. Switch torque off and on to clear it.
-        </p>
+        <p className="text-sm text-warning">{latchedLine(card?.health.faultFlags ?? 0, atStop)}</p>
       )}
       {problem !== undefined && <p className="text-sm text-danger">{problem}</p>}
     </section>

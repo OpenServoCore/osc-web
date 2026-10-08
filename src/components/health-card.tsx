@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBus, useRegisters } from "@/lib/bus/hooks";
 import { healthFrom, HEALTH_REGISTERS } from "@/lib/bus/spans";
+import { ackFault } from "@/lib/fault-ack";
 import { formatQuantity } from "@/lib/format";
 import { countersLine, statements, trimLine, type Level } from "@/lib/health";
 import { useSession } from "@/lib/session";
@@ -50,18 +51,12 @@ export function HealthCard({ id }: { id: number }) {
   const data = card?.data;
   const faulted = health !== undefined && health.faultFlags !== 0;
 
-  /** The ack is the torque_enable 0->1 edge; one turn, so nothing interleaves. */
+  /** One turn, so nothing interleaves with the ack. */
   async function ack() {
-    const field = descriptor?.fields().find((f) => f.name === "torque_enable");
-    if (descriptor === undefined || field === undefined) return;
-    const off = descriptor.encode("torque_enable", { kind: "bool", value: false });
-    const on = descriptor.encode("torque_enable", { kind: "bool", value: true });
+    if (descriptor === undefined) return;
     setAcking(true);
     try {
-      await bus.command(async (c) => {
-        await c.write(id, field.addr, off);
-        await c.write(id, field.addr, on);
-      });
+      await bus.command((c) => ackFault(c, id, descriptor));
       setError(undefined);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

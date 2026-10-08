@@ -7,10 +7,12 @@ import type { ReadRegister } from "./units";
 /** `t_winding_cc` while the thermometer is off (thermal.rs `UNSET_CC`). */
 export const UNSET_CC = -32768;
 
-/** `therm_flags` bits (thermal.rs `flag`); bit 1, TRACK, names no state. */
+/**
+ * `therm_flags` bits (thermal.rs `flag`); bit 1, TRACK (a same-seat reference
+ * is live), names no state, and bits 3-7 are reserved.
+ */
 const UNSET = 1 << 0;
 const COLD_RECAL = 1 << 2;
-const HOT_BOOT = 1 << 3;
 
 export const THERMAL_REGISTERS: readonly string[] = [
   "current_limit_counts",
@@ -78,7 +80,6 @@ export function thermStates(t: Thermal): ThermState[] {
   if (t.windingCc > t.derateStartCc && t.iLimCounts < t.currentLimitCounts) {
     out.push({ word: "derating", level: "warn" });
   }
-  if ((t.flags & HOT_BOOT) !== 0) out.push({ word: "hot boot", level: "notice" });
   if ((t.flags & COLD_RECAL) !== 0) out.push({ word: "check cold R", level: "notice" });
   return out;
 }

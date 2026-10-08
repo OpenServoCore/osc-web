@@ -42,12 +42,12 @@ describe("therm_flags", () => {
     [1 << 0, ["off"]],
     [1 << 1, []],
     [1 << 2, ["check cold R"]],
-    [1 << 3, ["hot boot"]],
+    [1 << 3, []],
     [1 << 4, []],
     [1 << 5, []],
     [1 << 6, []],
     [1 << 7, []],
-    [(1 << 2) | (1 << 3), ["hot boot", "check cold R"]],
+    [(1 << 2) | (1 << 3), ["check cold R"]],
     [0xff, ["off"]],
   ])("flags %i states %j", (flags, words) => {
     expect(thermStates({ ...warm, flags }).map((s) => s.word)).toEqual(words);
@@ -65,9 +65,9 @@ describe("therm_flags", () => {
     expect(thermStates({ ...hot, iLimCounts: 280 })).toEqual([]);
     expect(thermStates({ ...hot, windingCc: 8000 })).toEqual([]);
     expect(thermStates({ ...warm, iLimCounts: 60 })).toEqual([]);
-    expect(thermStates({ ...hot, flags: 1 << 3 }).map((s) => s.word)).toEqual([
+    expect(thermStates({ ...hot, flags: 1 << 2 }).map((s) => s.word)).toEqual([
       "derating",
-      "hot boot",
+      "check cold R",
     ]);
   });
 });

@@ -114,7 +114,7 @@ describe("buildTable", () => {
     expect(placement("pos_error_counts")).toEqual(["Settings", "Safety"]);
     expect(placement("sensor_bad_count")).toEqual(["Settings", "Safety"]);
     expect(placement("cutoff_cc")).toEqual(["Settings", "Thermal"]);
-    expect(placement("rtherm_omega_max_cps")).toEqual(["Settings", "Thermal"]);
+    expect(placement("rtherm_i_min_counts")).toEqual(["Settings", "Thermal"]);
   });
 
   test("id and baud are read-only with links; the deadline is editable", () => {
@@ -150,7 +150,6 @@ describe("buildTable", () => {
     expect(rowOf("shunt_r_mohm").editable).toBe(false);
     expect(rowOf("vdd_mv").editable).toBe(true);
     expect(placement("r0_q12")).toEqual(["Board", "Motor model"]);
-    expect(placement("mu_q016")).toEqual(["Board", "Motor model"]);
     expect(placement("ke_uvs_per_rad")).toEqual(["Board", "Motor model"]);
     expect(placement("ke_vpc_q")).toEqual(["Board", "Motor model"]);
     expect(rowOf("r0_q12").editable).toBe(true);

@@ -19,6 +19,7 @@ import {
   buildTable,
   editValues,
   formatRow,
+  realValue,
   searchIndex,
   type Group,
   type Link as LinkTarget,
@@ -37,6 +38,7 @@ import {
   type OpenGroups,
   type SearchTarget,
 } from "@/lib/table-search";
+import type { Calibration } from "@/lib/units";
 
 export const Route = createFileRoute("/table")({ component: TablePage });
 
@@ -298,6 +300,9 @@ function Panel({
   onWrite?: () => void;
 }) {
   const bus = useBus();
+  const { servos, values: cards } = useSession();
+  const servo = servos.find((s) => s.id === id);
+  const cal = servo === undefined ? undefined : cards.get(servo.uid)?.constants.calibration;
   const [pending, setPending] = useState<Pending>();
   const [flash, setFlash] = useState<Flash>();
   const body = useRef<HTMLDivElement>(null);
@@ -346,6 +351,7 @@ function Panel({
             onToggle(group.label, next);
           }}
           values={values}
+          cal={cal}
           loading={values === undefined && error === undefined}
           flashed={jump?.row ?? flash?.name}
           onApply={apply}
@@ -360,6 +366,7 @@ function GroupSection({
   open,
   onOpenChange,
   values,
+  cal,
   loading,
   flashed,
   onApply,
@@ -368,6 +375,7 @@ function GroupSection({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   values: Values | undefined;
+  cal: Calibration | undefined;
   loading: boolean;
   flashed: string | undefined;
   onApply: (row: Row, raw: EditValue) => Promise<void>;
@@ -390,6 +398,7 @@ function GroupSection({
                 key={row.field.name}
                 row={row}
                 value={values?.get(row.field.name)}
+                cal={cal}
                 loading={loading}
                 flashed={row.field.name === flashed}
                 onApply={onApply}
@@ -420,12 +429,14 @@ function HelpMark({ label }: { label: string }) {
 function RowLine({
   row,
   value,
+  cal,
   loading,
   flashed,
   onApply,
 }: {
   row: Row;
   value: EditValue | undefined;
+  cal: Calibration | undefined;
   loading: boolean;
   flashed: boolean;
   onApply: (row: Row, raw: EditValue) => Promise<void>;
@@ -443,7 +454,7 @@ function RowLine({
       </th>
       <td className="px-3 py-2 align-top font-mono tabular-nums">
         {value !== undefined ? (
-          <ValueCell row={row} value={value} onApply={onApply} />
+          <ValueCell row={row} value={value} real={realValue(row, value, cal)} onApply={onApply} />
         ) : loading ? (
           <Skeleton className="h-4 w-16" />
         ) : (
@@ -457,15 +468,19 @@ function RowLine({
 function ValueCell({
   row,
   value,
+  real,
   onApply,
 }: {
   row: Row;
   value: EditValue;
+  /** The value in real units; the register's own value then reads as the raw layer. */
+  real: string | undefined;
   onApply: (row: Row, raw: EditValue) => Promise<void>;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      <span>
+      {real !== undefined && <span className="px-1">{real}</span>}
+      <span className={real === undefined ? undefined : "text-text-3"}>
         {row.editable && !row.blob ? (
           <ValueEditor field={row.field} value={value} onApply={(raw) => onApply(row, raw)} />
         ) : (

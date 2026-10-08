@@ -1,7 +1,14 @@
 import type { Descriptor, Field, Value } from "@openservocore/client";
 import { limitText, windowFloorText } from "./bus/spans";
 import { fieldKind, formatValue, type EditValue, type FieldKind } from "./edit";
-import { hexAddr } from "./format";
+import { formatQuantity, hexAddr } from "./format";
+import {
+  accelDegPerS2,
+  calibrationStatus,
+  DISPLAY,
+  velocityDegPerS,
+  type Calibration,
+} from "./units";
 
 export type TabName = "Settings" | "Calibration" | "Board" | "Live values";
 
@@ -173,6 +180,22 @@ const TEXT: ReadonlyMap<string, (value: number) => string> = new Map([
   ["limit_flags", limitText],
   ["window_floor_q15", windowFloorText],
 ]);
+
+/** Registers that read in real units through a usable calibration; the raw value stays beside them. */
+const REAL: ReadonlyMap<string, (counts: number, cal: Calibration) => string> = new Map([
+  ["velocity_limit_cps", (v, cal) => formatQuantity(velocityDegPerS(v, cal), DISPLAY.velocity)],
+  ["accel_limit_q88", (v, cal) => formatQuantity(accelDegPerS2(v, cal), DISPLAY.acceleration)],
+]);
+
+export function realValue(
+  row: Row,
+  value: EditValue,
+  cal: Calibration | undefined,
+): string | undefined {
+  const convert = REAL.get(row.field.name);
+  if (convert === undefined || cal === undefined || typeof value !== "number") return undefined;
+  return calibrationStatus(cal).valid ? convert(value, cal) : undefined;
+}
 
 export function labelParts(name: string): { label: string; hint?: string } {
   let suffix = "";

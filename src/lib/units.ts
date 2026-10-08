@@ -11,6 +11,10 @@ export const ADC_MAX_COUNT = ADC_FULL_SCALE - 1;
 const KELVIN_25C = 298.15;
 const KELVIN_0C = 273.15;
 const FULL_TURN_CDEG = 36000;
+/** accel_limit_q88 is c/s of velocity change per medium tick in Q8.8 (firmware kernel/trajectory.rs). */
+const Q88 = 2 ** 8;
+/** Protocol sec 5.6: the medium tick runs at 2 kHz. */
+const MEDIUM_TICK_HZ = 2000;
 /** gear_ratio_centi is motor revs per output rev x100, so 100 is a direct drive. */
 const MIN_GEAR_RATIO_CENTI = 100;
 /** gear_ratio_centi is a u16 on the wire. */
@@ -189,6 +193,10 @@ export function velocityDegPerS(countsPerS: number, cal: Calibration): number {
   return countsPerS * degPerCount(cal);
 }
 
+export function accelDegPerS2(q88: number, cal: Calibration): number {
+  return (q88 / Q88) * MEDIUM_TICK_HZ * degPerCount(cal);
+}
+
 /**
  * Mirrors Board.amps. `biasCounts` is the shunt reading at zero current: the
  * app passes the servo's own `current_bias_counts`, where the notebooks instead
@@ -241,6 +249,7 @@ export const DISPLAY = {
   position: { unit: "deg", digits: 1 },
   goal: { unit: "deg", digits: 1 },
   velocity: { unit: "deg/s", digits: 0 },
+  acceleration: { unit: "deg/s^2", digits: 0 },
   current: { unit: "mA", digits: 0 },
   busVoltage: { unit: "V", digits: 2 },
   motorVoltage: { unit: "V", digits: 2 },

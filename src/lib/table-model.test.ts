@@ -7,6 +7,7 @@ import {
   formatRow,
   labelParts,
   matchRows,
+  realValue,
   searchIndex,
   summarizeBlob,
   SEARCH_LIMIT,
@@ -327,4 +328,25 @@ test("editValues keeps every decoded register under its own kind", () => {
     ["mode", 2],
     ["words", blob],
   ]);
+});
+
+describe("real units", () => {
+  const cal = {
+    rawMin: 200,
+    rawMax: 3800,
+    angleMinCdeg: 0,
+    angleMaxCdeg: 18000,
+    gearRatioCenti: 100,
+  };
+
+  test("the trajectory limits read in deg/s and deg/s^2 through the calibration", () => {
+    expect(realValue(rowOf("velocity_limit_cps"), 1500, cal)).toBe("75 deg/s");
+    expect(realValue(rowOf("accel_limit_q88"), 3840, cal)).toBe("1500 deg/s^2");
+  });
+
+  test("without a usable calibration, or for any other register, the raw value stands alone", () => {
+    expect(realValue(rowOf("velocity_limit_cps"), 1500, undefined)).toBeUndefined();
+    expect(realValue(rowOf("velocity_limit_cps"), 1500, { ...cal, rawMax: 100 })).toBeUndefined();
+    expect(realValue(rowOf("stall_omega_max_cps"), 1500, cal)).toBeUndefined();
+  });
 });

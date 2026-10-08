@@ -55,6 +55,8 @@ export const CONTROL_REGISTERS: readonly string[] = [
 ];
 
 export const LIMIT_REGISTERS: readonly string[] = [
+  "pos_min_soft_counts",
+  "pos_max_soft_counts",
   "duty_max_q15",
   "velocity_limit_cps",
   "current_limit_counts",
@@ -69,6 +71,8 @@ export interface ControlState {
 
 /** The config ceilings the goal validators and the trajectory clamp to. */
 export interface Limits {
+  posMinSoftCounts: number;
+  posMaxSoftCounts: number;
   dutyMaxQ15: number;
   velocityLimitCps: number;
   currentLimitCounts: number;
@@ -89,6 +93,8 @@ export function decodeControl(read: ReadRegister): ControlState {
 
 export function limitsFromTable(read: ReadRegister): Limits {
   return {
+    posMinSoftCounts: read("pos_min_soft_counts"),
+    posMaxSoftCounts: read("pos_max_soft_counts"),
     dutyMaxQ15: read("duty_max_q15"),
     velocityLimitCps: read("velocity_limit_cps"),
     currentLimitCounts: read("current_limit_counts"),
@@ -124,6 +130,18 @@ export function goalRange(mode: ModeName, cal: Calibration, limits: Limits): Ran
     case "Position":
       return positionRange(cal);
   }
+}
+
+/**
+ * The position goal sits at or past an end of travel: the calibrated span or
+ * the soft limits the trajectory clamps to, whichever end is nearer.
+ */
+export function goalAtStop(goal: number, cal: Calibration, limits: Limits): boolean {
+  const span = positionRange(cal);
+  return (
+    goal <= Math.max(span.min, limits.posMinSoftCounts) ||
+    goal >= Math.min(span.max, limits.posMaxSoftCounts)
+  );
 }
 
 export function clampGoal(counts: number, range: Range): number {

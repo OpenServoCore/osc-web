@@ -1,6 +1,6 @@
 import type { Health } from "@openservocore/client";
 import { expect, test } from "vitest";
-import { countersLine, statements, trimLine } from "./health";
+import { countersLine, latchedLine, statements, trimLine } from "./health";
 
 const clean: Health = {
   faultFlags: 0,
@@ -75,4 +75,18 @@ test("the counter lines carry sign and plurals", () => {
   expect(countersLine({ ...clean, crcFailCount: 2, framingDropCount: 7 })).toBe(
     "2 CRC errors, 7 dropped frames",
   );
+});
+
+const MOVE_GOAL =
+  "Motor is off: a fault is latched. Move the goal away from the stop, then switch torque off and on.";
+const TOGGLE = "Motor is off: a fault is latched. Switch torque off and on to clear it.";
+
+test("a motion fault with the goal at a stop says to move the goal before the ack", () => {
+  expect(latchedLine(1 << 2, true)).toBe(MOVE_GOAL);
+  expect(latchedLine((1 << 3) | (1 << 6), true)).toBe(MOVE_GOAL);
+});
+
+test("a goal clear of the stops, or the data fault alone, says only to toggle torque", () => {
+  expect(latchedLine(1 << 2, false)).toBe(TOGGLE);
+  expect(latchedLine(1 << 6, true)).toBe(TOGGLE);
 });

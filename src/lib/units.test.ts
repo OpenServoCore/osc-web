@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import fixture from "../../tests/fixtures/stall-24mhz.json";
 import {
+  accelDegPerS2,
   ADC_FULL_SCALE,
   ADC_MAX_COUNT,
   busV,
@@ -169,4 +170,18 @@ test("calibrationFromTable binds the five calibration registers", () => {
     gear_ratio_centi: 29000,
   };
   expect(calibrationFromTable(readFrom(regs))).toEqual(CAL);
+});
+
+test("accelDegPerS2 reads Q8.8 counts/s per 2 kHz medium tick through the position scale", () => {
+  const cal: Calibration = {
+    rawMin: 200,
+    rawMax: 3800,
+    angleMinCdeg: 0,
+    angleMaxCdeg: 18000,
+    gearRatioCenti: 100,
+  };
+  // 3840 / 256 = 15 counts/s per tick, 30000 counts/s^2, 0.05 deg per count.
+  expect(accelDegPerS2(3840, cal)).toBeCloseTo(1500, 9);
+  expect(accelDegPerS2(0, cal)).toBe(0);
+  expect(accelDegPerS2(3840, { ...cal, rawMax: cal.rawMin })).toBe(0);
 });

@@ -25,6 +25,18 @@ const FAULTS: readonly string[] = [
  */
 const CLEAR = "The motor stays off until torque is switched off and on again.";
 
+/**
+ * The Live page's line under the torque switch. A motion fault re-latches the
+ * moment torque returns if the goal still drives into the stop; the data
+ * fault is about the servo's data, not where it is.
+ */
+export function latchedLine(faultFlags: number, goalAtStop: boolean): string {
+  const motion = (faultFlags & ~(1 << FAULT_DATA_BIT)) !== 0;
+  return motion && goalAtStop
+    ? "Motor is off: a fault is latched. Move the goal away from the stop, then switch torque off and on."
+    : "Motor is off: a fault is latched. Switch torque off and on to clear it.";
+}
+
 function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }

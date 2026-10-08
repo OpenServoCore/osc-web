@@ -42,3 +42,11 @@ test("the temperature panel is absent until its series is switched on", async ({
   await page.getByRole("switch", { name: "Temperature" }).click();
   await expect(page.getByRole("region", { name: /^Temperature/ })).toBeVisible();
 });
+
+test("the winding series joins the temperature panel in C", async ({ page }) => {
+  await openLive(page);
+  await expect(page.getByRole("region", { name: /^Temperature/ })).toHaveCount(0);
+  await page.getByRole("switch", { name: "Winding" }).click();
+  await expect(page.getByRole("region", { name: /^Temperature C/ })).toBeVisible();
+  await expect(page.getByLabel("Winding value")).toHaveText(/^-?\d+\.\d C$/);
+});

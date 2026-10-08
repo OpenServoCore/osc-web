@@ -37,6 +37,7 @@ export interface Sample {
   vmotorA: number;
   vmotorB: number;
   ntc: number;
+  windingCc: number;
 }
 
 export interface TelemetryConfig {
@@ -60,6 +61,7 @@ export const SAMPLE_REGISTERS: readonly string[] = [
   "vmotor_b",
   "vbus_raw",
   "ntc_raw",
+  "t_winding_cc",
 ];
 
 /** The registers a units binder reads, so the list lives in one place. */
@@ -95,6 +97,7 @@ export function decodeSample(read: ReadRegister, t: number): Sample {
     vmotorA: read("vmotor_a"),
     vmotorB: read("vmotor_b"),
     ntc: read("ntc_raw"),
+    windingCc: read("t_winding_cc"),
   };
 }
 

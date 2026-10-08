@@ -63,6 +63,7 @@ import {
   type Sample,
   type TelemetryConfig,
 } from "@/lib/telemetry";
+import { windingC } from "@/lib/thermal";
 import {
   busV,
   calibrationStatus,
@@ -79,7 +80,14 @@ import { useModePref, useUnitsPref } from "@/lib/use-pref";
 export const Route = createFileRoute("/live")({ component: LivePage });
 
 type SeriesKey =
-  "position" | "goal" | "velocity" | "current" | "busVoltage" | "motorVoltage" | "temperature";
+  | "position"
+  | "goal"
+  | "velocity"
+  | "current"
+  | "busVoltage"
+  | "motorVoltage"
+  | "temperature"
+  | "winding";
 
 interface SeriesDef {
   key: SeriesKey;
@@ -119,6 +127,7 @@ const MOTOR_V: SeriesDef = {
   right: true,
 };
 const TEMPERATURE: SeriesDef = { key: "temperature", label: "Temperature", token: "series2" };
+const WINDING: SeriesDef = { key: "winding", label: "Winding", token: "series1" };
 
 /**
  * The dashed goal sits with the series it is the setpoint of, in that series'
@@ -143,11 +152,11 @@ function panelsFor(mode: ModeName | undefined, lin = false): PanelDef[] {
       title: "Electrical",
       series: [CURRENT, ...(mode === "Current" ? [goal(CURRENT)] : []), BUS_V, MOTOR_V],
     },
-    { key: "temperature", title: "Temperature", series: [TEMPERATURE], optional: true },
+    { key: "temperature", title: "Temperature", series: [TEMPERATURE, WINDING], optional: true },
   ];
 }
 
-const OFF_BY_DEFAULT: readonly SeriesKey[] = ["motorVoltage", "temperature"];
+const OFF_BY_DEFAULT: readonly SeriesKey[] = ["motorVoltage", "temperature", "winding"];
 /** Raw mode shows counts for these; the rest stay in real units. */
 const RAW_FAMILY: readonly SeriesKey[] = ["position", "goal", "velocity"];
 
@@ -181,6 +190,7 @@ function convert(
     busVoltage: busV(s.vbus, sense),
     motorVoltage: vdiffV(s.vmotorA, s.vmotorB, sense),
     temperature: temperatureC(s.ntc, sense),
+    winding: windingC(s.windingCc),
   };
 }
 
@@ -202,6 +212,7 @@ function toRows(
 
 function display(key: SeriesKey, raw: boolean, goal: GoalUnits | undefined, lin = false): Display {
   if (key === "goal" && goal !== undefined) return { unit: goal.unit, digits: goal.digits };
+  if (key === "winding") return DISPLAY.temperature;
   if (!raw || !RAW_FAMILY.includes(key)) return DISPLAY[key];
   if (key === "velocity") return { unit: `${DISPLAY.raw.unit}/s`, digits: DISPLAY.raw.digits };
   // Linearized counts carry a 1/16 fraction.

@@ -49,6 +49,7 @@ test("decodeSample scales omega_hat_cps out of Q16 and keeps the rest in counts"
   view.setUint16(at("vmotor_b"), 700, true);
   view.setUint16(at("vbus_raw"), 3600, true);
   view.setUint16(at("ntc_raw"), 2000, true);
+  view.setInt16(at("t_winding_cc"), -3141, true);
   expect(decodeSample(decodeSpan(fields, span, bytes), 1.5)).toEqual({
     t: 1.5,
     pos: 1234,
@@ -65,6 +66,7 @@ test("decodeSample scales omega_hat_cps out of Q16 and keeps the rest in counts"
     vmotorA: 800,
     vmotorB: 700,
     ntc: 2000,
+    windingCc: -3141,
   });
 });
 

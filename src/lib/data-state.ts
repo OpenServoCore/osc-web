@@ -21,6 +21,8 @@ export const FAULT_DATA = 7;
 export const FAULT_DATA_BIT = 6;
 
 const CONFIG_CORRUPT = 1 << 1;
+/** The stored plant stamp differs from the set the servo holds. */
+export const STAMP_MISMATCH = 1 << 4;
 
 const NEXT = "Run osc cal and osc ident, then save.";
 
@@ -57,7 +59,7 @@ const REASONS: readonly (Reason & { bit: number })[] = [
     text: `Closed loop is off: this servo has never been calibrated. ${NEXT}`,
   },
   {
-    bit: 1 << 4,
+    bit: STAMP_MISMATCH,
     name: "STAMP_MISMATCH",
     text: "Closed loop is off: the position table and the identified values are not one set (edited, rebuilt or partly written). Run osc ident, or re-run the tool that was interrupted.",
   },

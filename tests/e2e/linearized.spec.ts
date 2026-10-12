@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { counts, GRID } from "../../src/lib/pos-lut";
-import { gotoSim, MG90A, writeTable } from "./helpers";
+import { gotoSim, MG90A, setSpeed, writeTable } from "./helpers";
 
 async function openLive(page: Page): Promise<void> {
   await page.getByRole("button", { name: "ID 1" }).click();
@@ -45,6 +45,8 @@ test("a burst can carry the linearized pot, in degrees through the same angle ma
   page,
 }) => {
   await gotoSim(page, [1, 2]);
+  // pos and pos_lin pack to 4 B rows, past the 3 B of the factory 1 M.
+  await setSpeed(page, "2 M");
   await page.getByRole("button", { name: "ID 1" }).click();
   await page.getByRole("link", { name: "Live" }).click();
   await page.getByRole("tab", { name: "Stream" }).click({ timeout: 15_000 });

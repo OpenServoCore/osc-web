@@ -3,7 +3,7 @@
 // the decoder (rows unpack through osc-protocol in the wasm), and the CSV
 // export.
 
-import { telDecodeRow, telRowBytes, type BaudRate } from "@openservocore/client";
+import { telDecodeRow, telRowBytes, telStreamFrame, type BaudRate } from "@openservocore/client";
 import { BAUD_RATES, fixed, formatBaud } from "./format";
 import { q4ToCounts } from "./pos-lut";
 import type { TelemetryConfig } from "./telemetry";
@@ -18,10 +18,6 @@ import {
   type Display,
 } from "./units";
 
-/** Payload bytes before the samples: stream_seq, flags, valid bitmap. */
-export const STREAM_HDR = 4;
-/** One frame batches up to 16 fast-tick samples; a seq hole is 16 samples. */
-export const SAMPLES_PER_FRAME = 16;
 const FLAG_LAST = 1;
 const MASK_ALL = 0xfff;
 /** capability_flags bit 0: tel_wide_fields and tel_row_bytes_max are published. */
@@ -111,7 +107,7 @@ export function maskIssue(
 }
 
 export interface Row {
-  /** Fast-tick index from the arm; a dropped frame leaves 16 missing indices. */
+  /** Fast-tick index from the burst's first row; a lost frame or a dropped row leaves missing indices. */
   sample: number;
   /** This tick's drive window met the sampling floors (the frame's `valid` bitmap). */
   valid: boolean;
@@ -119,33 +115,29 @@ export interface Row {
 }
 
 /**
- * Splits the CRC-clean stream payloads of one burst into rows. Sample `i` of
- * the frame with unwrapped index `k` is sample `16k + i`: the u8 stream_seq
- * is unwrapped against the previous frame, and a burst arms at seq 0, so a
- * nonzero first seq is missed frames too. A payload that cannot be a
- * `mask` frame (short header, ragged remainder, over 16 samples) is skipped.
+ * Splits the CRC-clean stream payloads of one burst into rows. A frame's
+ * head stamps its first row with the servo's tick (u16) and its length
+ * gives the row count, so each frame's rows tick on from its stamp,
+ * unwrapped against the previous frame's: a lost frame or rows the servo
+ * dropped leave missing samples. The first frame's first row is sample 0.
+ * A payload that cannot be a `mask` frame is skipped.
  */
 export function decodeBurst(frames: readonly Uint8Array[], mask: number): Row[] {
   const fields = fieldsOf(mask);
   const len = telRowBytes(mask);
   const rows: Row[] = [];
-  let lastSeq: number | undefined;
-  let frameIdx = 0;
+  let stamp: number | undefined;
+  let base = 0;
   for (const payload of frames) {
-    if (payload.length < STREAM_HDR) continue;
-    const seq = payload[0] ?? 0;
-    const idx = lastSeq === undefined ? seq : frameIdx + ((seq - lastSeq) & 0xff);
-    lastSeq = seq;
-    frameIdx = idx;
-    const body = payload.length - STREAM_HDR;
-    if (len === 0 || body % len !== 0 || body / len > SAMPLES_PER_FRAME) continue;
-    const valid = (payload[2] ?? 0) | ((payload[3] ?? 0) << 8);
-    for (let i = 0; i < body / len; i++) {
-      const at = STREAM_HDR + i * len;
-      const decoded = telDecodeRow(mask, payload.subarray(at, at + len));
+    const frame = telStreamFrame(mask, payload);
+    if (frame === undefined) continue;
+    if (stamp !== undefined) base += (frame.tick - stamp) & 0xffff;
+    stamp = frame.tick;
+    for (let at = 0, i = 0; at < frame.rows.length; at += len, i++) {
+      const decoded = telDecodeRow(mask, frame.rows.subarray(at, at + len));
       const values: Partial<Record<FieldKey, number>> = {};
       for (const f of fields) values[f.key] = decoded?.[f.bit];
-      rows.push({ sample: idx * SAMPLES_PER_FRAME + i, valid: (valid & (1 << i)) !== 0, values });
+      rows.push({ sample: base + i, valid: ((frame.valid >>> i) & 1) !== 0, values });
     }
   }
   return rows;

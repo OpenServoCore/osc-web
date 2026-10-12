@@ -26,21 +26,18 @@ import {
   FIELDS,
   maskIssue,
   maskOf,
+  rowBytesMax,
   summarize,
   summaryText,
   toCsv,
   unitsFor,
   type FieldKey,
   type Row,
+  type StreamConfig,
   type Summary,
   type Unit,
 } from "@/lib/stream";
-import {
-  BIAS_REGISTERS,
-  CONFIG_REGISTERS,
-  configFrom,
-  type TelemetryConfig,
-} from "@/lib/telemetry";
+import { BIAS_REGISTERS, CONFIG_REGISTERS, configFrom } from "@/lib/telemetry";
 import { calibrationStatus } from "@/lib/units";
 import { useUnitsPref } from "@/lib/use-pref";
 
@@ -52,12 +49,15 @@ const COUNT_MAX = 65535;
 const WINDOW_MAX_MS = 4_294_967;
 const DASH = [6, 4];
 const COLORS: readonly (keyof ChartTokens)[] = ["series1", "series2", "series3", "ctx"];
-/** The conversion registers plus the tick rate a burst's time axis needs. */
-const STREAM_REGISTERS: readonly string[] = [...CONFIG_REGISTERS, ...BIAS_REGISTERS, "tick_hz"];
-
-interface StreamConfig extends TelemetryConfig {
-  tickHz: number;
-}
+/** The conversion registers, the tick rate and PWM period, and the row admission facts. */
+const STREAM_REGISTERS: readonly string[] = [
+  ...CONFIG_REGISTERS,
+  ...BIAS_REGISTERS,
+  "tick_hz",
+  "pwm_period_ticks",
+  "capability_flags",
+  "tel_row_bytes_max",
+];
 
 interface Capture {
   mask: number;
@@ -122,7 +122,7 @@ function saveCsv(text: string, name: string): void {
 }
 
 export function StreamTab({ id }: { id: number }) {
-  const { descriptor, descriptorError } = useSession();
+  const { descriptor, descriptorError, baud } = useSession();
   const bus = useBus();
   const stream = useReadOnce(id, STREAM_REGISTERS, [descriptor]);
   const [fields, setFields] = useState<readonly FieldKey[]>(DEFAULT_FIELDS);
@@ -142,9 +142,14 @@ export function StreamTab({ id }: { id: number }) {
     () =>
       snapshot === undefined
         ? undefined
-        : { ...configFrom(snapshot.read), tickHz: snapshot.read("tick_hz") },
+        : {
+            ...configFrom(snapshot.read),
+            tickHz: snapshot.read("tick_hz"),
+            pwmPeriodTicks: snapshot.read("pwm_period_ticks"),
+          },
     [snapshot],
   );
+  const perRate = snapshot?.values.get("tel_row_bytes_max");
 
   const calibrated = config !== undefined && calibrationStatus(config.cal).valid;
   const raw = !calibrated || unitsPref === "raw";
@@ -171,8 +176,21 @@ export function StreamTab({ id }: { id: number }) {
   }, [capture, units, tickHz]);
 
   const startCapture = () => {
-    const issue = maskIssue(mask);
-    if (descriptor === undefined || samples === undefined || window === undefined) return;
+    if (
+      descriptor === undefined ||
+      snapshot === undefined ||
+      baud === undefined ||
+      perRate?.kind !== "bytes" ||
+      samples === undefined ||
+      window === undefined
+    ) {
+      return;
+    }
+    const issue = maskIssue(
+      mask,
+      baud,
+      rowBytesMax(snapshot.read("capability_flags"), perRate.value, baud),
+    );
     if (issue !== undefined) {
       setError(issue);
       return;
@@ -291,7 +309,11 @@ export function StreamTab({ id }: { id: number }) {
               className="self-start"
               aria-busy={pending}
               disabled={
-                pending || descriptor === undefined || samples === undefined || window === undefined
+                pending ||
+                descriptor === undefined ||
+                snapshot === undefined ||
+                samples === undefined ||
+                window === undefined
               }
               onClick={startCapture}
             >

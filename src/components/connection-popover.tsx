@@ -15,10 +15,8 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { isDisconnect } from "@/lib/bus/stats";
-import { formatBaud } from "@/lib/format";
+import { BAUD_RATES, formatBaud } from "@/lib/format";
 import { useSession, type Status } from "@/lib/session";
-
-const rates: BaudRate[] = ["b500000", "b1000000", "b2000000", "b3000000"];
 
 function chip(status: Status): { text: string; className: string } {
   switch (status) {
@@ -190,7 +188,7 @@ export function ConnectionPopover({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {rates.map((r) => (
+                    {BAUD_RATES.map((r) => (
                       <SelectItem key={r} value={r}>
                         {formatBaud(r)}
                       </SelectItem>

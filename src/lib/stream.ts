@@ -1,9 +1,10 @@
-// The Stream tab minus React: the TEL burst frame layout (protocol sec 5.6,
-// firmware core tel.rs), the mask that picks a sample's fields, the decoder
-// that mirrors the ident host's StreamAssembler, and the CSV export.
+// The Stream tab minus React: the TEL burst frame layout (protocol sec 5.6),
+// the mask that picks a row's fields and its admission at the line's rate,
+// the decoder (rows unpack through osc-protocol in the wasm), and the CSV
+// export.
 
-import { dutyPercent } from "./control";
-import { fixed } from "./format";
+import { telDecodeRow, telRowBytes, type BaudRate } from "@openservocore/client";
+import { BAUD_RATES, fixed, formatBaud } from "./format";
 import { q4ToCounts } from "./pos-lut";
 import type { TelemetryConfig } from "./telemetry";
 import {
@@ -21,38 +22,33 @@ import {
 export const STREAM_HDR = 4;
 /** One frame batches up to 16 fast-tick samples; a seq hole is 16 samples. */
 export const SAMPLES_PER_FRAME = 16;
-/** A 16-sample batch must clear the wire in its own tick window at 3 M. */
-export const FIELDS_MAX = 6;
 const FLAG_LAST = 1;
 const MASK_ALL = 0xfff;
-/** Every v1 field is two bytes. */
-const FIELD_BYTES = 2;
+/** capability_flags bit 0: tel_wide_fields and tel_row_bytes_max are published. */
+export const CAP_TEL_ROWS = 1;
 
 export type Family = "position" | "electrical";
 
-/**
- * In `tel_mask` bit order, which is also the order fields pack in a sample.
- * `key` is the firmware's TelSample name, so a CSV column names the register.
- */
+/** In `tel_mask` bit order. `key` is the firmware's TelSample name, so a CSV column names it. */
 export const FIELDS = [
-  { key: "pos", label: "Position", bit: 0, signed: false, family: "position" },
-  { key: "current", label: "Current", bit: 1, signed: true, family: "electrical" },
-  { key: "current_trough", label: "Current trough", bit: 2, signed: false, family: "electrical" },
-  { key: "duty_q15", label: "Duty", bit: 3, signed: true, family: "electrical" },
-  { key: "vdiff", label: "Motor V", bit: 4, signed: true, family: "electrical" },
-  { key: "vbus", label: "Bus V", bit: 5, signed: false, family: "electrical" },
-  { key: "current_raw", label: "Current raw", bit: 6, signed: false, family: "electrical" },
-  { key: "vmotor_a", label: "Motor A", bit: 7, signed: false, family: "electrical" },
-  { key: "vmotor_b", label: "Motor B", bit: 8, signed: false, family: "electrical" },
-  { key: "vbus_raw", label: "Bus raw", bit: 9, signed: false, family: "electrical" },
-  { key: "ntc_raw", label: "NTC raw", bit: 10, signed: false, family: "electrical" },
+  { key: "pos", label: "Position", bit: 0, family: "position" },
+  { key: "current", label: "Current", bit: 1, family: "electrical" },
+  { key: "current_trough", label: "Current trough", bit: 2, family: "electrical" },
+  // Signed PWM compare counts; full scale is pwm_period_ticks.
+  { key: "duty", label: "Duty", bit: 3, family: "electrical" },
+  { key: "vdiff", label: "Motor V", bit: 4, family: "electrical" },
+  { key: "vbus", label: "Bus V", bit: 5, family: "electrical" },
+  { key: "current_raw", label: "Current raw", bit: 6, family: "electrical" },
+  { key: "vmotor_a", label: "Motor A", bit: 7, family: "electrical" },
+  { key: "vmotor_b", label: "Motor B", bit: 8, family: "electrical" },
+  { key: "vbus_raw", label: "Bus raw", bit: 9, family: "electrical" },
+  { key: "ntc_raw", label: "NTC raw", bit: 10, family: "electrical" },
   // The Q4 word the kernel controlled on that tick (protocol sec 5.7).
-  { key: "pos_lin", label: "Position (linearized)", bit: 11, signed: false, family: "position" },
+  { key: "pos_lin", label: "Position (linearized)", bit: 11, family: "position" },
 ] as const satisfies readonly {
   key: string;
   label: string;
   bit: number;
-  signed: boolean;
   family: Family;
 }[];
 
@@ -82,17 +78,36 @@ export function fieldsOf(mask: number): FieldDef[] {
   return FIELDS.filter((f) => (mask & (1 << f.bit)) !== 0);
 }
 
-/** Why the servo would refuse this mask (tel.rs `mask_valid`), or undefined. */
-export function maskIssue(mask: number): string | undefined {
-  if ((mask & ~MASK_ALL) !== 0) return "mask has reserved bits set";
-  const n = fieldsOf(mask).length;
-  if (n === 0) return "pick at least one field";
-  if (n > FIELDS_MAX) return `at most ${FIELDS_MAX} fields fit one sample`;
-  return undefined;
+/**
+ * The longest row the servo streams at `baud`: its `tel_row_bytes_max` entry
+ * at that rate's index, or undefined when `capability_flags` says the
+ * firmware publishes none.
+ */
+export function rowBytesMax(caps: number, perRate: Uint8Array, baud: BaudRate): number | undefined {
+  if ((caps & CAP_TEL_ROWS) === 0) return undefined;
+  return perRate[BAUD_RATES.indexOf(baud)];
 }
 
-export function sampleLen(mask: number): number {
-  return FIELD_BYTES * fieldsOf(mask).length;
+/**
+ * Why the servo would not stream this mask at `baud`, or undefined. An arm
+ * whose row outgrows the limit acks and then disarms, so the host checks
+ * first, as osc does.
+ */
+export function maskIssue(
+  mask: number,
+  baud: BaudRate,
+  max: number | undefined,
+): string | undefined {
+  if ((mask & ~MASK_ALL) !== 0) return "mask has reserved bits set";
+  if (fieldsOf(mask).length === 0) return "pick at least one field";
+  if (max === undefined) {
+    return "the servo publishes no TEL row limits: its firmware predates packed TEL rows";
+  }
+  const row = telRowBytes(mask);
+  if (row > max) {
+    return `these fields pack to ${row} B rows; the servo streams rows of at most ${max} B at ${formatBaud(baud)}. Raise the speed or capture the fields over two bursts.`;
+  }
+  return undefined;
 }
 
 export interface Row {
@@ -112,7 +127,7 @@ export interface Row {
  */
 export function decodeBurst(frames: readonly Uint8Array[], mask: number): Row[] {
   const fields = fieldsOf(mask);
-  const len = FIELD_BYTES * fields.length;
+  const len = telRowBytes(mask);
   const rows: Row[] = [];
   let lastSeq: number | undefined;
   let frameIdx = 0;
@@ -124,15 +139,12 @@ export function decodeBurst(frames: readonly Uint8Array[], mask: number): Row[] 
     frameIdx = idx;
     const body = payload.length - STREAM_HDR;
     if (len === 0 || body % len !== 0 || body / len > SAMPLES_PER_FRAME) continue;
-    const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
-    const valid = view.getUint16(2, true);
+    const valid = (payload[2] ?? 0) | ((payload[3] ?? 0) << 8);
     for (let i = 0; i < body / len; i++) {
+      const at = STREAM_HDR + i * len;
+      const decoded = telDecodeRow(mask, payload.subarray(at, at + len));
       const values: Partial<Record<FieldKey, number>> = {};
-      let at = STREAM_HDR + i * len;
-      for (const f of fields) {
-        values[f.key] = f.signed ? view.getInt16(at, true) : view.getUint16(at, true);
-        at += FIELD_BYTES;
-      }
+      for (const f of fields) values[f.key] = decoded?.[f.bit];
       rows.push({ sample: idx * SAMPLES_PER_FRAME + i, valid: (valid & (1 << i)) !== 0, values });
     }
   }
@@ -196,19 +208,24 @@ const PERCENT: Display = { unit: "%", digits: 1 };
 /** Linearized counts carry a 1/16 fraction. */
 const LIN_COUNTS: Display = { unit: "counts", digits: 1 };
 
+export interface StreamConfig extends TelemetryConfig {
+  tickHz: number;
+  pwmPeriodTicks: number;
+}
+
 /**
  * Real units through the servo's own sense chain and calibration; the raw
  * preference reverts the position family to counts, the electrical fields
  * stay real. Without a config every field is counts.
  */
-export function unitsFor(mask: number, config: TelemetryConfig | undefined, raw: boolean): Unit[] {
+export function unitsFor(mask: number, config: StreamConfig | undefined, raw: boolean): Unit[] {
   return fieldsOf(mask).map((f) => {
     const counts: Unit = { key: f.key, ...COUNTS, convert: (c) => c };
     if (f.key === "pos_lin" && (config === undefined || raw)) {
       return { key: f.key, ...LIN_COUNTS, convert: q4ToCounts };
     }
     if (config === undefined) return counts;
-    const { sense, cal, biases } = config;
+    const { sense, cal, biases, pwmPeriodTicks } = config;
     switch (f.key) {
       case "pos":
         return raw
@@ -227,8 +244,8 @@ export function unitsFor(mask: number, config: TelemetryConfig | undefined, raw:
           ...DISPLAY.current,
           convert: (c) => currentMa(c, biases.currentBiasCounts, sense),
         };
-      case "duty_q15":
-        return { key: f.key, ...PERCENT, convert: dutyPercent };
+      case "duty":
+        return { key: f.key, ...PERCENT, convert: (c) => (c / pwmPeriodTicks) * 100 };
       case "vdiff":
         return { key: f.key, ...DISPLAY.motorVoltage, convert: (c) => vdiffV(c, 0, sense) };
       case "vbus":

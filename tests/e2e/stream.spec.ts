@@ -4,8 +4,21 @@ import { gotoSim } from "./helpers";
 
 const SUMMARY = /^(\d+) frames, (\d+) samples, (complete|incomplete), \d+ garble, \d+ statuses/;
 
-async function openStream(page: Page): Promise<void> {
+/** Migrates the simulated fleet from its factory 1 M through the connection popover. */
+async function setSpeed(page: Page, speed: string): Promise<void> {
+  await page.getByRole("button", { name: /^Connected/ }).click();
+  const popover = page.getByRole("dialog");
+  await popover.getByRole("combobox", { name: "Speed" }).click();
+  await page.getByRole("option", { name: speed }).click();
+  await popover.getByRole("button", { name: "Apply" }).click();
+  await popover.getByRole("button", { name: "Change speed" }).click();
+  await expect(page.getByRole("button", { name: `Connected at ${speed}` })).toBeVisible();
+  await page.keyboard.press("Escape");
+}
+
+async function openStream(page: Page, speed?: string): Promise<void> {
   await gotoSim(page, [1, 2]);
+  if (speed !== undefined) await setSpeed(page, speed);
   await page.getByRole("button", { name: "ID 1" }).click();
   await page.getByRole("link", { name: "Live" }).click();
   // A cold dev server compiles the Live route chunk on this first request.
@@ -36,13 +49,24 @@ async function downloadCsv(page: Page): Promise<string[]> {
   return lines.slice(0, -1);
 }
 
-// The simulated fleet replays a recorded track at 1 M, where a full-rate burst
-// still fits the wire for the default five fields, so the burst comes back
-// complete; the assertions only lean on what arrived.
-test("a capture with the default fields fills the summary and downloads matching CSV rows", async ({
+// The default five fields pack to 8 B rows: past the 4 B the servo streams at
+// its factory 1 M, inside 3 M's limit.
+test("at 1 M the default fields are refused with the servo's row limit", async ({ page }) => {
+  await openStream(page);
+  await expect(page.getByText("tel_mask 0x03c1 - tel_count 120")).toBeVisible();
+  await page.getByRole("button", { name: "Capture", exact: true }).click();
+  await expect(
+    page.getByText(
+      "these fields pack to 8 B rows; the servo streams rows of at most 4 B at 1 M. Raise the speed or capture the fields over two bursts.",
+    ),
+  ).toBeVisible();
+  await expect(page.getByLabel("Capture summary")).toHaveCount(0);
+});
+
+test("at 3 M a capture with the default fields fills the summary and downloads matching CSV rows", async ({
   page,
 }) => {
-  await openStream(page);
+  await openStream(page, "3 M");
   await expect(page.getByText("tel_mask 0x03c1 - tel_count 120")).toBeVisible();
   const { frames, samples } = await capture(page);
   expect(frames).toBeGreaterThan(0);
@@ -72,4 +96,20 @@ test("the field selection and sample count drive the mask, the burst and the CSV
   const lines = await downloadCsv(page);
   expect(lines[0]).toBe("sample,valid,pos (deg),current (mA)");
   expect(lines.length - 1).toBe(samples);
+});
+
+test("duty streams as a percent of the servo's PWM period", async ({ page }) => {
+  await openStream(page);
+  for (const name of ["Current raw", "Motor A", "Motor B", "Bus raw"]) {
+    await page.getByRole("checkbox", { name, exact: true }).click();
+  }
+  await page.getByRole("checkbox", { name: "Duty", exact: true }).click();
+  await expect(page.getByText("tel_mask 0x0009 - tel_count 120")).toBeVisible();
+  const { samples } = await capture(page);
+  expect(samples).toBeGreaterThan(0);
+  const lines = await downloadCsv(page);
+  expect(lines[0]).toBe("sample,valid,pos (deg),duty (%)");
+  const duty = lines.slice(1).map((l) => Number(l.split(",")[3]));
+  expect(duty.every((d) => Math.abs(d) <= 100)).toBe(true);
+  expect(duty.some((d) => d !== 0)).toBe(true);
 });

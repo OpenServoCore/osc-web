@@ -33,20 +33,22 @@ const pair = (a: number, b: number) => {
   return [w & 0xff, (w >> 8) & 0xff, w >> 16];
 };
 
-/** A frame of `rows`, the valid bit set on even rows. */
-function frame(seq: number, last: boolean, rows: readonly number[][]): Uint8Array {
+const u32 = (v: number) => [...u16(v & 0xffff), ...u16(v >>> 16)];
+
+/** A frame of `rows`, its first stamped `tick`, the valid bit set on even rows. */
+function frame(seq: number, last: boolean, tick: number, rows: readonly number[][]): Uint8Array {
   let valid = 0;
   rows.forEach((_, i) => {
-    if (i % 2 === 0) valid |= 1 << i;
+    if (i % 2 === 0) valid = (valid | (1 << i)) >>> 0;
   });
-  return Uint8Array.from([seq, last ? 1 : 0, ...u16(valid), ...rows.flat()]);
+  return Uint8Array.from([seq, last ? 1 : 0, ...u16(tick), ...rows.flat(), ...u32(valid), 0, 0]);
 }
 
 /** Position alone rides in one 16-bit slot. */
 const posRows = (n: number) => Array.from({ length: n }, (_, i) => u16(0x100 + i));
 
-/** The 1 M, 2 M and 3 M limits the core seeds; 0.5 M carries one byte. */
-const PER_RATE = Uint8Array.from([1, 4, 8, 11]);
+/** The 1 M, 2 M and 3 M limits the core seeds; 0.5 M carries none. */
+const PER_RATE = Uint8Array.from([0, 3, 8, 11]);
 
 test("the field table is in mask bit order and the default mask packs to an 8 B row", () => {
   expect(FIELDS.map((f) => f.bit)).toEqual([...FIELDS.keys()]);
@@ -57,11 +59,11 @@ test("the field table is in mask bit order and the default mask packs to an 8 B 
 });
 
 test("admission is the servo's row limit at the line's rate, as osc refuses it", () => {
-  expect(rowBytesMax(CAP_TEL_ROWS, PER_RATE, "b1000000")).toBe(4);
+  expect(rowBytesMax(CAP_TEL_ROWS, PER_RATE, "b1000000")).toBe(3);
   expect(rowBytesMax(CAP_TEL_ROWS, PER_RATE, "b3000000")).toBe(11);
   expect(rowBytesMax(0, PER_RATE, "b3000000")).toBeUndefined();
-  expect(maskIssue(0x3c1, "b1000000", 4)).toBe(
-    "these fields pack to 8 B rows; the servo streams rows of at most 4 B at 1 M. Raise the speed or capture the fields over two bursts.",
+  expect(maskIssue(0x3c1, "b1000000", 3)).toBe(
+    "these fields pack to 8 B rows; the servo streams rows of at most 3 B at 1 M. Raise the speed or capture the fields over two bursts.",
   );
   // The six raw fields: 9 B, past 2 M's 8, inside 3 M's 11.
   expect(maskIssue(0x1cd, "b2000000", 8)).toMatch(
@@ -79,26 +81,27 @@ test("admission is the servo's row limit at the line's rate, as osc refuses it",
 test("the protocol's golden row decodes: a lone 12-bit slot, wide signed slots, a signed duty pair", () => {
   const mask = maskOf(["pos", "current", "duty", "vdiff", "ntc_raw"]);
   const golden = [0x23, 0x01, 0xfe, 0xff, 0xd4, 0xfe, 0xfb, 0xcf, 0xab];
-  const rows = decodeBurst([frame(0x42, false, [golden, golden])], mask);
+  const rows = decodeBurst([frame(0x42, false, 0x1234, [golden, golden])], mask);
   expect(rows).toHaveLength(2);
-  // A burst arms at seq 0: a first frame at 0x42 is 0x42 missed frames.
+  // The first frame's first row is sample 0, whatever its seq and stamp.
   expect(rows[0]).toEqual({
-    sample: 0x42 * 16,
+    sample: 0,
     valid: true,
     values: { pos: 0x123, current: -2, duty: -5, vdiff: -300, ntc_raw: 0xabc },
   });
-  expect(rows[1]).toMatchObject({ sample: 0x42 * 16 + 1, valid: false });
+  expect(rows[1]).toMatchObject({ sample: 1, valid: false });
 });
 
-test("the default fields pair up after the lone position and a seq hole leaves 16 missing samples", () => {
+test("the default fields pair up after the lone position and a lost frame leaves the samples its stamp skips", () => {
   const mask = maskOf(DEFAULT_FIELDS);
   const row = (i: number) => [...u16(0x800 + i), ...pair(0x100 + i, 0xa00), ...pair(0xb00, 0xfff)];
   const a = frame(
     0,
     false,
+    100,
     Array.from({ length: 16 }, (_, i) => row(i)),
   );
-  const c = frame(2, true, [row(0), row(1), row(2)]);
+  const c = frame(2, true, 132, [row(0), row(1), row(2)]);
   const rows = decodeBurst([a, c], mask);
   expect(rows.map((r) => r.sample)).toEqual([...Array(16).keys(), 32, 33, 34]);
   expect(rows[18]?.values).toEqual({
@@ -112,21 +115,45 @@ test("the default fields pair up after the lone position and a seq hole leaves 1
   expect(isLast(c)).toBe(true);
 });
 
-test("seq unwraps past 255 and ragged payloads are skipped", () => {
+test("stamps unwrap past 0xffff and ragged payloads are skipped", () => {
   const mask = maskOf(["pos"]);
+  const ragged = frame(1, false, 0xfff0, [[0x00, 0x01, 0x02]]);
   const rows = decodeBurst(
-    [frame(255, false, posRows(16)), Uint8Array.from([0, 0, 0, 0, 1]), frame(0, true, posRows(1))],
+    [
+      frame(255, false, 0xfff8, posRows(16)),
+      Uint8Array.from([0, 0, 0, 0, 1]),
+      ragged,
+      frame(0, true, 0x0008, posRows(1)),
+    ],
     mask,
   );
-  expect(rows.map((r) => r.sample)).toEqual(
-    [...Array(16).keys()].map((i) => 255 * 16 + i).concat(256 * 16),
+  expect(rows.map((r) => r.sample)).toEqual([...Array(17).keys()]);
+});
+
+test("the row count comes from the length, and dropped rows jump the stamp without a seq hole", () => {
+  const mask = maskOf(["pos"]);
+  const rows = decodeBurst(
+    [
+      frame(0, false, 7, posRows(24)),
+      frame(1, false, 31, posRows(5)),
+      frame(2, true, 40, posRows(2)),
+    ],
+    mask,
   );
+  expect(rows.map((r) => r.sample)).toEqual([
+    ...Array(29).keys(),
+    // rows 29..32 dropped by the servo: frame 2 is stamped 4 ticks on
+    33,
+    34,
+  ]);
+  expect(rows[23]).toMatchObject({ valid: false, values: { pos: 0x100 + 23 } });
+  expect(rows[24]).toMatchObject({ valid: true, values: { pos: 0x100 } });
 });
 
 test("the summary carries the burst's counters and the decoded sample count", () => {
   const mask = maskOf(["pos"]);
   const burst = {
-    frames: [frame(0, false, posRows(16)), frame(1, true, posRows(4))],
+    frames: [frame(0, false, 0, posRows(16)), frame(1, true, 16, posRows(4))],
     complete: true,
     statuses: 3,
     garble: 0,
@@ -173,7 +200,7 @@ const config: StreamConfig = {
 
 test("the CSV has a header naming the selected fields with their units and one line per row", () => {
   const mask = maskOf(["pos", "current_raw"]);
-  const rows = decodeBurst([frame(0, true, [pair(0x800, 0x100), pair(0x801, 0x101)])], mask);
+  const rows = decodeBurst([frame(0, true, 0, [pair(0x800, 0x100), pair(0x801, 0x101)])], mask);
   const csv = toCsv(rows, unitsFor(mask, config, false));
   const lines = csv.split("\n");
   expect(lines[0]).toBe("sample,valid,pos (deg),current_raw (mA)");
@@ -193,7 +220,7 @@ test("the CSV has a header naming the selected fields with their units and one l
 
 test("pos_lin is the Q4 word over 16, in degrees through the same angle map as pos", () => {
   const mask = maskOf(["pos", "pos_lin"]);
-  const rows = decodeBurst([frame(0, true, [[...u16(0x800), ...u16(0x800 << 4)]])], mask);
+  const rows = decodeBurst([frame(0, true, 0, [[...u16(0x800), ...u16(0x800 << 4)]])], mask);
   expect(rows[0]?.values).toEqual({ pos: 0x800, pos_lin: 0x800 << 4 });
   const [pos, lin] = unitsFor(mask, config, false);
   expect(lin?.unit).toBe("deg");
@@ -209,7 +236,7 @@ test("pos_lin is the Q4 word over 16, in degrees through the same angle map as p
 
 test("duty is signed PWM compare counts, a percent of pwm_period_ticks", () => {
   const mask = maskOf(["duty"]);
-  const rows = decodeBurst([frame(0, true, [u16(-600 & 0xfff), u16(1200)])], mask);
+  const rows = decodeBurst([frame(0, true, 0, [u16(-600 & 0xfff), u16(1200)])], mask);
   expect(rows.map((r) => r.values.duty)).toEqual([-600, 1200]);
   const units = unitsFor(mask, config, false);
   expect(units[0]).toMatchObject({ key: "duty", unit: "%" });

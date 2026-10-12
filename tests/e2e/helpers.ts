@@ -47,6 +47,18 @@ export async function gotoSim(
   await expect(page.getByRole("button", { name: /^Connected/ })).toBeVisible();
 }
 
+/** Migrates the simulated fleet from its factory 1 M through the connection popover. */
+export async function setSpeed(page: Page, speed: string): Promise<void> {
+  await page.getByRole("button", { name: /^Connected/ }).click();
+  const popover = page.getByRole("dialog");
+  await popover.getByRole("combobox", { name: "Speed" }).click();
+  await page.getByRole("option", { name: speed }).click();
+  await popover.getByRole("button", { name: "Apply" }).click();
+  await popover.getByRole("button", { name: "Change speed" }).click();
+  await expect(page.getByRole("button", { name: `Connected at ${speed}` })).toBeVisible();
+  await page.keyboard.press("Escape");
+}
+
 /** Selects ID 1 of a simulated fleet of 1 and 2 and opens the control table. */
 export async function openTable(page: Page): Promise<void> {
   await gotoSim(page, [1, 2]);

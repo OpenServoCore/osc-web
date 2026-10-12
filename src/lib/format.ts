@@ -9,6 +9,9 @@ export function hex16(n: number): string {
   return `0x${n.toString(16).padStart(4, "0")}`;
 }
 
+/** In protocol sec 2 rate-index order. */
+export const BAUD_RATES: readonly BaudRate[] = ["b500000", "b1000000", "b2000000", "b3000000"];
+
 export function formatBaud(rate: BaudRate): string {
   return `${Number(rate.slice(1)) / 1_000_000} M`;
 }

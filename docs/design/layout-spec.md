@@ -72,7 +72,7 @@ Tab contents (map from the descriptor fields already in the file):
 - Settings: Identity and bus (id and baud read-only with links "Change on the Servo page ->" / "Change in the connection popover ->"; response_deadline_us editable), Motion limits, Control loops, Safety, Thermal. Motion limits and Safety expanded by default, others collapsed.
 - Calibration: one group, all six rows read-only, status strip at top: calibration chip + "Worked out from the values; the servo keeps no date." + "Edit on the Servo page ->". lut_corr shows "55-point table" + "Download .csv" (secondary, small, mock no-op).
 - Board: Board constants (shunt, gain, dividers, tick rate, windows, thermistor) read-only, vdd_mv editable; Motor model group (r0, t0, k_r2t, mu, ke, r, recip_ke, b_i, friction) editable, collapsed by default.
-- Live values: Status (faults, status flags, clock trim, counters with Clear), Estimates, Raw samples, Commands (editable: torque_enable, mode, goals, tel_mask, tel_count, boot_mode, duty, arm/page/chans), Profile/capture (collapsed by default). Read-only groups show grey "updated 0.4 s ago" in the tab header (mock: tick it).
+- Live values: Status (faults, status flags, clock trim, counters with Clear), Estimates, Raw samples, Commands (editable: torque_enable, mode, goals, the TEL chunks, tel_count, boot_mode, duty, arm/page/chans), Profile/capture (collapsed by default). Read-only groups show grey "updated 0.4 s ago" in the tab header (mock: tick it).
 
 Row: label bold in column 1 with grey mono register name beneath [intermediate]; tooltip on the register name "addr 0x020, 4 bytes, int32, rw". Value in column 2 mono; read-only values get a tiny grey "ro" tag right of the value. Editable value = value button with pencil on hover -> popover. Save writes immediately; row flashes green.
 
@@ -94,7 +94,7 @@ States: "waiting for data" grey text over an empty grid before the first sample 
 
 Layout: Capture card left (360 px), burst chart card right (fills, chart height like Telemetry).
 
-Capture card [surface]: help "?" on the title ("Records every control tick for a few milliseconds, far faster than Telemetry. Pick the fields, arm it, then move the goal."). Field pills (Position, Current, Bus V, Motor A, Motor B). Samples number input + grey "of 120". Start select. "Arm" primary (becomes "Disarm" danger-outline while armed); state chip next to it: ready / armed / capturing / captured. Grey summary sentence under the button ("2 fields x 60 samples = 7.5 ms at 8 kHz"). Grey mono line [intermediate]: resulting tel_mask hex and tel_count.
+Capture card [surface]: help "?" on the title ("Records every control tick for a few milliseconds, far faster than Telemetry. Pick the fields, arm it, then move the goal."). Field pills (Position, Current, Bus V, Motor A, Motor B). Samples number input + grey "of 120". Start select. "Arm" primary (becomes "Disarm" danger-outline while armed); state chip next to it: ready / armed / capturing / captured. Grey summary sentence under the button ("2 fields x 60 samples = 7.5 ms at 8 kHz"). Grey mono line [intermediate]: resulting chunks and tel_count.
 
 Burst chart card [surface]: title "Last burst", grey subtitle "60 samples, 7.5 ms, 12:04:31". Action: "Download .csv" (secondary). One panel per captured field family; crosshair tooltip. Units follow the Telemetry toggle. States: no capture yet = dashed empty box "Arm a capture to see a burst here"; armed = thin amber strip "Waiting for the goal to change ..." with a Disarm link.
 
@@ -104,7 +104,7 @@ Card anatomy: title (fs-md 600) left with its icon; status chip directly after t
 
 Icons: one monochrome line style (lucide) throughout. Status icons on statements and chips, an icon on card titles, on the nav rows, and on buttons that do something physical.
 
-Secondary text: grey subtitle (text-3, fs-sm) for glance facts; tooltip for long or rare facts (full serial, addr/width/type, tel_mask hex, why a control is disabled); hover reveal only for affordances (pencil, copy icon), never for information. Mono tabular numerals for values; sans for labels and sentences.
+Secondary text: grey subtitle (text-3, fs-sm) for glance facts; tooltip for long or rare facts (full serial, addr/width/type, TEL chunks, why a control is disabled); hover reveal only for affordances (pencil, copy icon), never for information. Mono tabular numerals for values; sans for labels and sentences.
 
 Button hierarchy: at most one filled primary per card (Connect adapter, Save in popover, Save settings, Arm). Everything else outlined secondary. Danger outline for Factory reset, Disarm, and the confirm trigger; danger filled only inside a confirm strip. Link-buttons for navigation and counter Clear.
 

@@ -49,11 +49,11 @@ test("Live values moves on its own", async ({ page }) => {
   await page.getByRole("tab", { name: "Live values" }).click();
   // The replayed pot sits at its rail for seconds at a time; the motor
   // current moves every tick.
-  const cell = tableRow(page, "current").getByRole("cell");
-  await expect(cell).toHaveText(/^\d+$/);
+  const cell = tableRow(page, "current_raw").getByRole("cell");
+  await expect(cell).toHaveText(/^\d+ raw counts$/);
   const first = (await cell.textContent()) ?? "";
   await expect(cell).not.toHaveText(first, { timeout: 5000 });
-  await expect(cell).toHaveText(/^\d+$/);
+  await expect(cell).toHaveText(/^\d+ raw counts$/);
 });
 
 test("a Live values edit flashes its row and shows the written value", async ({ page }) => {

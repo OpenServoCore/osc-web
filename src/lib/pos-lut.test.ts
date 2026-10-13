@@ -11,7 +11,6 @@ import {
   isIdentity,
   pointsWords,
   q4,
-  q4ToCounts,
   report,
   STATE,
   stateWords,
@@ -40,7 +39,6 @@ test("the identity is raw << 4 exactly, and a point lands at raw + c[k]", () => 
   // f = 8 of 16 between corrections 4 and -1: half way from +4 to -1.
   expect(counts(mg90a, 568)).toBe(569.5);
   expect(interpQ4(4096 + 560, 4, -1)).toBe(interpQ4(560, 4, -1));
-  expect(q4ToCounts(569.5 * 16)).toBe(569.5);
   expect(isIdentity(IDENTITY)).toBe(true);
   expect(isIdentity(mg90a)).toBe(false);
 });

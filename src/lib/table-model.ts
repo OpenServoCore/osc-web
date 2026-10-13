@@ -89,11 +89,12 @@ const POS_LUT = 0x19c;
 const IDENT_CTRL = 0x1e0;
 const TEL_COMMON = 0x200;
 const TEL_MODE = 0x220;
-const ESTIMATES = 0x224;
-const SENSORS = 0x240;
-const IDENT = 0x25a;
-const TEL_LIMITS = 0x266;
-const HEALTH = 0x26a;
+const TICK = 0x224;
+const ESTIMATES = 0x244;
+const REFS = 0x258;
+const IDENT = 0x260;
+const TEL_LIMITS = 0x26c;
+const HEALTH = 0x270;
 const PROFILE = 0x280;
 const BURST_WINDOW = 0x2c0;
 
@@ -136,7 +137,7 @@ const TABS: readonly TabSpec[] = [
       { label: "Health", blocks: [HEALTH] },
       { label: "Estimates", blocks: [ESTIMATES] },
       // Identification aggregates are windowed raw counts, not estimator output.
-      { label: "Raw samples", blocks: [SENSORS, IDENT] },
+      { label: "Raw samples", blocks: [TICK, REFS, IDENT] },
       { label: "Commands", blocks: [LIFECYCLE, SYSTEM, BURST_REQUEST, IDENT_CTRL] },
       { label: "Position table window", collapsed: true, blocks: [POS_LUT] },
       { label: "Profile/capture", help: true, collapsed: true, blocks: [PROFILE, BURST_WINDOW] },

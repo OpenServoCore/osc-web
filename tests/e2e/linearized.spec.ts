@@ -1,7 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
-import { readFile } from "node:fs/promises";
 import { counts, GRID } from "../../src/lib/pos-lut";
-import { gotoSim, MG90A, setSpeed, writeTable } from "./helpers";
+import { gotoSim, MG90A, writeTable } from "./helpers";
 
 async function openLive(page: Page): Promise<void> {
   await page.getByRole("button", { name: "ID 1" }).click();
@@ -39,32 +38,4 @@ test("with a live table the position is read through it, the raw sample beside i
   const raw = Number(/\d+/.exec((await page.getByLabel("Position raw").textContent()) ?? "")?.[0]);
   expect(await readout.textContent()).toBe(`${counts(MG90A.points, raw).toFixed(1)} counts`);
   expect(GRID).toBe(16);
-});
-
-test("a burst can carry the linearized pot, in degrees through the same angle map", async ({
-  page,
-}) => {
-  await gotoSim(page, [1, 2]);
-  // pos and pos_lin pack to 4 B rows, past the 3 B of the factory 1 M.
-  await setSpeed(page, "2 M");
-  await page.getByRole("button", { name: "ID 1" }).click();
-  await page.getByRole("link", { name: "Live" }).click();
-  await page.getByRole("tab", { name: "Stream" }).click({ timeout: 15_000 });
-  await expect(page.getByText(/ samples = [\d.]+ ms at \d+ kHz$/)).toBeVisible();
-  for (const name of ["Current raw", "Motor A", "Motor B", "Bus raw"]) {
-    await page.getByRole("checkbox", { name, exact: true }).click();
-  }
-  await page.getByRole("checkbox", { name: "Position (linearized)", exact: true }).click();
-  await expect(page.getByText("tel_mask 0x0801 - tel_count 120")).toBeVisible();
-  await page.getByRole("button", { name: "Capture", exact: true }).click();
-  await expect(page.getByLabel("Capture summary")).toHaveText(/ samples, /);
-  const [download] = await Promise.all([
-    page.waitForEvent("download"),
-    page.getByRole("button", { name: "Download .csv" }).click(),
-  ]);
-  const lines = (await readFile(await download.path(), "utf8")).split("\n");
-  expect(lines[0]).toBe("sample,valid,pos (deg),pos_lin (deg)");
-  // The simulated fleet applies no table, so its pos_lin is the identity word.
-  const [, , pos, lin] = (lines[1] ?? "").split(",");
-  expect(lin).toBe(pos);
 });

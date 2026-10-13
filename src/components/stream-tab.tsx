@@ -15,18 +15,20 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { telColumns, type TelChunk, type TelColumn } from "@openservocore/client";
 import { useBus, useReadOnce } from "@/lib/bus/hooks";
 import { useChartTokens, type ChartTokens } from "@/lib/chart-theme";
 import { hex16 } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import {
+  coverFields,
   decodeBurst,
   DEFAULT_FIELDS,
   familyOf,
   FIELDS,
-  maskIssue,
-  maskOf,
-  rowBytesMax,
+  PRESETS,
+  rateIssue,
+  rowBytes,
   summarize,
   summaryText,
   toCsv,
@@ -49,21 +51,23 @@ const COUNT_MAX = 65535;
 const WINDOW_MAX_MS = 4_294_967;
 const DASH = [6, 4];
 const COLORS: readonly (keyof ChartTokens)[] = ["series1", "series2", "series3", "ctx"];
-/** The conversion registers, the tick rate and PWM period, and the row admission facts. */
+/** The conversion registers, the tick rate and the current window floor. */
 const STREAM_REGISTERS: readonly string[] = [
   ...CONFIG_REGISTERS,
   ...BIAS_REGISTERS,
   "tick_hz",
-  "pwm_period_ticks",
-  "capability_flags",
-  "tel_row_bytes_max",
+  "i_window_min_ticks",
 ];
 
 interface Capture {
-  mask: number;
+  columns: TelColumn[];
   rows: Row[];
   summary: Summary;
   at: Date;
+}
+
+function chunksText(chunks: readonly TelChunk[]): string {
+  return chunks.map((c) => `${hex16(c.addr)}+${c.len}`).join(", ");
 }
 
 function message(e: unknown): string {
@@ -145,20 +149,24 @@ export function StreamTab({ id }: { id: number }) {
         : {
             ...configFrom(snapshot.read),
             tickHz: snapshot.read("tick_hz"),
-            pwmPeriodTicks: snapshot.read("pwm_period_ticks"),
+            iWindowMinTicks: snapshot.read("i_window_min_ticks"),
           },
     [snapshot],
   );
-  const perRate = snapshot?.values.get("tel_row_bytes_max");
+  const layout = useMemo(
+    () =>
+      descriptor === undefined ? undefined : new Map(descriptor.fields().map((f) => [f.name, f])),
+    [descriptor],
+  );
+  const cover = layout === undefined ? undefined : coverFields(fields, layout);
 
   const calibrated = config !== undefined && calibrationStatus(config.cal).valid;
   const raw = !calibrated || unitsPref === "raw";
-  const mask = maskOf(fields);
   const samples = wholeIn(count, COUNT_MAX);
   const window = wholeIn(windowMs, WINDOW_MAX_MS);
   const tickHz = config?.tickHz ?? 0;
   const units = useMemo(
-    () => (capture === undefined ? [] : unitsFor(capture.mask, config, raw)),
+    () => (capture === undefined ? [] : unitsFor(capture.columns, config, raw)),
     [capture, config, raw],
   );
   const options = useMemo(() => chartOptions(units, tokens, tickHz), [units, tokens, tickHz]);
@@ -180,28 +188,31 @@ export function StreamTab({ id }: { id: number }) {
       descriptor === undefined ||
       snapshot === undefined ||
       baud === undefined ||
-      perRate?.kind !== "bytes" ||
+      cover === undefined ||
       samples === undefined ||
       window === undefined
     ) {
       return;
     }
-    const issue = maskIssue(
-      mask,
-      baud,
-      rowBytesMax(snapshot.read("capability_flags"), perRate.value, baud),
-    );
-    if (issue !== undefined) {
-      setError(issue);
+    if (cover.issue !== undefined) {
+      setError(cover.issue);
       return;
     }
+    const rate = rateIssue(baud);
+    if (rate !== undefined) {
+      setError(rate);
+      return;
+    }
+    const { chunks } = cover;
+    const columns = telColumns(descriptor, chunks);
+    const iWindowMinTicks = config?.iWindowMinTicks;
     setPending(true);
     bus
-      .command((c) => c.telBurst(id, descriptor, mask, samples, window * 1000))
+      .command((c) => c.telBurst(id, descriptor, chunks, samples, window * 1000))
       .then(
         (burst) => {
-          const rows = decodeBurst(burst.frames, mask);
-          setCapture({ mask, rows, summary: summarize(burst, rows), at: new Date() });
+          const rows = decodeBurst(burst.frames, columns, rowBytes(chunks), iWindowMinTicks);
+          setCapture({ columns, rows, summary: summarize(burst, rows), at: new Date() });
           setError(undefined);
         },
         (e: unknown) => {
@@ -244,6 +255,20 @@ export function StreamTab({ id }: { id: number }) {
             <legend id={fieldsId} className="mb-2 text-xs font-medium text-text-3 uppercase">
               Fields
             </legend>
+            <div className="mb-3 flex flex-wrap gap-2">
+              {PRESETS.map((p) => (
+                <Button
+                  key={p.label}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setFields(p.keys);
+                  }}
+                >
+                  {p.label}
+                </Button>
+              ))}
+            </div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-2">
               {FIELDS.map((f) => {
                 const boxId = `${fieldsId}-${f.key}`;
@@ -312,6 +337,7 @@ export function StreamTab({ id }: { id: number }) {
                 pending ||
                 descriptor === undefined ||
                 snapshot === undefined ||
+                cover?.issue !== undefined ||
                 samples === undefined ||
                 window === undefined
               }
@@ -321,14 +347,20 @@ export function StreamTab({ id }: { id: number }) {
               {pending ? "Capturing..." : "Capture"}
             </Button>
             <p className="text-sm text-text-3">
-              {fields.length} fields x {samples ?? "?"} samples
+              {cover !== undefined && cover.issue === undefined ? rowBytes(cover.chunks) : "?"} B
+              rows x {samples ?? "?"} samples
               {config !== undefined && samples !== undefined
                 ? ` = ${spanMs(samples, config.tickHz).toFixed(1)} ms at ${(config.tickHz / 1000).toFixed(0)} kHz`
                 : ""}
             </p>
-            <p className="font-mono text-xs text-text-3">
-              tel_mask {hex16(mask)} - tel_count {samples ?? "?"}
-            </p>
+            {cover?.issue === undefined ? (
+              <p className="font-mono text-xs text-text-3">
+                chunks {cover === undefined ? "?" : chunksText(cover.chunks)} - tel_count{" "}
+                {samples ?? "?"}
+              </p>
+            ) : (
+              <p className="text-sm text-danger">{cover.issue}</p>
+            )}
             {capture !== undefined && (
               <p aria-label="Capture summary" className="text-sm text-text-3">
                 {summaryText(capture.summary)}

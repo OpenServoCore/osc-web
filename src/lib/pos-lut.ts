@@ -72,11 +72,6 @@ export function counts(points: readonly number[], raw: number): number {
   return q4(points, raw) / GRID;
 }
 
-/** Q4 word to counts, for a TEL `pos_lin` sample. */
-export function q4ToCounts(word: number): number {
-  return word / GRID;
-}
-
 export function isIdentity(points: readonly number[]): boolean {
   return points.every((c) => c === 0);
 }

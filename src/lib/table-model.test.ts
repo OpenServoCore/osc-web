@@ -167,7 +167,8 @@ describe("buildTable", () => {
     expect(rowOf("window_floor_q15")).toMatchObject({ label: "Window floor", editable: false });
     expect(rowOf("window_floor_q15").hint).toBeUndefined();
     expect(placement("theta_hat_q16")).toEqual(["Live values", "Estimates"]);
-    expect(placement("sample_tick")).toEqual(["Live values", "Estimates"]);
+    expect(placement("sample_tick")).toEqual(["Live values", "Raw samples"]);
+    expect(placement("vbus_counts")).toEqual(["Live values", "Estimates"]);
     expect(placement("pos")).toEqual(["Live values", "Raw samples"]);
     expect(placement("vmotor_bias_counts")).toEqual(["Live values", "Raw samples"]);
     expect(placement("agg_seq")).toEqual(["Live values", "Raw samples"]);

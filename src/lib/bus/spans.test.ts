@@ -25,7 +25,7 @@ import {
 const fields = descriptor.fields as Field[];
 
 test("the live span is one read from pos through vmotor_bias_counts", () => {
-  expect(span(fields, LIVE_REGISTERS)).toEqual({ addr: 576, count: 26 });
+  expect(span(fields, LIVE_REGISTERS)).toEqual({ addr: 554, count: 50 });
 });
 
 test("the constants span is one read from raw_min through vmotor_bias_nom_counts", () => {
@@ -93,7 +93,7 @@ test("planSpans rejects a register the descriptor does not carry", () => {
   expect(() => planSpans(sample, ["nope"])).toThrow("descriptor has no nope");
 });
 
-test("the 0.1 sample span is goal_duty through ntc_raw in one read", () => {
+test("the 0.1 sample span is goal_duty through omega_hat_cps in one read", () => {
   expect(
     planSpans(fields, [
       "goal_duty",
@@ -102,15 +102,15 @@ test("the 0.1 sample span is goal_duty through ntc_raw in one read", () => {
       "goal_current",
       "mode_active",
       "omega_hat_cps",
-      "duty_applied_q15",
+      "duty_ticks",
       "pos",
-      "current",
+      "current_raw",
       "vmotor_a",
       "vmotor_b",
       "vbus_raw",
       "ntc_raw",
     ]),
-  ).toEqual([{ addr: 390, count: 210 }]);
+  ).toEqual([{ addr: 390, count: 198 }]);
 });
 
 /** A descriptor codec over `sample`, plain numbers only. */
@@ -186,7 +186,7 @@ test("the live, health and constants layouts decode from a whole-table image", (
   put("vdd_mv", 3300);
   put("ntc_beta", 3950);
   put("pos", 2054);
-  put("current", 2100);
+  put("current_raw", 2100);
   put("vbus_raw", 3072);
   put("ntc_raw", 1500);
   put("current_bias_counts", 2048);
@@ -228,7 +228,7 @@ test("the live, health and constants layouts decode from a whole-table image", (
 
 test("the fleet card reads the live sensors and the health block as one span", () => {
   expect(planSpans(fields, [...LIVE_REGISTERS, ...HEALTH_REGISTERS])).toEqual([
-    { addr: 512, count: 90 },
+    { addr: 512, count: 92 },
   ]);
 });
 

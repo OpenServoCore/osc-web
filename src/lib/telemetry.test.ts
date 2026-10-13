@@ -13,13 +13,13 @@ import {
 
 const fields = descriptor.fields as Field[];
 
-test("the sample registers plan one read, goal_duty through ntc_raw", () => {
-  expect(planSpans(fields, SAMPLE_REGISTERS)).toEqual([{ addr: 390, count: 210 }]);
+test("the sample registers plan one read, goal_duty through t_winding_cc", () => {
+  expect(planSpans(fields, SAMPLE_REGISTERS)).toEqual([{ addr: 390, count: 204 }]);
 });
 
 test("the conversion registers plan one read each side of the table", () => {
-  expect(planSpans(fields, CONFIG_REGISTERS)).toEqual([{ addr: 128, count: 64 }]);
-  expect(planSpans(fields, BIAS_REGISTERS)).toEqual([{ addr: 594, count: 8 }]);
+  expect(planSpans(fields, CONFIG_REGISTERS)).toEqual([{ addr: 128, count: 82 }]);
+  expect(planSpans(fields, BIAS_REGISTERS)).toEqual([{ addr: 600, count: 4 }]);
 });
 
 test("registersOf lists what a binder reads, in order", () => {
@@ -27,7 +27,7 @@ test("registersOf lists what a binder reads, in order", () => {
 });
 
 test("decodeSample scales omega_hat_cps out of Q16 and keeps the rest in counts", () => {
-  const span = { addr: 390, count: 210 };
+  const span = { addr: 390, count: 204 };
   const bytes = new Uint8Array(span.count);
   const view = new DataView(bytes.buffer);
   const at = (name: string) => {
@@ -41,10 +41,10 @@ test("decodeSample scales omega_hat_cps out of Q16 and keeps the rest in counts"
   view.setInt16(at("goal_current"), 250, true);
   view.setUint8(at("mode_active"), 3);
   view.setInt32(at("omega_hat_cps"), -3 * 65536, true);
-  view.setInt16(at("duty_applied_q15"), -900, true);
+  view.setInt16(at("duty_ticks"), -900, true);
   view.setUint16(at("pos"), 1234, true);
   view.setUint8(at("pos_lut_state"), 2);
-  view.setUint16(at("current"), 300, true);
+  view.setUint16(at("current_raw"), 300, true);
   view.setUint16(at("vmotor_a"), 800, true);
   view.setUint16(at("vmotor_b"), 700, true);
   view.setUint16(at("vbus_raw"), 3600, true);
@@ -58,7 +58,7 @@ test("decodeSample scales omega_hat_cps out of Q16 and keeps the rest in counts"
     goalVelocity: -500,
     goalCurrent: 250,
     goalDuty: -1000,
-    dutyApplied: -900,
+    dutyTicks: -900,
     modeActive: 3,
     velocity: -3,
     current: 300,
@@ -70,7 +70,7 @@ test("decodeSample scales omega_hat_cps out of Q16 and keeps the rest in counts"
   });
 });
 
-test("configFrom binds the sense, the calibration and the biases from one reader", () => {
+test("configFrom binds the sense, the calibration, the biases and the PWM period from one reader", () => {
   const values: Record<string, number> = {
     shunt_r_mohm: 10,
     gain_milli: 32000,
@@ -82,9 +82,11 @@ test("configFrom binds the sense, the calibration and the biases from one reader
     gear_ratio_centi: 100,
     current_bias_counts: 2048,
     vmotor_bias_counts: 1024,
+    pwm_period_ticks: 1200,
   };
   const config = configFrom((name) => values[name] ?? 1);
   expect(config.sense.shuntMohm).toBe(10);
   expect(config.cal.rawMax).toBe(3800);
   expect(config.biases.currentBiasCounts).toBe(2048);
+  expect(config.pwmPeriodTicks).toBe(1200);
 });

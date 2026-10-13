@@ -192,7 +192,7 @@ function convert(
     velocity: raw ? s.velocity : velocityDegPerS(s.velocity, cal),
     current: currentMa(s.current, biases.currentBiasCounts, sense),
     busVoltage: busV(s.vbus, sense),
-    motorVoltage: vdiffV(s.vmotorA, s.vmotorB, sense),
+    motorVoltage: vdiffV(s.vdiff, 0, sense),
     temperature: temperatureC(s.ntc, sense),
     winding: windingC(s.windingCc),
   };

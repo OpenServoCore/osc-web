@@ -45,8 +45,7 @@ test("decodeSample scales omega_hat_cps out of Q16 and keeps the rest in counts"
   view.setUint16(at("pos"), 1234, true);
   view.setUint8(at("pos_lut_state"), 2);
   view.setUint16(at("current_raw"), 300, true);
-  view.setUint16(at("vmotor_a"), 800, true);
-  view.setUint16(at("vmotor_b"), 700, true);
+  view.setInt16(at("vdiff_counts"), -100, true);
   view.setUint16(at("vbus_raw"), 3600, true);
   view.setUint16(at("ntc_raw"), 2000, true);
   view.setInt16(at("t_winding_cc"), -3141, true);
@@ -63,8 +62,7 @@ test("decodeSample scales omega_hat_cps out of Q16 and keeps the rest in counts"
     velocity: -3,
     current: 300,
     vbus: 3600,
-    vmotorA: 800,
-    vmotorB: 700,
+    vdiff: -100,
     ntc: 2000,
     windingCc: -3141,
   });

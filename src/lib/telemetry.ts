@@ -35,8 +35,12 @@ export interface Sample {
   velocity: number;
   current: number;
   vbus: number;
-  vmotorA: number;
-  vmotorB: number;
+  /**
+   * `vdiff_counts`, the kernel's drive-window differential: a poll of the two
+   * taps can land while the next scan holds them in sample order (protocol
+   * sec 5.6).
+   */
+  vdiff: number;
   ntc: number;
   windingCc: number;
 }
@@ -60,8 +64,7 @@ export const SAMPLE_REGISTERS: readonly string[] = [
   "pos_lut_state",
   "pos",
   "current_raw",
-  "vmotor_a",
-  "vmotor_b",
+  "vdiff_counts",
   "vbus_raw",
   "ntc_raw",
   "t_winding_cc",
@@ -98,8 +101,7 @@ export function decodeSample(read: ReadRegister, t: number): Sample {
     velocity: read("omega_hat_cps") / Q16,
     current: read("current_raw"),
     vbus: read("vbus_raw"),
-    vmotorA: read("vmotor_a"),
-    vmotorB: read("vmotor_b"),
+    vdiff: read("vdiff_counts"),
     ntc: read("ntc_raw"),
     windingCc: read("t_winding_cc"),
   };

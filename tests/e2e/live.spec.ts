@@ -50,3 +50,10 @@ test("the winding series joins the temperature panel in C", async ({ page }) => 
   await expect(page.getByRole("region", { name: /^Temperature C/ })).toBeVisible();
   await expect(page.getByLabel("Winding value")).toHaveText(/^-?\d+\.\d C$/);
 });
+
+test("the motor voltage series reads the held differential in volts", async ({ page }) => {
+  await openLive(page);
+  await page.getByRole("switch", { name: "Motor V" }).click();
+  // The replayed stall holds the taps about 2900 counts apart, either way.
+  await expect(page.getByLabel("Motor V value")).toHaveText(/^-?11\.\d{2} V$/);
+});

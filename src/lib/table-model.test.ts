@@ -171,9 +171,9 @@ describe("buildTable", () => {
     expect(placement("vbus_counts")).toEqual(["Live values", "Estimates"]);
     expect(placement("pos")).toEqual(["Live values", "Raw samples"]);
     expect(placement("vmotor_bias_counts")).toEqual(["Live values", "Raw samples"]);
-    expect(placement("agg_seq")).toEqual(["Live values", "Raw samples"]);
-    expect(placement("ident_agg")).toEqual(["Live values", "Commands"]);
-    expect(rowOf("ident_agg").editable).toBe(true);
+    expect(placement("chunk0_addr")).toEqual(["Live values", "Commands"]);
+    expect(placement("tel_count")).toEqual(["Live values", "Commands"]);
+    expect(rowOf("tel_count").editable).toBe(true);
     expect(placement("tick_load_mean_q15")).toEqual(["Live values", "Health"]);
     expect(placement("stack_free_min")).toEqual(["Live values", "Health"]);
     expect(placement("window_v_floor_q15")).toEqual(["Live values", "Health"]);

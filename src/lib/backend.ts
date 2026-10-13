@@ -60,6 +60,25 @@ export async function openClient(): Promise<OscClient> {
   return OscClient.connect(device ?? (await requestDevice()));
 }
 
+/**
+ * The recording carries the terminal taps but not the kernel's differential:
+ * the sim publishes `a - b`, held through the windows the recording marks
+ * unread, as the kernel holds `vdiff_counts`.
+ */
+function heldDiff(
+  a: readonly number[],
+  b: readonly number[],
+  valid: readonly number[],
+): Int16Array {
+  const out = new Int16Array(a.length);
+  let held = 0;
+  for (let i = 0; i < a.length; i++) {
+    if (valid[i] !== 0) held = (a[i] ?? 0) - (b[i] ?? 0);
+    out[i] = held;
+  }
+  return out;
+}
+
 // Loaded on demand: the recording is for the simulated fleet only and stays
 // out of the bundle a real adapter needs.
 async function simTrack(): Promise<Track> {
@@ -69,7 +88,7 @@ async function simTrack(): Promise<Track> {
     current: Int16Array.from(track.current),
     currentTrough: Uint16Array.from(track.currentTrough),
     dutyQ15: Int16Array.from(track.dutyQ15),
-    vdiff: Int16Array.from(track.vdiff),
+    vdiff: heldDiff(track.vmotorA, track.vmotorB, track.windowValid),
     vbus: Uint16Array.from(track.vbus),
     currentRaw: Uint16Array.from(track.currentRaw),
     vmotorA: Uint16Array.from(track.vmotorA),

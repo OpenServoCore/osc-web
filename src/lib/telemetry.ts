@@ -17,8 +17,9 @@ export const POLL_HZ = 10;
 const Q16 = 2 ** 16;
 
 /**
- * One sample in device counts: `velocity` and `goalVelocity` are counts/s, the
- * duties q15, `modeActive` the `mode` enum's discriminant, `t` seconds.
+ * One sample in device counts: `velocity` and `goalVelocity` are counts/s,
+ * `goalDuty` q15, `dutyTicks` PWM compare counts, `modeActive` the `mode`
+ * enum's discriminant, `t` seconds.
  */
 export interface Sample {
   t: number;
@@ -29,13 +30,17 @@ export interface Sample {
   goalVelocity: number;
   goalCurrent: number;
   goalDuty: number;
-  dutyApplied: number;
+  dutyTicks: number;
   modeActive: number;
   velocity: number;
   current: number;
   vbus: number;
-  vmotorA: number;
-  vmotorB: number;
+  /**
+   * `vdiff_counts`, the kernel's drive-window differential: a poll of the two
+   * taps can land while the next scan holds them in sample order (protocol
+   * sec 5.6).
+   */
+  vdiff: number;
   ntc: number;
   windingCc: number;
 }
@@ -44,6 +49,8 @@ export interface TelemetryConfig {
   sense: Sense;
   cal: Calibration;
   biases: Biases;
+  /** Full scale of `duty_ticks`. */
+  pwmPeriodTicks: number;
 }
 
 export const SAMPLE_REGISTERS: readonly string[] = [
@@ -53,12 +60,11 @@ export const SAMPLE_REGISTERS: readonly string[] = [
   "goal_current",
   "mode_active",
   "omega_hat_cps",
-  "duty_applied_q15",
+  "duty_ticks",
   "pos_lut_state",
   "pos",
-  "current",
-  "vmotor_a",
-  "vmotor_b",
+  "current_raw",
+  "vdiff_counts",
   "vbus_raw",
   "ntc_raw",
   "t_winding_cc",
@@ -77,6 +83,7 @@ export function registersOf(binder: (read: ReadRegister) => unknown): string[] {
 export const CONFIG_REGISTERS: readonly string[] = [
   ...registersOf(senseFromTable),
   ...registersOf(calibrationFromTable),
+  "pwm_period_ticks",
 ];
 export const BIAS_REGISTERS: readonly string[] = registersOf(biasesFromTable);
 
@@ -89,13 +96,12 @@ export function decodeSample(read: ReadRegister, t: number): Sample {
     goalVelocity: read("goal_velocity"),
     goalCurrent: read("goal_current"),
     goalDuty: read("goal_duty"),
-    dutyApplied: read("duty_applied_q15"),
+    dutyTicks: read("duty_ticks"),
     modeActive: read("mode_active"),
     velocity: read("omega_hat_cps") / Q16,
-    current: read("current"),
+    current: read("current_raw"),
     vbus: read("vbus_raw"),
-    vmotorA: read("vmotor_a"),
-    vmotorB: read("vmotor_b"),
+    vdiff: read("vdiff_counts"),
     ntc: read("ntc_raw"),
     windingCc: read("t_winding_cc"),
   };
@@ -107,5 +113,6 @@ export function configFrom(read: ReadRegister): TelemetryConfig {
     sense: senseFromTable(read),
     cal: calibrationFromTable(read),
     biases: biasesFromTable(read),
+    pwmPeriodTicks: read("pwm_period_ticks"),
   };
 }

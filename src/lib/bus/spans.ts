@@ -151,7 +151,7 @@ export const CONSTANT_REGISTERS: readonly string[] = [
 /** TELEMETRY sensors the cards show, plus the biases their conversion needs. */
 export const LIVE_REGISTERS: readonly string[] = [
   "pos",
-  "current",
+  "current_raw",
   "vbus_raw",
   "ntc_raw",
   "current_bias_counts",
@@ -206,7 +206,7 @@ export interface Live {
 export function liveFrom(read: ReadRegister): Live {
   return {
     pos: read("pos"),
-    current: read("current"),
+    current: read("current_raw"),
     vbusRaw: read("vbus_raw"),
     ntcRaw: read("ntc_raw"),
     biases: biasesFromTable(read),

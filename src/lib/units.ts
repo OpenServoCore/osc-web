@@ -206,6 +206,11 @@ export function currentMa(counts: number, biasCounts: number, sense: Sense): num
   return (counts - biasCounts) * ampsPerCount(sense) * 1000;
 }
 
+/** `duty_ticks` as a percent of full drive. */
+export function dutyTicksPercent(ticks: number, pwmPeriodTicks: number): number {
+  return (ticks / pwmPeriodTicks) * 100;
+}
+
 /** Mirrors Board.vsys_v. Takes `vbus_raw`, never the estimator's `vbus_counts`. */
 export function busV(vbusRawCounts: number, sense: Sense): number {
   return vbusRawCounts * busVoltsPerCount(sense);

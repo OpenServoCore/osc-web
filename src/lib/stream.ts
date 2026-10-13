@@ -1,143 +1,224 @@
-// The Stream tab minus React: the TEL burst frame layout (protocol sec 5.6),
-// the mask that picks a row's fields and its admission at the line's rate,
-// the decoder (rows unpack through osc-protocol in the wasm), and the CSV
-// export.
+// The Stream tab minus React: the fields a TEL row can copy and the chunks
+// that cover them (protocol sec 5.6), the 3 M rule, the decoder (a row is
+// table bytes, read at the descriptor's offsets) and the CSV export.
 
-import { telDecodeRow, telRowBytes, telStreamFrame, type BaudRate } from "@openservocore/client";
-import { BAUD_RATES, fixed, formatBaud } from "./format";
-import { q4ToCounts } from "./pos-lut";
+import {
+  telBaud,
+  telChunksMax,
+  telChunksValid,
+  telRowBytesMax,
+  telStreamFrame,
+  type BaudRate,
+  type TelChunk,
+  type TelColumn,
+} from "@openservocore/client";
+import { fixed, formatBaud } from "./format";
 import type { TelemetryConfig } from "./telemetry";
+import { windingC } from "./thermal";
 import {
   busV,
   currentMa,
   DISPLAY,
+  dutyTicksPercent,
   motorV,
   positionDeg,
   temperatureC,
   vdiffV,
+  velocityDegPerS,
   type Display,
 } from "./units";
 
 const FLAG_LAST = 1;
-const MASK_ALL = 0xfff;
-/** capability_flags bit 0: tel_wide_fields and tel_row_bytes_max are published. */
-export const CAP_TEL_ROWS = 1;
+/** `tick_flags` bit 0: the shunt read this tick's window. */
+const TICK_FLAG_I_VALID = 1;
+/** theta_hat_q16 and omega_hat_cps carry 16 fraction bits. */
+const Q16 = 2 ** 16;
 
 export type Family = "position" | "electrical";
 
-/** In `tel_mask` bit order. `key` is the firmware's TelSample name, so a CSV column names it. */
+/**
+ * In table order: the tick block, then the medium-rate estimates. `key` is
+ * the descriptor's name, so a CSV column names it.
+ */
 export const FIELDS = [
-  { key: "pos", label: "Position", bit: 0, family: "position" },
-  { key: "current", label: "Current", bit: 1, family: "electrical" },
-  { key: "current_trough", label: "Current trough", bit: 2, family: "electrical" },
+  { key: "current_raw", label: "Current raw", family: "electrical", estimate: false },
+  { key: "vmotor_a", label: "Motor A", family: "electrical", estimate: false },
+  { key: "vmotor_b", label: "Motor B", family: "electrical", estimate: false },
+  { key: "pos", label: "Position", family: "position", estimate: false },
+  { key: "vcal", label: "Vcal", family: "electrical", estimate: false },
+  { key: "vbus_raw", label: "Bus raw", family: "electrical", estimate: false },
+  { key: "ntc_raw", label: "NTC raw", family: "electrical", estimate: false },
   // Signed PWM compare counts; full scale is pwm_period_ticks.
-  { key: "duty", label: "Duty", bit: 3, family: "electrical" },
-  { key: "vdiff", label: "Motor V", bit: 4, family: "electrical" },
-  { key: "vbus", label: "Bus V", bit: 5, family: "electrical" },
-  { key: "current_raw", label: "Current raw", bit: 6, family: "electrical" },
-  { key: "vmotor_a", label: "Motor A", bit: 7, family: "electrical" },
-  { key: "vmotor_b", label: "Motor B", bit: 8, family: "electrical" },
-  { key: "vbus_raw", label: "Bus raw", bit: 9, family: "electrical" },
-  { key: "ntc_raw", label: "NTC raw", bit: 10, family: "electrical" },
-  // The Q4 word the kernel controlled on that tick (protocol sec 5.7).
-  { key: "pos_lin", label: "Position (linearized)", bit: 11, family: "position" },
+  { key: "duty_ticks", label: "Duty", family: "electrical", estimate: false },
+  { key: "current_trough", label: "Current trough", family: "electrical", estimate: false },
+  { key: "i_tick_counts", label: "Current", family: "electrical", estimate: false },
+  { key: "vdiff_counts", label: "Motor V", family: "electrical", estimate: false },
+  { key: "vmotor_a_trough", label: "Motor A trough", family: "electrical", estimate: false },
+  { key: "vmotor_b_trough", label: "Motor B trough", family: "electrical", estimate: false },
+  { key: "tick_flags", label: "Tick flags", family: "electrical", estimate: false },
+  { key: "sample_tick", label: "Sample tick", family: "electrical", estimate: false },
+  { key: "theta_hat_q16", label: "Position estimate", family: "position", estimate: true },
+  { key: "omega_hat_cps", label: "Velocity estimate", family: "position", estimate: true },
+  { key: "tau_d_counts", label: "Disturbance", family: "electrical", estimate: true },
+  { key: "i_lim_counts", label: "Current ceiling", family: "electrical", estimate: true },
+  { key: "t_winding_cc", label: "Winding temp", family: "electrical", estimate: true },
+  { key: "vbus_counts", label: "Bus V", family: "electrical", estimate: true },
 ] as const satisfies readonly {
   key: string;
   label: string;
-  bit: number;
   family: Family;
+  estimate: boolean;
 }[];
 
 export type FieldDef = (typeof FIELDS)[number];
 export type FieldKey = FieldDef["key"];
 
-/** Position, the raw current window, both terminal taps and the raw bus tap. */
-export const DEFAULT_FIELDS: readonly FieldKey[] = [
-  "pos",
-  "current_raw",
-  "vmotor_a",
-  "vmotor_b",
-  "vbus_raw",
-];
+export const PRESETS = [
+  {
+    label: "Default six",
+    keys: ["current_raw", "vmotor_a", "vmotor_b", "pos", "duty_ticks", "current_trough"],
+  },
+  { label: "Ident four", keys: ["pos", "duty_ticks", "i_tick_counts", "vdiff_counts"] },
+  {
+    label: "Raw frame",
+    keys: ["current_raw", "vmotor_a", "vmotor_b", "pos", "vcal", "vbus_raw"],
+  },
+] as const satisfies readonly { label: string; keys: readonly FieldKey[] }[];
 
-export function maskOf(keys: Iterable<FieldKey>): number {
-  let mask = 0;
-  for (const key of keys) {
-    const field = FIELDS.find((f) => f.key === key);
-    if (field !== undefined) mask |= 1 << field.bit;
-  }
-  return mask;
+export const DEFAULT_FIELDS: readonly FieldKey[] = PRESETS[0].keys;
+
+/** Where a field sits in the table, from the descriptor. */
+export interface Placement {
+  addr: number;
+  width: number;
 }
 
-/** The mask's fields in bit order. */
-export function fieldsOf(mask: number): FieldDef[] {
-  return FIELDS.filter((f) => (mask & (1 << f.bit)) !== 0);
-}
+export type Cover = { chunks: TelChunk[]; issue?: undefined } | { issue: string };
 
-/**
- * The longest row the servo streams at `baud`: its `tel_row_bytes_max` entry
- * at that rate's index, or undefined when `capability_flags` says the
- * firmware publishes none.
- */
-export function rowBytesMax(caps: number, perRate: Uint8Array, baud: BaudRate): number | undefined {
-  if ((caps & CAP_TEL_ROWS) === 0) return undefined;
-  return perRate[BAUD_RATES.indexOf(baud)];
+function run(fields: readonly Placement[]): TelChunk {
+  const addr = fields[0]?.addr ?? 0;
+  const end = Math.max(...fields.map((f) => f.addr + f.width));
+  return { addr, len: end - addr };
 }
 
 /**
- * Why the servo would not stream this mask at `baud`, or undefined. An arm
- * whose row outgrows the limit acks and then disarms, so the host checks
- * first, as osc does.
+ * The chunks a row copies to carry `keys`: one run of the table per group,
+ * the estimates in a chunk of their own (the servo copies every chunk when it
+ * publishes the tick block, so estimates arrive as last published, up to one
+ * tick old), and a lone group split at its widest gap when one run outgrows
+ * the row. Fields inside a run's gaps ride along.
  */
-export function maskIssue(
-  mask: number,
-  baud: BaudRate,
-  max: number | undefined,
-): string | undefined {
-  if ((mask & ~MASK_ALL) !== 0) return "mask has reserved bits set";
-  if (fieldsOf(mask).length === 0) return "pick at least one field";
-  if (max === undefined) {
-    return "the servo publishes no TEL row limits: its firmware predates packed TEL rows";
+export function coverFields(
+  keys: Iterable<FieldKey>,
+  layout: ReadonlyMap<string, Placement>,
+): Cover {
+  const wanted = new Set(keys);
+  const placed: (Placement & { estimate: boolean })[] = [];
+  for (const f of FIELDS) {
+    if (!wanted.has(f.key)) continue;
+    const at = layout.get(f.key);
+    if (at === undefined) return { issue: `the servo's table has no ${f.key}` };
+    placed.push({ addr: at.addr, width: at.width, estimate: f.estimate });
   }
-  const row = telRowBytes(mask);
-  if (row > max) {
-    return `these fields pack to ${row} B rows; the servo streams rows of at most ${max} B at ${formatBaud(baud)}. Raise the speed or capture the fields over two bursts.`;
+  if (placed.length === 0) return { issue: "pick at least one field" };
+  placed.sort((a, b) => a.addr - b.addr);
+  const max = telRowBytesMax();
+  let groups = [placed.filter((f) => !f.estimate), placed.filter((f) => f.estimate)].filter(
+    (g) => g.length > 0,
+  );
+  if (groups.length === 1 && run(placed).len > max && telChunksMax() > 1) {
+    const gap = (i: number) => {
+      const left = placed[i - 1];
+      return (placed[i]?.addr ?? 0) - (left === undefined ? 0 : left.addr + left.width);
+    };
+    let cut = 1;
+    for (let i = 2; i < placed.length; i++) if (gap(i) > gap(cut)) cut = i;
+    groups = [placed.slice(0, cut), placed.slice(cut)];
   }
-  return undefined;
+  const chunks = groups.map(run);
+  const total = rowBytes(chunks);
+  if (total > max || !telChunksValid(chunks)) {
+    return {
+      issue: `these fields need ${total} B rows; a row copies at most ${max} B in at most ${telChunksMax()} runs of the table. Untick some fields or capture them over two bursts.`,
+    };
+  }
+  return { chunks };
+}
+
+export function rowBytes(chunks: readonly TelChunk[]): number {
+  return chunks.reduce((sum, c) => sum + c.len, 0);
+}
+
+/** Why a burst at `baud` would not stream, or undefined: below the TEL rate the servo acks the arm and stays silent. */
+export function rateIssue(baud: BaudRate): string | undefined {
+  if (baud === telBaud()) return undefined;
+  const tel = formatBaud(telBaud());
+  return `TEL streams at ${tel}baud only: raise the bus speed to ${tel}, and use a short cable with good contacts.`;
 }
 
 export interface Row {
   /** Fast-tick index from the burst's first row; a lost frame or a dropped row leaves missing indices. */
   sample: number;
-  /** This tick's drive window met the sampling floors (the frame's `valid` bitmap). */
-  valid: boolean;
-  values: Partial<Record<FieldKey, number>>;
+  /** This tick's current window was read; undefined when the row carries neither tick_flags nor duty_ticks. */
+  valid: boolean | undefined;
+  values: Partial<Record<string, number>>;
 }
 
 /**
- * Splits the CRC-clean stream payloads of one burst into rows. A frame's
- * head stamps its first row with the servo's tick (u16) and its length
- * gives the row count, so each frame's rows tick on from its stamp,
+ * The kernel's window rule: `tick_flags` I_VALID when the row carries it,
+ * else a nonzero duty at least `i_window_min_ticks` wide.
+ */
+export function windowValid(
+  values: Partial<Record<string, number>>,
+  iWindowMinTicks: number | undefined,
+): boolean | undefined {
+  const flags = values.tick_flags;
+  if (flags !== undefined) return (flags & TICK_FLAG_I_VALID) !== 0;
+  const duty = values.duty_ticks;
+  if (duty === undefined || iWindowMinTicks === undefined) return undefined;
+  return duty !== 0 && Math.abs(duty) >= iWindowMinTicks;
+}
+
+function readLe(view: DataView, at: number, column: TelColumn): number | undefined {
+  switch (column.width) {
+    case 1:
+      return column.signed ? view.getInt8(at) : view.getUint8(at);
+    case 2:
+      return column.signed ? view.getInt16(at, true) : view.getUint16(at, true);
+    case 4:
+      return column.signed ? view.getInt32(at, true) : view.getUint32(at, true);
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Splits the CRC-clean stream payloads of one burst into rows of `rowBytes`.
+ * A frame's head stamps its first row with the servo's tick (u16) and its
+ * length gives the row count, so each frame's rows tick on from its stamp,
  * unwrapped against the previous frame's: a lost frame or rows the servo
  * dropped leave missing samples. The first frame's first row is sample 0.
- * A payload that cannot be a `mask` frame is skipped.
+ * A payload that cannot be a frame of these rows is skipped.
  */
-export function decodeBurst(frames: readonly Uint8Array[], mask: number): Row[] {
-  const fields = fieldsOf(mask);
-  const len = telRowBytes(mask);
+export function decodeBurst(
+  frames: readonly Uint8Array[],
+  columns: readonly TelColumn[],
+  rowBytes: number,
+  iWindowMinTicks: number | undefined,
+): Row[] {
   const rows: Row[] = [];
   let stamp: number | undefined;
   let base = 0;
   for (const payload of frames) {
-    const frame = telStreamFrame(mask, payload);
+    const frame = telStreamFrame(rowBytes, payload);
     if (frame === undefined) continue;
     if (stamp !== undefined) base += (frame.tick - stamp) & 0xffff;
     stamp = frame.tick;
-    for (let at = 0, i = 0; at < frame.rows.length; at += len, i++) {
-      const decoded = telDecodeRow(mask, frame.rows.subarray(at, at + len));
-      const values: Partial<Record<FieldKey, number>> = {};
-      for (const f of fields) values[f.key] = decoded?.[f.bit];
-      rows.push({ sample: base + i, valid: ((frame.valid >>> i) & 1) !== 0, values });
+    const view = new DataView(frame.rows.buffer, frame.rows.byteOffset, frame.rows.byteLength);
+    for (let at = 0, i = 0; at + rowBytes <= frame.rows.length; at += rowBytes, i++) {
+      const values: Partial<Record<string, number>> = {};
+      for (const c of columns) values[c.name] = readLe(view, at + c.offset, c);
+      rows.push({ sample: base + i, valid: windowValid(values, iWindowMinTicks), values });
     }
   }
   return rows;
@@ -191,72 +272,88 @@ export function summaryText(s: Summary): string {
 
 /** One CSV column and chart series: a field's counts through one converter. */
 export interface Unit extends Display {
-  key: FieldKey;
+  key: string;
   convert: (counts: number) => number;
 }
 
 const COUNTS: Display = DISPLAY.raw;
 const PERCENT: Display = { unit: "%", digits: 1 };
-/** Linearized counts carry a 1/16 fraction. */
-const LIN_COUNTS: Display = { unit: "counts", digits: 1 };
+const Q16_COUNTS: Display = { unit: "counts", digits: 1 };
+const COUNTS_PER_S: Display = { unit: "counts/s", digits: 0 };
 
 export interface StreamConfig extends TelemetryConfig {
   tickHz: number;
-  pwmPeriodTicks: number;
+  iWindowMinTicks: number;
+}
+
+function realUnit(key: string, config: StreamConfig, raw: boolean): Unit | undefined {
+  const { sense, cal, biases, pwmPeriodTicks } = config;
+  const unit = (display: Display, convert: (c: number) => number): Unit => ({
+    key,
+    ...display,
+    convert,
+  });
+  switch (key) {
+    case "pos":
+      return raw ? undefined : unit(DISPLAY.position, (c) => positionDeg(c, cal));
+    case "theta_hat_q16":
+      return raw
+        ? unit(Q16_COUNTS, (c) => c / Q16)
+        : unit(DISPLAY.position, (c) => positionDeg(c / Q16, cal));
+    case "omega_hat_cps":
+      return raw
+        ? unit(COUNTS_PER_S, (c) => c / Q16)
+        : unit(DISPLAY.velocity, (c) => velocityDegPerS(c / Q16, cal));
+    // The kernel's own bias-subtracted counts: no bias to take out again.
+    case "i_tick_counts":
+    case "tau_d_counts":
+    case "i_lim_counts":
+      return unit(DISPLAY.current, (c) => currentMa(c, 0, sense));
+    case "current_trough":
+    case "current_raw":
+      return unit(DISPLAY.current, (c) => currentMa(c, biases.currentBiasCounts, sense));
+    case "duty_ticks":
+      return unit(PERCENT, (c) => dutyTicksPercent(c, pwmPeriodTicks));
+    case "vdiff_counts":
+      return unit(DISPLAY.motorVoltage, (c) => vdiffV(c, 0, sense));
+    case "vbus_raw":
+    case "vbus_counts":
+      return unit(DISPLAY.busVoltage, (c) => busV(c, sense));
+    case "vmotor_a":
+    case "vmotor_b":
+    case "vmotor_a_trough":
+    case "vmotor_b_trough":
+      return unit(DISPLAY.motorVoltage, (c) => motorV(c, biases.vmotorBiasCounts, sense));
+    case "ntc_raw":
+      return unit(DISPLAY.temperature, (c) => temperatureC(c, sense));
+    case "t_winding_cc":
+      return unit(DISPLAY.temperature, windingC);
+    default:
+      return undefined;
+  }
 }
 
 /**
  * Real units through the servo's own sense chain and calibration; the raw
  * preference reverts the position family to counts, the electrical fields
- * stay real. Without a config every field is counts.
+ * stay real. Without a config, or for a field with no conversion, counts.
  */
-export function unitsFor(mask: number, config: StreamConfig | undefined, raw: boolean): Unit[] {
-  return fieldsOf(mask).map((f) => {
-    const counts: Unit = { key: f.key, ...COUNTS, convert: (c) => c };
-    if (f.key === "pos_lin" && (config === undefined || raw)) {
-      return { key: f.key, ...LIN_COUNTS, convert: q4ToCounts };
-    }
-    if (config === undefined) return counts;
-    const { sense, cal, biases, pwmPeriodTicks } = config;
-    switch (f.key) {
-      case "pos":
-        return raw
-          ? counts
-          : { key: f.key, ...DISPLAY.position, convert: (c) => positionDeg(c, cal) };
-      // The stops map to themselves, so the same angle map applies.
-      case "pos_lin":
-        return { key: f.key, ...DISPLAY.position, convert: (c) => positionDeg(q4ToCounts(c), cal) };
-      // The kernel's own bias-subtracted sample: no bias to take out again.
-      case "current":
-        return { key: f.key, ...DISPLAY.current, convert: (c) => currentMa(c, 0, sense) };
-      case "current_trough":
-      case "current_raw":
-        return {
-          key: f.key,
-          ...DISPLAY.current,
-          convert: (c) => currentMa(c, biases.currentBiasCounts, sense),
-        };
-      case "duty":
-        return { key: f.key, ...PERCENT, convert: (c) => (c / pwmPeriodTicks) * 100 };
-      case "vdiff":
-        return { key: f.key, ...DISPLAY.motorVoltage, convert: (c) => vdiffV(c, 0, sense) };
-      case "vbus":
-      case "vbus_raw":
-        return { key: f.key, ...DISPLAY.busVoltage, convert: (c) => busV(c, sense) };
-      case "vmotor_a":
-      case "vmotor_b":
-        return {
-          key: f.key,
-          ...DISPLAY.motorVoltage,
-          convert: (c) => motorV(c, biases.vmotorBiasCounts, sense),
-        };
-      case "ntc_raw":
-        return { key: f.key, ...DISPLAY.temperature, convert: (c) => temperatureC(c, sense) };
-    }
-  });
+export function unitsFor(
+  columns: readonly Pick<TelColumn, "name">[],
+  config: StreamConfig | undefined,
+  raw: boolean,
+): Unit[] {
+  return columns.map(
+    ({ name }) =>
+      (config === undefined ? undefined : realUnit(name, config, raw)) ?? {
+        key: name,
+        ...COUNTS,
+        convert: (c) => c,
+      },
+  );
 }
 
-export function familyOf(key: FieldKey): Family {
+export function familyOf(key: string): Family {
   return FIELDS.find((f) => f.key === key)?.family ?? "electrical";
 }
 
@@ -264,7 +361,7 @@ export function csvHeader(units: readonly Unit[]): string {
   return ["sample", "valid", ...units.map((u) => `${u.key} (${u.unit})`)].join(",");
 }
 
-/** Header, then one line per row; a field the row lacks is an empty cell. */
+/** Header, then one line per row; a value the row lacks is an empty cell. */
 export function toCsv(rows: readonly Row[], units: readonly Unit[]): string {
   const lines = [csvHeader(units)];
   for (const row of rows) {
@@ -272,7 +369,8 @@ export function toCsv(rows: readonly Row[], units: readonly Unit[]): string {
       const counts = row.values[u.key];
       return counts === undefined ? "" : fixed(u.convert(counts), u.digits);
     });
-    lines.push([row.sample, row.valid ? 1 : 0, ...cells].join(","));
+    const valid = row.valid === undefined ? "" : row.valid ? 1 : 0;
+    lines.push([row.sample, valid, ...cells].join(","));
   }
   return `${lines.join("\n")}\n`;
 }

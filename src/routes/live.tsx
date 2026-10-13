@@ -72,6 +72,7 @@ import {
   calibrationStatus,
   currentMa,
   DISPLAY,
+  dutyTicksPercent,
   positionDeg,
   temperatureC,
   vdiffV,
@@ -191,7 +192,7 @@ function convert(
     velocity: raw ? s.velocity : velocityDegPerS(s.velocity, cal),
     current: currentMa(s.current, biases.currentBiasCounts, sense),
     busVoltage: busV(s.vbus, sense),
-    motorVoltage: vdiffV(s.vmotorA, s.vmotorB, sense),
+    motorVoltage: vdiffV(s.vdiff, 0, sense),
     temperature: temperatureC(s.ntc, sense),
     winding: windingC(s.windingCc),
   };
@@ -793,7 +794,7 @@ function Controls({
           </dd>
           <dt>Applied duty</dt>
           <dd aria-label="Applied duty value" className="font-mono tabular-nums">
-            {dutyPercent(latest.dutyApplied).toFixed(1)} %
+            {dutyTicksPercent(latest.dutyTicks, config.pwmPeriodTicks).toFixed(1)} %
           </dd>
         </dl>
       )}

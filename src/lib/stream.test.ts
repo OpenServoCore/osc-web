@@ -1,21 +1,22 @@
-import { initSync } from "@openservocore/client";
+import { Descriptor, initSync, telColumns, type TelChunk } from "@openservocore/client";
 import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
+import descriptorJson from "../../../open-servo-core/descriptors/osc-servo/0.1.json";
 import fixture from "../../tests/fixtures/stall-24mhz.json";
 import {
-  CAP_TEL_ROWS,
+  coverFields,
   decodeBurst,
   DEFAULT_FIELDS,
-  FIELDS,
-  fieldsOf,
   isLast,
-  maskIssue,
-  maskOf,
-  rowBytesMax,
+  PRESETS,
+  rateIssue,
+  rowBytes,
   summarize,
   summaryText,
   toCsv,
   unitsFor,
+  windowValid,
+  type FieldKey,
   type StreamConfig,
 } from "./stream";
 import { calibrationFromTable, senseFromTable } from "./units";
@@ -26,119 +27,166 @@ initSync({
   ),
 });
 
+const descriptor = Descriptor.parse(JSON.stringify(descriptorJson));
+const layout = new Map(descriptorJson.fields.map((f) => [f.name, f]));
+
 const u16 = (v: number) => [v & 0xff, (v >> 8) & 0xff];
-/** Two 12-bit fields in three bytes: the 24-bit LE word `a | b << 12`. */
-const pair = (a: number, b: number) => {
-  const w = (a & 0xfff) | ((b & 0xfff) << 12);
-  return [w & 0xff, (w >> 8) & 0xff, w >> 16];
-};
+const u32 = (v: number) => [...u16(v & 0xffff), ...u16((v >>> 16) & 0xffff)];
 
-const u32 = (v: number) => [...u16(v & 0xffff), ...u16(v >>> 16)];
-
-/** A frame of `rows`, its first stamped `tick`, the valid bit set on even rows. */
+/** A stream frame payload: seq, flags, the first row's tick, then the rows. */
 function frame(seq: number, last: boolean, tick: number, rows: readonly number[][]): Uint8Array {
-  let valid = 0;
-  rows.forEach((_, i) => {
-    if (i % 2 === 0) valid = (valid | (1 << i)) >>> 0;
-  });
-  return Uint8Array.from([seq, last ? 1 : 0, ...u16(tick), ...rows.flat(), ...u32(valid), 0, 0]);
+  return Uint8Array.from([seq, last ? 1 : 0, ...u16(tick), ...rows.flat()]);
 }
 
-/** Position alone rides in one 16-bit slot. */
+function chunksOf(keys: readonly FieldKey[]): TelChunk[] {
+  const cover = coverFields(keys, layout);
+  if (cover.issue !== undefined) throw new Error(cover.issue);
+  return cover.chunks;
+}
+
+function decode(keys: readonly FieldKey[], frames: readonly Uint8Array[], windowMin = 60) {
+  const chunks = chunksOf(keys);
+  return decodeBurst(frames, telColumns(descriptor, chunks), rowBytes(chunks), windowMin);
+}
+
+/** Position alone rides in one 16-bit run. */
 const posRows = (n: number) => Array.from({ length: n }, (_, i) => u16(0x100 + i));
 
-/** The 1 M, 2 M and 3 M limits the core seeds; 0.5 M carries none. */
-const PER_RATE = Uint8Array.from([0, 3, 8, 11]);
-
-test("the field table is in mask bit order and the default mask packs to an 8 B row", () => {
-  expect(FIELDS.map((f) => f.bit)).toEqual([...FIELDS.keys()]);
-  expect(FIELDS.at(-1)?.key).toBe("pos_lin");
-  expect(maskOf(DEFAULT_FIELDS)).toBe(0x3c1);
-  expect(fieldsOf(0x3c1).map((f) => f.key)).toEqual(DEFAULT_FIELDS);
-  expect(maskIssue(0x3c1, "b2000000", 8)).toBeUndefined();
+test("the presets are the protocol's common rows", () => {
+  const [six, ident, raw] = PRESETS.map((p) => chunksOf(p.keys));
+  // protocol sec 5.6: the six in two runs, identification's four in two with
+  // current_trough riding along, the crest scan in one.
+  expect(six).toEqual([
+    { addr: 0x232, len: 8 },
+    { addr: 0x240, len: 4 },
+  ]);
+  expect(ident).toEqual([
+    { addr: 0x238, len: 2 },
+    { addr: 0x240, len: 8 },
+  ]);
+  expect(telColumns(descriptor, chunksOf(PRESETS[1].keys)).map((c) => c.name)).toEqual([
+    "pos",
+    "duty_ticks",
+    "current_trough",
+    "i_tick_counts",
+    "vdiff_counts",
+  ]);
+  expect(raw).toEqual([{ addr: 0x232, len: 12 }]);
+  expect(DEFAULT_FIELDS).toEqual(PRESETS[0].keys);
 });
 
-test("admission is the servo's row limit at the line's rate, as osc refuses it", () => {
-  expect(rowBytesMax(CAP_TEL_ROWS, PER_RATE, "b1000000")).toBe(3);
-  expect(rowBytesMax(CAP_TEL_ROWS, PER_RATE, "b3000000")).toBe(11);
-  expect(rowBytesMax(0, PER_RATE, "b3000000")).toBeUndefined();
-  expect(maskIssue(0x3c1, "b1000000", 3)).toBe(
-    "these fields pack to 8 B rows; the servo streams rows of at most 3 B at 1 M. Raise the speed or capture the fields over two bursts.",
-  );
-  // The six raw fields: 9 B, past 2 M's 8, inside 3 M's 11.
-  expect(maskIssue(0x1cd, "b2000000", 8)).toMatch(
-    /^these fields pack to 9 B rows; .* 8 B at 2 M\./,
-  );
-  expect(maskIssue(0x1cd, "b3000000", 11)).toBeUndefined();
-  expect(maskIssue(0xfff, "b3000000", 11)).toMatch(/pack to 20 B rows/);
-  expect(maskIssue(0x3c1, "b3000000", undefined)).toBe(
-    "the servo publishes no TEL row limits: its firmware predates packed TEL rows",
-  );
-  expect(maskIssue(0, "b3000000", 11)).toBe("pick at least one field");
-  expect(maskIssue(1 << 12, "b3000000", 11)).toBe("mask has reserved bits set");
+test("an estimate rides in the second chunk behind the tick block", () => {
+  const pos = layout.get("pos");
+  const omega = layout.get("omega_hat_cps");
+  expect(chunksOf(["omega_hat_cps", "pos"])).toEqual([
+    { addr: pos?.addr, len: 2 },
+    { addr: omega?.addr, len: 4 },
+  ]);
 });
 
-test("the protocol's golden row decodes: a lone 12-bit slot, wide signed slots, a signed duty pair", () => {
-  const mask = maskOf(["pos", "current", "duty", "vdiff", "ntc_raw"]);
-  const golden = [0x23, 0x01, 0xfe, 0xff, 0xd4, 0xfe, 0xfb, 0xcf, 0xab];
-  const rows = decodeBurst([frame(0x42, false, 0x1234, [golden, golden])], mask);
+test("one block wider than a row splits at its widest gap", () => {
+  expect(chunksOf(["current_raw", "vmotor_a", "i_tick_counts", "vdiff_counts"])).toEqual([
+    { addr: 0x232, len: 4 },
+    { addr: 0x244, len: 4 },
+  ]);
+});
+
+test("a selection no two runs of 12 B cover is refused in plain words", () => {
+  expect(coverFields(["current_raw", "ntc_raw", "sample_tick"], layout)).toEqual({
+    issue:
+      "these fields need 18 B rows; a row copies at most 12 B in at most 2 runs of the table. Untick some fields or capture them over two bursts.",
+  });
+  expect(coverFields([], layout)).toEqual({ issue: "pick at least one field" });
+  expect(coverFields(["pos"], new Map())).toEqual({ issue: "the servo's table has no pos" });
+});
+
+test("a burst arms only at the TEL rate", () => {
+  expect(rateIssue("b3000000")).toBeUndefined();
+  expect(rateIssue("b1000000")).toBe(
+    "TEL streams at 3 Mbaud only: raise the bus speed to 3 M, and use a short cable with good contacts.",
+  );
+  expect(rateIssue("b2000000")).toMatch(/^TEL streams at 3 Mbaud only/);
+});
+
+test("a row decodes at the descriptor's offsets, signed where the table is", () => {
+  const head = [...u16(2100), ...u16(800), ...u16(700), ...u16(0x123)];
+  const rows = decode(
+    ["current_raw", "vmotor_a", "vmotor_b", "pos", "duty_ticks", "current_trough"],
+    [
+      frame(0x42, false, 0x1234, [
+        [...head, ...u16(-300 & 0xffff), ...u16(100)],
+        [...head, ...u16(0), ...u16(100)],
+      ]),
+    ],
+  );
   expect(rows).toHaveLength(2);
   // The first frame's first row is sample 0, whatever its seq and stamp.
   expect(rows[0]).toEqual({
     sample: 0,
     valid: true,
-    values: { pos: 0x123, current: -2, duty: -5, vdiff: -300, ntc_raw: 0xabc },
+    values: {
+      current_raw: 2100,
+      vmotor_a: 800,
+      vmotor_b: 700,
+      pos: 0x123,
+      duty_ticks: -300,
+      current_trough: 100,
+    },
   });
-  expect(rows[1]).toMatchObject({ sample: 1, valid: false });
+  expect(rows[1]).toMatchObject({ sample: 1, valid: false, values: { duty_ticks: 0 } });
 });
 
-test("the default fields pair up after the lone position and a lost frame leaves the samples its stamp skips", () => {
-  const mask = maskOf(DEFAULT_FIELDS);
-  const row = (i: number) => [...u16(0x800 + i), ...pair(0x100 + i, 0xa00), ...pair(0xb00, 0xfff)];
-  const a = frame(
-    0,
-    false,
-    100,
-    Array.from({ length: 16 }, (_, i) => row(i)),
+test("the second chunk's fields follow the first's in the row", () => {
+  const rows = decode(
+    ["pos", "omega_hat_cps"],
+    [frame(0, true, 0, [[...u16(2048), ...u32(-3 * 65536)]])],
   );
-  const c = frame(2, true, 132, [row(0), row(1), row(2)]);
-  const rows = decodeBurst([a, c], mask);
+  expect(rows[0]?.values).toEqual({ pos: 2048, omega_hat_cps: -3 * 65536 });
+  expect(rows[0]?.valid).toBeUndefined();
+});
+
+test("window validity is the duty rule, or tick_flags I_VALID when the row carries it", () => {
+  expect(windowValid({ duty_ticks: 60 }, 60)).toBe(true);
+  expect(windowValid({ duty_ticks: -60 }, 60)).toBe(true);
+  expect(windowValid({ duty_ticks: 59 }, 60)).toBe(false);
+  expect(windowValid({ duty_ticks: 0 }, 0)).toBe(false);
+  expect(windowValid({ duty_ticks: 0, tick_flags: 0b101 }, 60)).toBe(true);
+  expect(windowValid({ duty_ticks: 600, tick_flags: 0b100 }, 60)).toBe(false);
+  expect(windowValid({ pos: 1 }, 60)).toBeUndefined();
+  expect(windowValid({ duty_ticks: 600 }, undefined)).toBeUndefined();
+});
+
+test("a lost frame leaves the samples its stamp skips and the LAST flag ends the burst", () => {
+  const a = frame(0, false, 100, posRows(16));
+  const c = frame(2, true, 132, posRows(3));
+  const rows = decode(["pos"], [a, c]);
   expect(rows.map((r) => r.sample)).toEqual([...Array(16).keys(), 32, 33, 34]);
-  expect(rows[18]?.values).toEqual({
-    pos: 0x802,
-    current_raw: 0x102,
-    vmotor_a: 0xa00,
-    vmotor_b: 0xb00,
-    vbus_raw: 0xfff,
-  });
+  expect(rows[18]?.values).toEqual({ pos: 0x102 });
   expect(isLast(a)).toBe(false);
   expect(isLast(c)).toBe(true);
 });
 
 test("stamps unwrap past 0xffff and ragged payloads are skipped", () => {
-  const mask = maskOf(["pos"]);
-  const ragged = frame(1, false, 0xfff0, [[0x00, 0x01, 0x02]]);
-  const rows = decodeBurst(
+  const rows = decode(
+    ["pos"],
     [
       frame(255, false, 0xfff8, posRows(16)),
       Uint8Array.from([0, 0, 0, 0, 1]),
-      ragged,
+      frame(1, false, 0xfff0, [[0x00, 0x01, 0x02]]),
       frame(0, true, 0x0008, posRows(1)),
     ],
-    mask,
   );
   expect(rows.map((r) => r.sample)).toEqual([...Array(17).keys()]);
 });
 
 test("the row count comes from the length, and dropped rows jump the stamp without a seq hole", () => {
-  const mask = maskOf(["pos"]);
-  const rows = decodeBurst(
+  const rows = decode(
+    ["pos"],
     [
       frame(0, false, 7, posRows(24)),
       frame(1, false, 31, posRows(5)),
       frame(2, true, 40, posRows(2)),
     ],
-    mask,
   );
   expect(rows.map((r) => r.sample)).toEqual([
     ...Array(29).keys(),
@@ -146,12 +194,11 @@ test("the row count comes from the length, and dropped rows jump the stamp witho
     33,
     34,
   ]);
-  expect(rows[23]).toMatchObject({ valid: false, values: { pos: 0x100 + 23 } });
-  expect(rows[24]).toMatchObject({ valid: true, values: { pos: 0x100 } });
+  expect(rows[23]?.values).toEqual({ pos: 0x100 + 23 });
+  expect(rows[24]?.values).toEqual({ pos: 0x100 });
 });
 
 test("the summary carries the burst's counters and the decoded sample count", () => {
-  const mask = maskOf(["pos"]);
   const burst = {
     frames: [frame(0, false, 0, posRows(16)), frame(1, true, 16, posRows(4))],
     complete: true,
@@ -159,7 +206,7 @@ test("the summary carries the burst's counters and the decoded sample count", ()
     garble: 0,
     trailing: false,
   };
-  const s = summarize(burst, decodeBurst(burst.frames, mask));
+  const s = summarize(burst, decode(["pos"], burst.frames));
   expect(s).toEqual({
     frames: 2,
     samples: 20,
@@ -196,54 +243,57 @@ const config: StreamConfig = {
   biases: { currentBiasCounts: 106, vmotorBiasCounts: 779 },
   tickHz: 20_000,
   pwmPeriodTicks: 1200,
+  iWindowMinTicks: 60,
 };
 
-test("the CSV has a header naming the selected fields with their units and one line per row", () => {
-  const mask = maskOf(["pos", "current_raw"]);
-  const rows = decodeBurst([frame(0, true, 0, [pair(0x800, 0x100), pair(0x801, 0x101)])], mask);
-  const csv = toCsv(rows, unitsFor(mask, config, false));
-  const lines = csv.split("\n");
-  expect(lines[0]).toBe("sample,valid,pos (deg),current_raw (mA)");
-  expect(lines).toHaveLength(4);
-  expect(lines[3]).toBe("");
-  expect(lines[1]).toMatch(/^0,1,\d+\.\d,-?\d+$/);
-  expect(lines[2]).toMatch(/^1,0,/);
-  // Raw keeps the position family in counts and the electrical fields real.
-  const raw = toCsv(rows, unitsFor(mask, config, true));
-  expect(raw.split("\n")[0]).toBe("sample,valid,pos (counts),current_raw (mA)");
-  expect(raw.split("\n")[1]?.startsWith("0,1,2048,")).toBe(true);
-  // Without a config every column is counts.
-  expect(toCsv(rows, unitsFor(mask, undefined, false)).split("\n")[0]).toBe(
-    "sample,valid,pos (counts),current_raw (counts)",
+test("the CSV names every carried field with its unit, valid empty where the row cannot say", () => {
+  const columns = telColumns(descriptor, chunksOf(["current_raw", "vmotor_a", "vmotor_b", "pos"]));
+  const rows = decodeBurst(
+    [frame(0, true, 0, [[...u16(0x101), ...u16(800), ...u16(700), ...u16(0x800)]])],
+    columns,
+    8,
+    60,
   );
-});
-
-test("pos_lin is the Q4 word over 16, in degrees through the same angle map as pos", () => {
-  const mask = maskOf(["pos", "pos_lin"]);
-  const rows = decodeBurst([frame(0, true, 0, [[...u16(0x800), ...u16(0x800 << 4)]])], mask);
-  expect(rows[0]?.values).toEqual({ pos: 0x800, pos_lin: 0x800 << 4 });
-  const [pos, lin] = unitsFor(mask, config, false);
-  expect(lin?.unit).toBe("deg");
-  expect(lin?.convert(0x0800 << 4)).toBe(pos?.convert(0x0800));
-  const [, rawLin] = unitsFor(mask, config, true);
-  expect(rawLin).toMatchObject({ unit: "counts", digits: 1 });
-  expect(rawLin?.convert((0x1000 << 4) + 8)).toBe(4096.5);
-  expect(unitsFor(mask, undefined, false)[1]?.convert(16)).toBe(1);
-  expect(toCsv(rows, unitsFor(mask, config, false)).split("\n")[0]).toBe(
-    "sample,valid,pos (deg),pos_lin (deg)",
+  const lines = toCsv(rows, unitsFor(columns, config, false)).split("\n");
+  expect(lines[0]).toBe("sample,valid,current_raw (mA),vmotor_a (V),vmotor_b (V),pos (deg)");
+  expect(lines).toHaveLength(3);
+  expect(lines[2]).toBe("");
+  expect(lines[1]).toMatch(/^0,,-?\d+,-?\d+\.\d\d,-?\d+\.\d\d,\d+\.\d$/);
+  // Raw keeps the position family in counts and the electrical fields real.
+  const raw = toCsv(rows, unitsFor(columns, config, true)).split("\n");
+  expect(raw[0]).toBe("sample,valid,current_raw (mA),vmotor_a (V),vmotor_b (V),pos (counts)");
+  expect(raw[1]?.endsWith(",2048")).toBe(true);
+  // Without a config every column is counts.
+  expect(toCsv(rows, unitsFor(columns, undefined, false)).split("\n")[0]).toBe(
+    "sample,valid,current_raw (counts),vmotor_a (counts),vmotor_b (counts),pos (counts)",
   );
 });
 
 test("duty is signed PWM compare counts, a percent of pwm_period_ticks", () => {
-  const mask = maskOf(["duty"]);
-  const rows = decodeBurst([frame(0, true, 0, [u16(-600 & 0xfff), u16(1200)])], mask);
-  expect(rows.map((r) => r.values.duty)).toEqual([-600, 1200]);
-  const units = unitsFor(mask, config, false);
-  expect(units[0]).toMatchObject({ key: "duty", unit: "%" });
-  expect(toCsv(rows, units).split("\n").slice(0, 3)).toEqual([
-    "sample,valid,duty (%)",
+  const rows = decode(
+    ["duty_ticks"],
+    [frame(0, true, 0, [u16(-600 & 0xffff), u16(1200), u16(30)])],
+  );
+  expect(rows.map((r) => r.values.duty_ticks)).toEqual([-600, 1200, 30]);
+  const units = unitsFor([{ name: "duty_ticks" }], config, false);
+  expect(units[0]).toMatchObject({ key: "duty_ticks", unit: "%" });
+  expect(toCsv(rows, units).split("\n").slice(0, 4)).toEqual([
+    "sample,valid,duty_ticks (%)",
     "0,1,-50.0",
-    "1,0,100.0",
+    "1,1,100.0",
+    "2,0,2.5",
   ]);
-  expect(unitsFor(mask, undefined, false)[0]?.convert(-600)).toBe(-600);
+  expect(unitsFor([{ name: "duty_ticks" }], undefined, false)[0]?.convert(-600)).toBe(-600);
+});
+
+test("the estimates scale out of Q16 into degrees, or counts under the raw preference", () => {
+  const names = [{ name: "theta_hat_q16" }, { name: "omega_hat_cps" }];
+  const [theta, omega] = unitsFor(names, config, false);
+  expect(theta).toMatchObject({ unit: "deg" });
+  expect(theta?.convert(2000 * 65536)).toBeCloseTo(90);
+  expect(omega).toMatchObject({ unit: "deg/s" });
+  expect(omega?.convert(-3000 * 65536)).toBeCloseTo(-180);
+  const [rawTheta, rawOmega] = unitsFor(names, config, true);
+  expect(rawTheta?.convert(2048 * 65536 + 32768)).toBe(2048.5);
+  expect(rawOmega).toMatchObject({ unit: "counts/s" });
 });

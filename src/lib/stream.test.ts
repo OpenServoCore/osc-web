@@ -52,12 +52,26 @@ function decode(keys: readonly FieldKey[], frames: readonly Uint8Array[], window
 /** Position alone rides in one 16-bit run. */
 const posRows = (n: number) => Array.from({ length: n }, (_, i) => u16(0x100 + i));
 
-test("the presets are the protocol's common rows, one run each", () => {
+test("the presets are the protocol's common rows", () => {
   const [six, ident, raw] = PRESETS.map((p) => chunksOf(p.keys));
-  // protocol sec 5.6: the six raw fields at 0x228 (12 B), identification's four at 0x224 (8 B).
-  expect(six).toEqual([{ addr: 0x228, len: 12 }]);
-  expect(ident).toEqual([{ addr: 0x224, len: 8 }]);
-  expect(raw).toEqual([{ addr: 0x22a, len: 12 }]);
+  // protocol sec 5.6: the six in two runs, identification's four in two with
+  // current_trough riding along, the crest scan in one.
+  expect(six).toEqual([
+    { addr: 0x232, len: 8 },
+    { addr: 0x240, len: 4 },
+  ]);
+  expect(ident).toEqual([
+    { addr: 0x238, len: 2 },
+    { addr: 0x240, len: 8 },
+  ]);
+  expect(telColumns(descriptor, chunksOf(PRESETS[1].keys)).map((c) => c.name)).toEqual([
+    "pos",
+    "duty_ticks",
+    "current_trough",
+    "i_tick_counts",
+    "vdiff_counts",
+  ]);
+  expect(raw).toEqual([{ addr: 0x232, len: 12 }]);
   expect(DEFAULT_FIELDS).toEqual(PRESETS[0].keys);
 });
 
@@ -71,16 +85,16 @@ test("an estimate rides in the second chunk behind the tick block", () => {
 });
 
 test("one block wider than a row splits at its widest gap", () => {
-  expect(chunksOf(["i_tick_counts", "vdiff_counts", "vcal", "tick_flags"])).toEqual([
-    { addr: 0x224, len: 4 },
-    { addr: 0x238, len: 8 },
+  expect(chunksOf(["current_raw", "vmotor_a", "i_tick_counts", "vdiff_counts"])).toEqual([
+    { addr: 0x232, len: 4 },
+    { addr: 0x244, len: 4 },
   ]);
 });
 
 test("a selection no two runs of 12 B cover is refused in plain words", () => {
-  expect(coverFields(["i_tick_counts", "ntc_raw", "sample_tick"], layout)).toEqual({
+  expect(coverFields(["current_raw", "ntc_raw", "sample_tick"], layout)).toEqual({
     issue:
-      "these fields need 16 B rows; a row copies at most 12 B in at most 2 runs of the table. Untick some fields or capture them over two bursts.",
+      "these fields need 18 B rows; a row copies at most 12 B in at most 2 runs of the table. Untick some fields or capture them over two bursts.",
   });
   expect(coverFields([], layout)).toEqual({ issue: "pick at least one field" });
   expect(coverFields(["pos"], new Map())).toEqual({ issue: "the servo's table has no pos" });
@@ -95,13 +109,13 @@ test("a burst arms only at the TEL rate", () => {
 });
 
 test("a row decodes at the descriptor's offsets, signed where the table is", () => {
-  const row = [...u16(-300 & 0xffff), ...u16(0x123), ...u16(100), ...u16(2100)];
+  const head = [...u16(2100), ...u16(800), ...u16(700), ...u16(0x123)];
   const rows = decode(
-    ["duty_ticks", "pos", "current_trough", "current_raw", "vmotor_a", "vmotor_b"],
+    ["current_raw", "vmotor_a", "vmotor_b", "pos", "duty_ticks", "current_trough"],
     [
       frame(0x42, false, 0x1234, [
-        [...row, ...u16(800), ...u16(700)],
-        [...u16(0), ...row.slice(2), ...u16(1), ...u16(2)],
+        [...head, ...u16(-300 & 0xffff), ...u16(100)],
+        [...head, ...u16(0), ...u16(100)],
       ]),
     ],
   );
@@ -111,12 +125,12 @@ test("a row decodes at the descriptor's offsets, signed where the table is", () 
     sample: 0,
     valid: true,
     values: {
-      duty_ticks: -300,
-      pos: 0x123,
-      current_trough: 100,
       current_raw: 2100,
       vmotor_a: 800,
       vmotor_b: 700,
+      pos: 0x123,
+      duty_ticks: -300,
+      current_trough: 100,
     },
   });
   expect(rows[1]).toMatchObject({ sample: 1, valid: false, values: { duty_ticks: 0 } });
@@ -233,25 +247,25 @@ const config: StreamConfig = {
 };
 
 test("the CSV names every carried field with its unit, valid empty where the row cannot say", () => {
-  const columns = telColumns(descriptor, chunksOf(["pos", "current_trough", "current_raw"]));
+  const columns = telColumns(descriptor, chunksOf(["current_raw", "vmotor_a", "vmotor_b", "pos"]));
   const rows = decodeBurst(
-    [frame(0, true, 0, [[...u16(0x800), ...u16(0x100), ...u16(0x101)]])],
+    [frame(0, true, 0, [[...u16(0x101), ...u16(800), ...u16(700), ...u16(0x800)]])],
     columns,
-    6,
+    8,
     60,
   );
   const lines = toCsv(rows, unitsFor(columns, config, false)).split("\n");
-  expect(lines[0]).toBe("sample,valid,pos (deg),current_trough (mA),current_raw (mA)");
+  expect(lines[0]).toBe("sample,valid,current_raw (mA),vmotor_a (V),vmotor_b (V),pos (deg)");
   expect(lines).toHaveLength(3);
   expect(lines[2]).toBe("");
-  expect(lines[1]).toMatch(/^0,,\d+\.\d,-?\d+,-?\d+$/);
+  expect(lines[1]).toMatch(/^0,,-?\d+,-?\d+\.\d\d,-?\d+\.\d\d,\d+\.\d$/);
   // Raw keeps the position family in counts and the electrical fields real.
   const raw = toCsv(rows, unitsFor(columns, config, true)).split("\n");
-  expect(raw[0]).toBe("sample,valid,pos (counts),current_trough (mA),current_raw (mA)");
-  expect(raw[1]?.startsWith("0,,2048,")).toBe(true);
+  expect(raw[0]).toBe("sample,valid,current_raw (mA),vmotor_a (V),vmotor_b (V),pos (counts)");
+  expect(raw[1]?.endsWith(",2048")).toBe(true);
   // Without a config every column is counts.
   expect(toCsv(rows, unitsFor(columns, undefined, false)).split("\n")[0]).toBe(
-    "sample,valid,pos (counts),current_trough (counts),current_raw (counts)",
+    "sample,valid,current_raw (counts),vmotor_a (counts),vmotor_b (counts),pos (counts)",
   );
 });
 

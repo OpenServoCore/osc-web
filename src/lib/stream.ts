@@ -41,18 +41,18 @@ export type Family = "position" | "electrical";
  * the descriptor's name, so a CSV column names it.
  */
 export const FIELDS = [
-  { key: "i_tick_counts", label: "Current", family: "electrical", estimate: false },
-  { key: "vdiff_counts", label: "Motor V", family: "electrical", estimate: false },
-  // Signed PWM compare counts; full scale is pwm_period_ticks.
-  { key: "duty_ticks", label: "Duty", family: "electrical", estimate: false },
-  { key: "pos", label: "Position", family: "position", estimate: false },
-  { key: "current_trough", label: "Current trough", family: "electrical", estimate: false },
   { key: "current_raw", label: "Current raw", family: "electrical", estimate: false },
   { key: "vmotor_a", label: "Motor A", family: "electrical", estimate: false },
   { key: "vmotor_b", label: "Motor B", family: "electrical", estimate: false },
+  { key: "pos", label: "Position", family: "position", estimate: false },
+  { key: "vcal", label: "Vcal", family: "electrical", estimate: false },
   { key: "vbus_raw", label: "Bus raw", family: "electrical", estimate: false },
   { key: "ntc_raw", label: "NTC raw", family: "electrical", estimate: false },
-  { key: "vcal", label: "Vcal", family: "electrical", estimate: false },
+  // Signed PWM compare counts; full scale is pwm_period_ticks.
+  { key: "duty_ticks", label: "Duty", family: "electrical", estimate: false },
+  { key: "current_trough", label: "Current trough", family: "electrical", estimate: false },
+  { key: "i_tick_counts", label: "Current", family: "electrical", estimate: false },
+  { key: "vdiff_counts", label: "Motor V", family: "electrical", estimate: false },
   { key: "vmotor_a_trough", label: "Motor A trough", family: "electrical", estimate: false },
   { key: "vmotor_b_trough", label: "Motor B trough", family: "electrical", estimate: false },
   { key: "tick_flags", label: "Tick flags", family: "electrical", estimate: false },
@@ -76,12 +76,12 @@ export type FieldKey = FieldDef["key"];
 export const PRESETS = [
   {
     label: "Default six",
-    keys: ["duty_ticks", "pos", "current_trough", "current_raw", "vmotor_a", "vmotor_b"],
+    keys: ["current_raw", "vmotor_a", "vmotor_b", "pos", "duty_ticks", "current_trough"],
   },
-  { label: "Ident four", keys: ["i_tick_counts", "vdiff_counts", "duty_ticks", "pos"] },
+  { label: "Ident four", keys: ["pos", "duty_ticks", "i_tick_counts", "vdiff_counts"] },
   {
     label: "Raw frame",
-    keys: ["pos", "current_trough", "current_raw", "vmotor_a", "vmotor_b", "vbus_raw"],
+    keys: ["current_raw", "vmotor_a", "vmotor_b", "pos", "vcal", "vbus_raw"],
   },
 ] as const satisfies readonly { label: string; keys: readonly FieldKey[] }[];
 
@@ -103,9 +103,10 @@ function run(fields: readonly Placement[]): TelChunk {
 
 /**
  * The chunks a row copies to carry `keys`: one run of the table per group,
- * the estimates in the second chunk (the servo copies it after the medium
- * step), and a lone group split at its widest gap when one run outgrows the
- * row. Fields inside a run's gaps ride along.
+ * the estimates in a chunk of their own (the servo copies every chunk when it
+ * publishes the tick block, so estimates arrive as last published, up to one
+ * tick old), and a lone group split at its widest gap when one run outgrows
+ * the row. Fields inside a run's gaps ride along.
  */
 export function coverFields(
   keys: Iterable<FieldKey>,

@@ -40,7 +40,7 @@ async function downloadCsv(page: Page): Promise<string[]> {
 // The simulated fleet boots at the factory 1 M.
 test("at 1 M a capture is refused: TEL streams at 3 M only", async ({ page }) => {
   await openStream(page);
-  await expect(page.getByText("chunks 0x0228+12 - tel_count 120")).toBeVisible();
+  await expect(page.getByText("chunks 0x0232+8, 0x0240+4 - tel_count 120")).toBeVisible();
   await page.getByRole("button", { name: "Capture", exact: true }).click();
   await expect(
     page.getByText(
@@ -52,25 +52,25 @@ test("at 1 M a capture is refused: TEL streams at 3 M only", async ({ page }) =>
 
 test("at 3 M the default six fill the summary and download matching CSV rows", async ({ page }) => {
   await openStream(page, "3 M");
-  await expect(page.getByText("chunks 0x0228+12 - tel_count 120")).toBeVisible();
+  await expect(page.getByText("chunks 0x0232+8, 0x0240+4 - tel_count 120")).toBeVisible();
   const { frames, samples } = await capture(page);
   expect(frames).toBeGreaterThan(0);
   expect(samples).toBeGreaterThan(0);
-  await expect(page.getByRole("region", { name: "deg | %, mA, V" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "deg | mA, V, %" })).toBeVisible();
   const lines = await downloadCsv(page);
   expect(lines[0]).toBe(
-    "sample,valid,duty_ticks (%),pos (deg),current_trough (mA),current_raw (mA),vmotor_a (V),vmotor_b (V)",
+    "sample,valid,current_raw (mA),vmotor_a (V),vmotor_b (V),pos (deg),duty_ticks (%),current_trough (mA)",
   );
   expect(lines.length - 1).toBe(samples);
   const rows = lines.slice(1).map((l) => l.split(","));
   for (const line of lines.slice(1)) {
-    expect(line).toMatch(/^\d+,[01],-?\d+\.\d,-?\d+\.\d,-?\d+,-?\d+,-?\d+\.\d\d,-?\d+\.\d\d$/);
+    expect(line).toMatch(/^\d+,[01],-?\d+,-?\d+\.\d\d,-?\d+\.\d\d,-?\d+\.\d,-?\d+\.\d,-?\d+$/);
   }
-  const duty = rows.map((r) => Number(r[2]));
+  const duty = rows.map((r) => Number(r[6]));
   expect(duty.every((d) => Math.abs(d) <= 100)).toBe(true);
   expect(duty.some((d) => d !== 0)).toBe(true);
   // A row at zero duty drove no window, so its current is not fresh.
-  expect(rows.filter((r) => Number(r[2]) === 0).every((r) => r[1] === "0")).toBe(true);
+  expect(rows.filter((r) => Number(r[6]) === 0).every((r) => r[1] === "0")).toBe(true);
 });
 
 test("presets and ticked fields drive the chunks, the burst and the CSV header", async ({
@@ -78,22 +78,24 @@ test("presets and ticked fields drive the chunks, the burst and the CSV header",
 }) => {
   await openStream(page, "3 M");
   await page.getByRole("button", { name: "Raw frame" }).click();
-  await expect(page.getByText("chunks 0x022a+12 - tel_count 120")).toBeVisible();
+  await expect(page.getByText("chunks 0x0232+12 - tel_count 120")).toBeVisible();
   await page.getByRole("button", { name: "Ident four" }).click();
-  await expect(page.getByText("chunks 0x0224+8 - tel_count 120")).toBeVisible();
-  // An estimate rides in the second chunk, copied after the medium step.
+  await expect(page.getByText("chunks 0x0238+2, 0x0240+8 - tel_count 120")).toBeVisible();
+  await page.getByRole("checkbox", { name: "Position", exact: true }).click();
+  await expect(page.getByText("chunks 0x0240+8 - tel_count 120")).toBeVisible();
+  // An estimate rides in a chunk of its own.
   await page.getByRole("checkbox", { name: "Velocity estimate", exact: true }).click();
   await page.getByRole("spinbutton", { name: "Samples" }).fill("40");
-  await expect(page.getByText("chunks 0x0224+8, 0x0248+4 - tel_count 40")).toBeVisible();
+  await expect(page.getByText("chunks 0x0240+8, 0x0258+4 - tel_count 40")).toBeVisible();
   const { samples } = await capture(page);
   expect(samples).toBeGreaterThan(0);
   expect(samples).toBeLessThanOrEqual(40);
   const lines = await downloadCsv(page);
   expect(lines[0]).toBe(
-    "sample,valid,i_tick_counts (mA),vdiff_counts (V),duty_ticks (%),pos (deg),omega_hat_cps (deg/s)",
+    "sample,valid,duty_ticks (%),current_trough (mA),i_tick_counts (mA),vdiff_counts (V),omega_hat_cps (deg/s)",
   );
   expect(lines.length - 1).toBe(samples);
-  expect(lines[1]).toMatch(/^0,[01],-?\d+,-?\d+\.\d\d,-?\d+\.\d,-?\d+\.\d,-?\d+$/);
+  expect(lines[1]).toMatch(/^0,[01],-?\d+\.\d,-?\d+,-?\d+,-?\d+\.\d\d,-?\d+$/);
 });
 
 test("a selection two chunks cannot cover says so and cannot be captured", async ({ page }) => {
@@ -104,7 +106,7 @@ test("a selection two chunks cannot cover says so and cannot be captured", async
   }
   await expect(
     page.getByText(
-      "these fields need 22 B rows; a row copies at most 12 B in at most 2 runs of the table. Untick some fields or capture them over two bursts.",
+      "these fields need 20 B rows; a row copies at most 12 B in at most 2 runs of the table. Untick some fields or capture them over two bursts.",
     ),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Capture", exact: true })).toBeDisabled();

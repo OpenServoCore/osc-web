@@ -176,6 +176,9 @@ describe("buildTable", () => {
     expect(rowOf("ident_agg").editable).toBe(true);
     expect(placement("tick_load_mean_q15")).toEqual(["Live values", "Health"]);
     expect(placement("stack_free_min")).toEqual(["Live values", "Health"]);
+    expect(placement("window_v_floor_q15")).toEqual(["Live values", "Health"]);
+    expect(placement("t_ntc_cc")).toEqual(["Live values", "Health"]);
+    expect(placement("therm_flags")).toEqual(["Live values", "Health"]);
     expect(rowOf("tick_load_mean_q15").editable).toBe(false);
     expect(rowOf("tel_drop_count").editable).toBe(true);
     expect(placement("torque_enable")).toEqual(["Live values", "Commands"]);

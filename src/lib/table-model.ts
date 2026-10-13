@@ -90,13 +90,13 @@ const IDENT_CTRL = 0x1e0;
 const TEL_COMMON = 0x200;
 const TEL_MODE = 0x220;
 const TICK = 0x224;
-const ESTIMATES = 0x244;
-const REFS = 0x258;
-const IDENT = 0x260;
-const TEL_LIMITS = 0x26c;
-const HEALTH = 0x270;
+const ESTIMATES = 0x254;
+const REFS = 0x268;
+const IDENT = 0x270;
+const TEL_LIMITS = 0x27c;
 const PROFILE = 0x280;
 const BURST_WINDOW = 0x2c0;
+const HEALTH = 0x3c0;
 
 const IDENTITY: GroupSpec = { label: "Identity and bus", collapsed: true, blocks: [CONFIG_COMMON] };
 

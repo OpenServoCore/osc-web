@@ -18,7 +18,7 @@ test("the sample registers plan one read, goal_duty through t_winding_cc", () =>
 });
 
 test("the conversion registers plan one read each side of the table", () => {
-  expect(planSpans(fields, CONFIG_REGISTERS)).toEqual([{ addr: 128, count: 82 }]);
+  expect(planSpans(fields, CONFIG_REGISTERS)).toEqual([{ addr: 160, count: 44 }]);
   expect(planSpans(fields, BIAS_REGISTERS)).toEqual([{ addr: 616, count: 4 }]);
 });
 

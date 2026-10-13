@@ -67,21 +67,26 @@ interface TabSpec {
 // the next block's start, so a region's reserved tail follows the block in
 // front of it and every address has a home.
 const CONFIG_COMMON = 0x000;
-const POS_LIMITS = 0x020;
+const POS_PHYS = 0x020;
+const POS_SOFT = 0x028;
 const LOOP_CURRENT = 0x030;
 const LOOP_VELOCITY = 0x038;
 const LOOP_POSITION = 0x040;
 const LIMITS = 0x048;
-const THERMAL = 0x05c;
-const FUSION = 0x068;
-const FAULT_CFG = 0x06e;
-const CALIB_POT = 0x080;
-const SENSE = 0x084;
-const WINDING = 0x094;
-const MOTOR = 0x09c;
-const KINEMATICS = 0x0ac;
-const STAMP = 0x0b2;
-const SENSE_EXT = 0x0b4;
+const THERMAL = 0x060;
+const THERMAL_EXT = 0x06a;
+const FUSION = 0x06e;
+const FAULT_CFG = 0x074;
+const MOTOR = 0x080;
+const WINDING = 0x08c;
+const CALIB_THERMAL = 0x08e;
+const MOTOR_EXT = 0x09c;
+const CALIB_POT = 0x0a0;
+const KINEMATICS = 0x0a4;
+const STAMP = 0x0aa;
+const SENSE = 0x0ac;
+const SENSE_EXT = 0x0bc;
+const PWM = 0x0ca;
 const LIFECYCLE = 0x180;
 const SYSTEM = 0x194;
 const BURST_REQUEST = 0x196;
@@ -104,7 +109,7 @@ const TABS: readonly TabSpec[] = [
     name: "Settings",
     groups: [
       IDENTITY,
-      { label: "Motion limits", blocks: [POS_LIMITS] },
+      { label: "Motion limits", blocks: [POS_PHYS, POS_SOFT] },
       // The observer gains close the same loops the PI gains do.
       {
         label: "Control loops",
@@ -114,7 +119,7 @@ const TABS: readonly TabSpec[] = [
       },
       // Fault thresholds are the other half of the stall and trip policy.
       { label: "Safety", help: true, blocks: [LIMITS, FAULT_CFG] },
-      { label: "Thermal", help: true, collapsed: true, blocks: [THERMAL] },
+      { label: "Thermal", help: true, collapsed: true, blocks: [THERMAL, THERMAL_EXT] },
     ],
   },
   {
@@ -124,8 +129,8 @@ const TABS: readonly TabSpec[] = [
   {
     name: "Board",
     groups: [
-      { label: "Board constants", blocks: [SENSE, SENSE_EXT] },
-      { label: "Motor model", help: true, collapsed: true, blocks: [WINDING, MOTOR] },
+      { label: "Board constants", blocks: [CALIB_THERMAL, SENSE, SENSE_EXT, PWM] },
+      { label: "Motor model", help: true, collapsed: true, blocks: [MOTOR, WINDING, MOTOR_EXT] },
     ],
   },
   {

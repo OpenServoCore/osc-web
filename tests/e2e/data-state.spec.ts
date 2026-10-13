@@ -40,7 +40,7 @@ test("a factory-fresh servo carries the banner on its card and page; a stamped o
   ).toBeVisible();
   const stamp = page.getByRole("group", { name: "Plant stamp" });
   await expect(stamp).toContainText("Never stamped");
-  await expect(stamp).toContainText("plant_stamp 0x0b2 = 0x0000");
+  await expect(stamp).toContainText("plant_stamp 0x0aa = 0x0000");
 
   await openServo(page, 1);
   await expect(page.getByRole("status", { name: "Data state" })).toHaveCount(0);

@@ -29,7 +29,7 @@ test("the live span is one read from current_raw through vmotor_bias_counts", ()
 });
 
 test("the constants span is one read from raw_min through vmotor_bias_nom_counts", () => {
-  expect(span(fields, CONSTANT_REGISTERS)).toEqual({ addr: 128, count: 64 });
+  expect(span(fields, CONSTANT_REGISTERS)).toEqual({ addr: 160, count: 40 });
 });
 
 test("plan fails loudly on a descriptor missing a register", () => {

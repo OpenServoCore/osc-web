@@ -17,5 +17,6 @@ export default defineConfig({
     command: `npm run dev -- --port ${port} --strictPort`,
     url: `http://localhost:${port}`,
     reuseExistingServer: !process.env.CI,
+    env: { PW_E2E: "1" },
   },
 });

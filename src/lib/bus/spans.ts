@@ -3,7 +3,7 @@
 
 import type { Descriptor, Field, Health, Value } from "@openservocore/client";
 import { dutyPercent } from "../control";
-import type { DataState } from "../data-state";
+import { FAULT_DATA_BIT, FAULT_DRIVE_REVERSED, type DataState } from "../data-state";
 import {
   biasesFromTable,
   calibrationFromTable,
@@ -247,8 +247,12 @@ const FAULTS: readonly string[] = [
   "Closed loop refused",
 ];
 
-export function faultText(faultFlags: number): string | undefined {
-  const set = FAULTS.filter((_, bit) => (faultFlags & (1 << bit)) !== 0);
+export function faultText(faultFlags: number, faultCode: number): string | undefined {
+  const set = FAULTS.flatMap((name, bit) => {
+    if ((faultFlags & (1 << bit)) === 0) return [];
+    const reversed = bit === FAULT_DATA_BIT && faultCode === FAULT_DRIVE_REVERSED;
+    return [reversed ? "Drive reversed" : name];
+  });
   if (set.length === 0) return faultFlags === 0 ? undefined : `Fault 0x${faultFlags.toString(16)}`;
   return set.join(", ");
 }

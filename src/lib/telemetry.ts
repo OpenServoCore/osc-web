@@ -36,9 +36,8 @@ export interface Sample {
   current: number;
   vbus: number;
   /**
-   * `vdiff_counts`, the kernel's drive-window differential: a poll of the two
-   * taps can land while the next scan holds them in sample order (protocol
-   * sec 5.6).
+   * `vdiff_counts`, the kernel's drive-window differential: logical sign, held
+   * through windows the terminal taps cannot read (protocol sec 5.6).
    */
   vdiff: number;
   ntc: number;

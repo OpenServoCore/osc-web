@@ -188,8 +188,15 @@ const TEXT: ReadonlyMap<string, (value: number) => string> = new Map([
 
 /** Registers that read in real units through a usable calibration; the raw value stays beside them. */
 const REAL: ReadonlyMap<string, (counts: number, cal: Calibration) => string> = new Map([
-  ["velocity_limit_cps", (v, cal) => formatQuantity(velocityDegPerS(v, cal), DISPLAY.velocity)],
-  ["accel_limit_q88", (v, cal) => formatQuantity(accelDegPerS2(v, cal), DISPLAY.acceleration)],
+  // limits are magnitudes: a descending angle map must not sign them
+  [
+    "velocity_limit_cps",
+    (v, cal) => formatQuantity(Math.abs(velocityDegPerS(v, cal)), DISPLAY.velocity),
+  ],
+  [
+    "accel_limit_q88",
+    (v, cal) => formatQuantity(Math.abs(accelDegPerS2(v, cal)), DISPLAY.acceleration),
+  ],
 ]);
 
 export function realValue(

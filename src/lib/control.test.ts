@@ -5,6 +5,7 @@ import fixture from "../../tests/fixtures/stall-24mhz.json";
 import {
   clampGoal,
   CONTROL_REGISTERS,
+  displayEnds,
   goalAtStop,
   decodeControl,
   dutyPercent,
@@ -155,6 +156,21 @@ test("the position goal is degrees through the calibration, or counts in raw mod
   expect(raw).toMatchObject({ unit: "counts", digits: 0 });
   expect(raw.toDisplay(2000)).toBe(2000);
   expect(raw.fromDisplay(1234.6)).toBe(1235);
+});
+
+test("a descending angle map reads its goal ends lowest degree first, the slider inverted", () => {
+  // degrees counterclockwise-positive on a pot whose counts rise clockwise
+  const ccwLow: Calibration = { ...cal, angleMinCdeg: 18000, angleMaxCdeg: 0 };
+  const deg = goalSpec("Position", { ...ctx, cal: ccwLow });
+  expect(deg.range).toEqual({ min: 200, max: 3800 });
+  expect(deg.fromDisplay(135)).toBe(1100);
+  expect(displayEnds(deg)).toEqual({ low: 3800, high: 200, inverted: true });
+  expect(displayEnds(goalSpec("Position", ctx))).toEqual({ low: 200, high: 3800, inverted: false });
+  const vel = goalSpec("Velocity", { ...ctx, cal: ccwLow });
+  expect(vel.fromDisplay(50)).toBe(-1000);
+  expect(displayEnds(vel)).toEqual({ low: 4000, high: -4000, inverted: true });
+  const raw = goalSpec("Position", { ...ctx, cal: ccwLow, raw: true });
+  expect(displayEnds(raw).inverted).toBe(false);
 });
 
 test("the velocity goal is deg/s over the velocity limit, counts/s in raw mode", () => {

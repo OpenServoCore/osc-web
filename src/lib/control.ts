@@ -243,3 +243,14 @@ export interface GoalSpec extends GoalUnits {
 export function goalSpec(mode: ModeName, ctx: GoalContext): GoalSpec {
   return { ...goalUnits(mode, ctx), range: goalRange(mode, ctx.cal, ctx.limits) };
 }
+
+/**
+ * The goal range's ends as the display reads them, lowest first. Degrees rise
+ * counterclockwise, so on a pot whose counts rise clockwise the angle map
+ * descends and the ends swap: `inverted` turns the slider to match.
+ */
+export function displayEnds(spec: GoalSpec): { low: number; high: number; inverted: boolean } {
+  const { min, max } = spec.range;
+  const inverted = spec.toDisplay(max) < spec.toDisplay(min);
+  return inverted ? { low: max, high: min, inverted } : { low: min, high: max, inverted };
+}

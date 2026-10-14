@@ -5,6 +5,7 @@ const port = Number(process.env.PW_PORT ?? 5179);
 
 export default defineConfig({
   testDir: "tests/e2e",
+  globalSetup: "./tests/e2e/warm-up.ts",
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? [["dot"], ["html", { open: "never" }]] : "list",
   use: {

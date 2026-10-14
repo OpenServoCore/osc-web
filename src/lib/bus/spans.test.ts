@@ -24,8 +24,8 @@ import {
 
 const fields = descriptor.fields as Field[];
 
-test("the live span is one read from current_raw through vmotor_bias_counts", () => {
-  expect(span(fields, LIVE_REGISTERS)).toEqual({ addr: 562, count: 58 });
+test("the live span is one read from pos through vmotor_bias_counts", () => {
+  expect(span(fields, LIVE_REGISTERS)).toEqual({ addr: 568, count: 56 });
 });
 
 test("the constants span is one read from raw_min through vmotor_bias_bot_ohm", () => {
@@ -110,7 +110,7 @@ test("the 0.1 sample span is goal_duty through omega_hat_cps in one read", () =>
       "vbus_raw",
       "ntc_raw",
     ]),
-  ).toEqual([{ addr: 390, count: 214 }]);
+  ).toEqual([{ addr: 390, count: 218 }]);
 });
 
 /** A descriptor codec over `sample`, plain numbers only. */
@@ -228,7 +228,7 @@ test("the live, health and constants layouts decode from a whole-table image", (
 
 test("the fleet card reads the live sensors and the health block as one span", () => {
   expect(planSpans(fields, [...LIVE_REGISTERS, ...HEALTH_REGISTERS])).toEqual([
-    { addr: 512, count: 108 },
+    { addr: 512, count: 112 },
   ]);
 });
 

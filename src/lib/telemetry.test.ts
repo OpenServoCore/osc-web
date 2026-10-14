@@ -14,12 +14,12 @@ import {
 const fields = descriptor.fields as Field[];
 
 test("the sample registers plan one read, goal_duty through t_winding_cc", () => {
-  expect(planSpans(fields, SAMPLE_REGISTERS)).toEqual([{ addr: 390, count: 220 }]);
+  expect(planSpans(fields, SAMPLE_REGISTERS)).toEqual([{ addr: 390, count: 224 }]);
 });
 
 test("the conversion registers plan one read each side of the table", () => {
   expect(planSpans(fields, CONFIG_REGISTERS)).toEqual([{ addr: 160, count: 48 }]);
-  expect(planSpans(fields, BIAS_REGISTERS)).toEqual([{ addr: 616, count: 4 }]);
+  expect(planSpans(fields, BIAS_REGISTERS)).toEqual([{ addr: 620, count: 4 }]);
 });
 
 test("registersOf lists what a binder reads, in order", () => {
@@ -27,7 +27,7 @@ test("registersOf lists what a binder reads, in order", () => {
 });
 
 test("decodeSample scales omega_hat_cps out of Q16 and keeps the rest in counts", () => {
-  const span = { addr: 390, count: 220 };
+  const span = { addr: 390, count: 224 };
   const bytes = new Uint8Array(span.count);
   const view = new DataView(bytes.buffer);
   const at = (name: string) => {

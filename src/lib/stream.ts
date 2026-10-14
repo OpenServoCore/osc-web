@@ -43,13 +43,13 @@ export type Family = "position" | "electrical";
  * the descriptor's name, so a CSV column names it.
  */
 export const FIELDS = [
-  { key: "current_raw", label: "Current raw", family: "electrical", estimate: false },
-  { key: "vmotor_a", label: "Motor A", family: "electrical", estimate: false },
-  { key: "vmotor_b", label: "Motor B", family: "electrical", estimate: false },
   { key: "pos", label: "Position", family: "position", estimate: false },
   { key: "vcal", label: "Vcal", family: "electrical", estimate: false },
   { key: "vbus_raw", label: "Bus raw", family: "electrical", estimate: false },
   { key: "ntc_raw", label: "NTC raw", family: "electrical", estimate: false },
+  { key: "current_raw", label: "Current raw", family: "electrical", estimate: false },
+  { key: "vmotor_a", label: "Motor A", family: "electrical", estimate: false },
+  { key: "vmotor_b", label: "Motor B", family: "electrical", estimate: false },
   // Signed PWM compare counts; full scale is pwm_period_ticks.
   { key: "duty_ticks", label: "Duty", family: "electrical", estimate: false },
   { key: "current_trough", label: "Current trough", family: "electrical", estimate: false },
@@ -78,12 +78,12 @@ export type FieldKey = FieldDef["key"];
 export const PRESETS = [
   {
     label: "Default six",
-    keys: ["current_raw", "vmotor_a", "vmotor_b", "pos", "duty_ticks", "current_trough"],
+    keys: ["pos", "current_raw", "vmotor_a", "vmotor_b", "duty_ticks", "current_trough"],
   },
   { label: "Ident four", keys: ["pos", "duty_ticks", "i_tick_counts", "vdiff_counts"] },
   {
     label: "Raw frame",
-    keys: ["current_raw", "vmotor_a", "vmotor_b", "pos", "vcal", "vbus_raw"],
+    keys: ["pos", "vcal", "vbus_raw", "current_raw", "vmotor_a", "vmotor_b"],
   },
 ] as const satisfies readonly { label: string; keys: readonly FieldKey[] }[];
 

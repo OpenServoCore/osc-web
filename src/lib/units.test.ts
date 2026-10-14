@@ -14,12 +14,18 @@ import {
   positionDeg,
   senseFromTable,
   temperatureC,
+  vbAlpha,
+  vbSteady,
   vdiffV,
   velocityDegPerS,
   type Calibration,
+  type Sense,
 } from "./units";
 
-const sense = senseFromTable(readFrom(fixture.meta.sense));
+// The recording predates the published bias divider: 0 reads as no divider.
+const sense = senseFromTable(
+  readFrom({ ...fixture.meta.sense, vmotor_bias_top_ohm: 0, vmotor_bias_bot_ohm: 0 }),
+);
 const { track, converted } = fixture;
 const bias = fixture.meta.current_bias_counts;
 
@@ -184,4 +190,59 @@ test("accelDegPerS2 reads Q8.8 counts/s per 2 kHz medium tick through the positi
   expect(accelDegPerS2(3840, cal)).toBeCloseTo(1500, 9);
   expect(accelDegPerS2(0, cal)).toBe(0);
   expect(accelDegPerS2(3840, { ...cal, rawMax: cal.rawMin })).toBe(0);
+});
+
+const REV_2A: Sense = {
+  shuntMohm: 60,
+  gainMilli: 14_884,
+  vddMv: 3300,
+  vmotorDivTop: 6400,
+  vmotorDivBot: 1600,
+  vbusDivTopOhm: 6400,
+  vbusDivBotOhm: 1600,
+  ntcPullupOhm: 10_000,
+  ntcR25Ohm: 10_000,
+  ntcBeta: 3950,
+  vmotorBiasNomCounts: 773,
+  vmotorBiasTopOhm: 430,
+  vmotorBiasBotOhm: 100,
+};
+const LSB_2A = 3.3 / ADC_FULL_SCALE;
+const VB0_2A = (ADC_FULL_SCALE * 100) / 530;
+const CV_2A = (430 * 100) / 530 / 8000;
+
+/** The settled node and its crest taps with terminal A at `vr`, B low, ON fraction `d`. */
+function taps2A(vr: number, d: number): [number, number, number] {
+  const vb = (VB0_2A + (CV_2A * d * vr) / LSB_2A) / (1 + 2 * CV_2A);
+  return [vb, (0.2 * vr) / LSB_2A + 0.8 * vb, 0.8 * vb];
+}
+
+test("VB under drive matches the bias plan's 430/100 rows at 4.5 and 8.4 V", () => {
+  const duties = [0, 0.1, 0.15, 0.25, 0.5, 0.75, 0.87, 1];
+  const rows: [number, number[]][] = [
+    [4.5, [-12.4, -7.9, -5.7, -1.2, 10.0, 21.2, 26.5, 32.4]],
+    [8.4, [-12.4, -4.0, 0.1, 8.5, 29.4, 50.2, 60.3, 71.1]],
+  ];
+  for (const [vr, mv] of rows) {
+    duties.forEach((d, i) => {
+      const [vb, a, b] = taps2A(vr, d);
+      const got = vbSteady(VB0_2A, d, a, b, REV_2A) ?? NaN;
+      expect(got).toBeCloseTo(vb, 9);
+      expect(Math.abs((got - VB0_2A) * LSB_2A * 1000 - (mv[i] ?? NaN))).toBeLessThan(0.06);
+    });
+  }
+});
+
+test("one terminal read against the boot bias carries four times the VB move", () => {
+  const [vb, a] = taps2A(8.4, 1);
+  expect(motorV(a, vb, REV_2A)).toBeCloseTo(8.4, 9);
+  expect((motorV(a, VB0_2A, REV_2A) - 8.4) * 1000).toBeCloseTo(284.5, 0);
+});
+
+test("VB follows 0.060 of a step per 50 us tick", () => {
+  expect(vbAlpha(REV_2A, 20_000)).toBeCloseTo(0.06, 3);
+});
+
+test("without the bias divider there is no live VB", () => {
+  expect(vbSteady(VB0_2A, 1, 3000, 600, { ...REV_2A, vmotorBiasTopOhm: 0 })).toBeUndefined();
 });

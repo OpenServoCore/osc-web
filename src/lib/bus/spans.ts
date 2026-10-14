@@ -146,6 +146,8 @@ export const CONSTANT_REGISTERS: readonly string[] = [
   "ntc_r25_ohm",
   "ntc_beta",
   "vmotor_bias_nom_counts",
+  "vmotor_bias_top_ohm",
+  "vmotor_bias_bot_ohm",
 ];
 
 /** TELEMETRY sensors the cards show, plus the biases their conversion needs. */

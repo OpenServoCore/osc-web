@@ -37,6 +37,8 @@ export default defineConfig({
   server: {
     // The file: dependency lives outside this repo, so dev must be allowed to serve its wasm.
     fs: { allow: [".", "../open-servo-core/client/web"] },
+    // A rebuild of the shared wasm package mid-run hot-swaps the session out from under a spec.
+    watch: process.env.PW_E2E === "1" ? null : undefined,
   },
   plugins: [
     localDescriptors(),

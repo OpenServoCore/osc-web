@@ -14,10 +14,21 @@ async function openLive(page: Page, opts: { debug?: boolean } = {}): Promise<voi
   await expect(page.getByRole("combobox", { name: "Mode" })).toBeEnabled();
 }
 
-async function pickMode(page: Page, mode: string): Promise<void> {
+/** Each mode's goal unit, which the goal readout takes from the servo's read-back of `mode`. */
+const GOAL_UNIT = {
+  Position: / deg$/,
+  Velocity: / deg\/s$/,
+  Current: / mA$/,
+  "Open loop": / %$/,
+} as const;
+
+async function pickMode(page: Page, mode: keyof typeof GOAL_UNIT): Promise<void> {
   await page.getByRole("combobox", { name: "Mode" }).click();
   await page.getByRole("option", { name: mode }).click();
   await expect(page.getByRole("combobox", { name: "Mode" })).toHaveText(mode);
+  // The combobox shows the pick at once, but the goal control stays on the
+  // servo's old mode until the read-back lands: a goal typed sooner goes there.
+  await expect(page.getByLabel("Goal readout")).toHaveText(GOAL_UNIT[mode]);
 }
 
 async function setGoal(page: Page, value: string): Promise<void> {

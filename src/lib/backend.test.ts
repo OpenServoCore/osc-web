@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { parseSimIds, parseSimVirgin, permittedAdapter } from "./backend";
+import { parseSimDeadlines, parseSimIds, parseSimVirgin, permittedAdapter } from "./backend";
 
 test("parseSimIds is undefined without ?sim", () => {
   expect(parseSimIds("")).toBeUndefined();
@@ -23,6 +23,17 @@ test("parseSimVirgin names the factory-fresh ids, none by default", () => {
   expect(parseSimVirgin("?sim=1,2")).toEqual([]);
   expect(parseSimVirgin("?sim=1,2&virgin=2")).toEqual([2]);
   expect(parseSimVirgin("?sim=1,2&virgin=2,x,300,1")).toEqual([2, 1]);
+});
+
+test("parseSimDeadlines maps ids to the deadline they hold, none by default", () => {
+  expect(parseSimDeadlines("?sim=1,2")).toEqual(new Map());
+  expect(parseSimDeadlines("?sim=1,2&deadline=2:400")).toEqual(new Map([[2, 400]]));
+  expect(parseSimDeadlines("?deadline=2:400,x,0:5,300:5,3:65536,1:2.5,4:0")).toEqual(
+    new Map([
+      [2, 400],
+      [4, 0],
+    ]),
+  );
 });
 
 test("parseSimIds drops duplicates", () => {

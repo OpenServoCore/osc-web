@@ -1,6 +1,6 @@
 import type { Field } from "@openservocore/client";
 import { LoaderCircle } from "lucide-react";
-import { useId, useState, type KeyboardEvent } from "react";
+import { useId, useRef, useState, type KeyboardEvent } from "react";
 import { hexAddr } from "@/lib/format";
 import {
   editText,
@@ -60,6 +60,7 @@ export function ValueEditor({
   const [text, setText] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
+  const trigger = useRef<HTMLButtonElement>(null);
 
   if (field.access === "ro") return <span className={valueClass}>{label}</span>;
 
@@ -104,6 +105,13 @@ export function ValueEditor({
     }
   }
 
+  // Radix hands focus back with a plain focus(), which scrolls the value into view and cancels
+  // a stamp notice that mounted while the editor closed. A click outside keeps the focus it took.
+  function restoreFocus(e: Event) {
+    e.preventDefault();
+    if (document.activeElement === document.body) trigger.current?.focus({ preventScroll: true });
+  }
+
   // The Select's own Enter handling runs first and prevents default; a
   // portaled listbox is outside currentTarget in the DOM even though the
   // React event bubbles here.
@@ -117,11 +125,21 @@ export function ValueEditor({
   return (
     <Popover open={open} onOpenChange={openChange}>
       <PopoverTrigger asChild>
-        <button type="button" className={`${valueClass} hover:bg-muted data-open:bg-muted`}>
+        <button
+          ref={trigger}
+          type="button"
+          className={`${valueClass} hover:bg-muted data-open:bg-muted`}
+        >
           {label}
         </button>
       </PopoverTrigger>
-      <PopoverContent side="bottom" align="start" className="w-80 gap-2" onKeyDown={keyDown}>
+      <PopoverContent
+        side="bottom"
+        align="start"
+        className="w-80 gap-2"
+        onKeyDown={keyDown}
+        onCloseAutoFocus={restoreFocus}
+      >
         <Label
           htmlFor={inputId}
           className="gap-3 font-mono text-xs font-normal text-muted-foreground"

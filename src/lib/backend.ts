@@ -2,6 +2,7 @@ import init, { OscClient, pid, requestDevice, vid, type Track } from "@openservo
 
 const ID_MIN = 1;
 const ID_MAX = 0xf9;
+const US_MAX = 0xffff;
 
 function parseIds(raw: string): number[] {
   const ids = new Set<number>();
@@ -25,6 +26,19 @@ export function parseSimIds(search: string): number[] | undefined {
 export function parseSimVirgin(search: string): number[] {
   const raw = new URLSearchParams(search).get("virgin");
   return raw === null ? [] : parseIds(raw);
+}
+
+/** `&deadline=2:400` boots those ids holding that response deadline, us. */
+export function parseSimDeadlines(search: string): Map<number, number> {
+  const raw = new URLSearchParams(search).get("deadline");
+  const held = new Map<number, number>();
+  for (const part of raw?.split(",") ?? []) {
+    const m = /^(\d+):(\d+)$/.exec(part);
+    if (m === null) continue;
+    const [id, us] = [Number(m[1]), Number(m[2])];
+    if (id >= ID_MIN && id <= ID_MAX && us <= US_MAX) held.set(id, us);
+  }
+  return held;
 }
 
 export function simRequested(): boolean {
@@ -54,7 +68,15 @@ export async function openClient(): Promise<OscClient> {
   if (ids !== undefined) {
     const track = await simTrack();
     const virgin = parseSimVirgin(window.location.search);
-    return OscClient.fakeWithTracks(ids.map((id) => ({ id, track, virgin: virgin.includes(id) })));
+    const held = parseSimDeadlines(window.location.search);
+    return OscClient.fakeWithTracks(
+      ids.map((id) => ({
+        id,
+        track,
+        virgin: virgin.includes(id),
+        responseDeadlineUs: held.get(id),
+      })),
+    );
   }
   const device = permittedAdapter(await navigator.usb.getDevices(), vid(), pid());
   return OscClient.connect(device ?? (await requestDevice()));

@@ -1,4 +1,5 @@
 import {
+  defaultResponseDeadlineUs,
   unpackVersion,
   type BaudRate,
   type Descriptor,
@@ -258,6 +259,9 @@ class Controller {
           }
           const baud = await client.findBusBaud();
           const servos = await pingAll(client, await client.discover());
+          // An id more than one node answers would collide on the deadline read.
+          const unique = servos.filter((s) => s.ping !== undefined).map((s) => s.id);
+          await client.syncResponseDeadline(unique, defaultResponseDeadlineUs());
           const rails = await client.rails();
           if (this.snap.client !== client) return undefined;
           this.dispatch({ type: "found", servos, baud, rails });

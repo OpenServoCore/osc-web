@@ -1,5 +1,5 @@
 import type { Health } from "@openservocore/client";
-import { FAULT_DATA_BIT, reasons, type DataState } from "./data-state";
+import { FAULT_DATA_BIT, FAULT_DRIVE_REVERSED, reasons, type DataState } from "./data-state";
 
 export type Level = "fault" | "warn" | "ok";
 
@@ -18,6 +18,9 @@ const FAULTS: readonly string[] = [
   "Under voltage: the bus rail sagged below the limit.",
   "Closed loop refused: the servo's data state does not allow it.",
 ];
+
+const DRIVE_REVERSED =
+  "Drive reversed: the shaft turned against the drive, as it does when the motor leads are swapped or the drive polarity changed. Run osc cal to recalibrate.";
 
 /**
  * Every latched fault clears the same way: the torque_enable 0->1 edge is the
@@ -43,6 +46,7 @@ function plural(n: number, word: string): string {
 
 /** The data fault names the reason it refused, not just that it did. */
 function faultLine(bit: number, data: DataState | undefined): string {
+  if (bit === FAULT_DATA_BIT && data?.faultCode === FAULT_DRIVE_REVERSED) return DRIVE_REVERSED;
   const [reason] = data === undefined ? [] : reasons(data.flags);
   if (bit === FAULT_DATA_BIT && reason !== undefined) return `Closed loop refused. ${reason.text}`;
   return FAULTS[bit] ?? `Unknown fault, bit ${bit}.`;

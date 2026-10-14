@@ -19,6 +19,8 @@ export interface Reason {
 export const FAULT_DATA = 7;
 /** `fault_flags` bit of the same fault. */
 export const FAULT_DATA_BIT = 6;
+/** `fault_code` of a shaft that turned against the drive, on the same bit. */
+export const FAULT_DRIVE_REVERSED = 8;
 
 const CONFIG_CORRUPT = 1 << 1;
 /** The stored plant stamp differs from the set the servo holds. */

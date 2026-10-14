@@ -233,10 +233,16 @@ test("the fleet card reads the live sensors and the health block as one span", (
 });
 
 test("faultText names the latched bits, lowest first", () => {
-  expect(faultText(0)).toBeUndefined();
-  expect(faultText(1 << 2)).toBe("Stall detected");
-  expect(faultText((1 << 0) | (1 << 5))).toBe("Overcurrent, Undervoltage");
-  expect(faultText(1 << 7)).toBe("Fault 0x80");
+  expect(faultText(0, 0)).toBeUndefined();
+  expect(faultText(1 << 2, 3)).toBe("Stall detected");
+  expect(faultText((1 << 0) | (1 << 5), 6)).toBe("Overcurrent, Undervoltage");
+  expect(faultText(1 << 7, 0)).toBe("Fault 0x80");
+});
+
+test("faultText names the data bit by its fault code", () => {
+  expect(faultText(1 << 6, 7)).toBe("Closed loop refused");
+  expect(faultText(1 << 6, 8)).toBe("Drive reversed");
+  expect(faultText((1 << 2) | (1 << 6), 8)).toBe("Stall detected, Drive reversed");
 });
 
 test("limitText names what governs, lowest first", () => {

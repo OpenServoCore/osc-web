@@ -43,6 +43,16 @@ test("the data fault names the reason the servo refused the enable", () => {
   );
 });
 
+test("drive_reversed names the reversed motor, whatever the data state says", () => {
+  const reversed =
+    "Drive reversed: the shaft turned against the drive, as it does when the motor leads are swapped or the drive polarity changed. Run osc cal to recalibrate. The motor stays off until torque is switched off and on again.";
+  const faultFlags = 1 << 6;
+  expect(statements({ ...clean, faultFlags }, { flags: 0, faultCode: 8 })[0]?.text).toBe(reversed);
+  expect(statements({ ...clean, faultFlags }, { flags: 1 << 4, faultCode: 8 })[0]?.text).toBe(
+    reversed,
+  );
+});
+
 test("every fault statement says how to clear it: torque off and on", () => {
   for (let bit = 0; bit < 8; bit++) {
     const s = statements({ ...clean, faultFlags: 1 << bit });

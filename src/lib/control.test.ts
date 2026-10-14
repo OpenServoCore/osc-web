@@ -28,8 +28,9 @@ import { ADC_MAX_COUNT, ampsPerCount, senseFromTable, type Calibration } from ".
 
 const fields = descriptor.fields as Field[];
 
+// The recording predates the published bias divider: 0 reads as no divider.
 const sense = senseFromTable((name) => {
-  const v = (fixture.meta.sense as Record<string, number>)[name];
+  const v = { ...fixture.meta.sense, vmotor_bias_top_ohm: 0, vmotor_bias_bot_ohm: 0 }[name];
   if (v === undefined) throw new Error(`fixture carries no ${name}`);
   return v;
 });

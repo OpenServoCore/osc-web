@@ -23,6 +23,8 @@ import {
   motorV,
   positionDeg,
   temperatureC,
+  vbAlpha,
+  vbSteady,
   vdiffV,
   velocityDegPerS,
   type Display,
@@ -273,7 +275,8 @@ export function summaryText(s: Summary): string {
 /** One CSV column and chart series: a field's counts through one converter. */
 export interface Unit extends Display {
   key: string;
-  convert: (counts: number) => number;
+  /** `row` indexes the rows the units were made for. */
+  convert: (counts: number, row?: number) => number;
 }
 
 const COUNTS: Display = DISPLAY.raw;
@@ -286,7 +289,31 @@ export interface StreamConfig extends TelemetryConfig {
   iWindowMinTicks: number;
 }
 
-function realUnit(key: string, config: StreamConfig, raw: boolean): Unit | undefined {
+/**
+ * VB per row through its low pass, from the boot bias at the first row, where
+ * a row carries both crest taps and the duty; undefined elsewhere.
+ */
+export function liveBias(rows: readonly Row[], config: StreamConfig): (number | undefined)[] {
+  const { sense, biases, pwmPeriodTicks, tickHz } = config;
+  const keep = 1 - vbAlpha(sense, tickHz);
+  let vb = biases.vmotorBiasCounts;
+  let at: number | undefined;
+  return rows.map(({ sample, values: { vmotor_a: a, vmotor_b: b, duty_ticks: d } }) => {
+    if (a === undefined || b === undefined || d === undefined || pwmPeriodTicks <= 0) return;
+    const to = vbSteady(biases.vmotorBiasCounts, Math.abs(d) / pwmPeriodTicks, a, b, sense);
+    if (to === undefined) return;
+    vb = to + (vb - to) * keep ** (at === undefined ? 1 : sample - at);
+    at = sample;
+    return vb;
+  });
+}
+
+function realUnit(
+  key: string,
+  config: StreamConfig,
+  raw: boolean,
+  vb: readonly (number | undefined)[],
+): Unit | undefined {
   const { sense, cal, biases, pwmPeriodTicks } = config;
   const unit = (display: Display, convert: (c: number) => number): Unit => ({
     key,
@@ -323,7 +350,12 @@ function realUnit(key: string, config: StreamConfig, raw: boolean): Unit | undef
     case "vmotor_b":
     case "vmotor_a_trough":
     case "vmotor_b_trough":
-      return unit(DISPLAY.motorVoltage, (c) => motorV(c, biases.vmotorBiasCounts, sense));
+      return {
+        key,
+        ...DISPLAY.motorVoltage,
+        convert: (c, i) =>
+          motorV(c, (i === undefined ? undefined : vb[i]) ?? biases.vmotorBiasCounts, sense),
+      };
     case "ntc_raw":
       return unit(DISPLAY.temperature, (c) => temperatureC(c, sense));
     case "t_winding_cc":
@@ -342,10 +374,12 @@ export function unitsFor(
   columns: readonly Pick<TelColumn, "name">[],
   config: StreamConfig | undefined,
   raw: boolean,
+  rows: readonly Row[] = [],
 ): Unit[] {
+  const vb = config === undefined ? [] : liveBias(rows, config);
   return columns.map(
     ({ name }) =>
-      (config === undefined ? undefined : realUnit(name, config, raw)) ?? {
+      (config === undefined ? undefined : realUnit(name, config, raw, vb)) ?? {
         key: name,
         ...COUNTS,
         convert: (c) => c,
@@ -364,10 +398,10 @@ export function csvHeader(units: readonly Unit[]): string {
 /** Header, then one line per row; a value the row lacks is an empty cell. */
 export function toCsv(rows: readonly Row[], units: readonly Unit[]): string {
   const lines = [csvHeader(units)];
-  for (const row of rows) {
+  for (const [i, row] of rows.entries()) {
     const cells = units.map((u) => {
       const counts = row.values[u.key];
-      return counts === undefined ? "" : fixed(u.convert(counts), u.digits);
+      return counts === undefined ? "" : fixed(u.convert(counts, i), u.digits);
     });
     const valid = row.valid === undefined ? "" : row.valid ? 1 : 0;
     lines.push([row.sample, valid, ...cells].join(","));

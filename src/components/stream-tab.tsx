@@ -166,7 +166,7 @@ export function StreamTab({ id }: { id: number }) {
   const window = wholeIn(windowMs, WINDOW_MAX_MS);
   const tickHz = config?.tickHz ?? 0;
   const units = useMemo(
-    () => (capture === undefined ? [] : unitsFor(capture.columns, config, raw)),
+    () => (capture === undefined ? [] : unitsFor(capture.columns, config, raw, capture.rows)),
     [capture, config, raw],
   );
   const options = useMemo(() => chartOptions(units, tokens, tickHz), [units, tokens, tickHz]);
@@ -175,9 +175,9 @@ export function StreamTab({ id }: { id: number }) {
     return [
       rows.map((r) => (tickHz > 0 ? spanMs(r.sample, tickHz) : r.sample)),
       ...units.map((u) =>
-        rows.map((r) => {
+        rows.map((r, i) => {
           const c = r.values[u.key];
-          return c === undefined ? null : u.convert(c);
+          return c === undefined ? null : u.convert(c, i);
         }),
       ),
     ];

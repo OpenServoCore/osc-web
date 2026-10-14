@@ -19,6 +19,8 @@ const MEDIUM_TICK_HZ = 2000;
 const MIN_GEAR_RATIO_CENTI = 100;
 /** gear_ratio_centi is a u16 on the wire. */
 const MAX_GEAR_RATIO_CENTI = 65535;
+/** VB's bias capacitance, Cb1 10 uF + Cb2 100 nF (rev 2A BOM nominal): the node's low pass. */
+export const BIAS_CAP_F = 10.1e-6;
 
 /** Reads one control-table register by descriptor name. */
 export type ReadRegister = (name: string) => number;
@@ -37,6 +39,9 @@ export interface Sense {
   ntcBeta: number;
   /** Nominal motor-terminal divider bias; telemetry publishes the boot-measured one. */
   vmotorBiasNomCounts: number;
+  /** The VDD divider making that bias; 0 on firmware that does not publish it. */
+  vmotorBiasTopOhm: number;
+  vmotorBiasBotOhm: number;
 }
 
 /** Count-to-angle calibration, from the CALIB pot and kinematics blocks. */
@@ -67,6 +72,8 @@ export function senseFromTable(read: ReadRegister): Sense {
     ntcR25Ohm: read("ntc_r25_ohm"),
     ntcBeta: read("ntc_beta"),
     vmotorBiasNomCounts: read("vmotor_bias_nom_counts"),
+    vmotorBiasTopOhm: read("vmotor_bias_top_ohm"),
+    vmotorBiasBotOhm: read("vmotor_bias_bot_ohm"),
   };
 }
 
@@ -229,6 +236,37 @@ export function motorV(tapCounts: number, biasCounts: number, sense: Sense): num
   const r =
     sense.vmotorDivBot > 0 ? (sense.vmotorDivTop + sense.vmotorDivBot) / sense.vmotorDivBot : 0;
   return (r * tapCounts - (r - 1) * biasCounts) * adcLsbV(sense);
+}
+
+/**
+ * Mirrors Board.vb_steady: the bias, counts, under slow-decay drive at ON
+ * fraction `duty` with both terminals' crest taps. `vb0Counts` is the node
+ * with no leg current. Leg current moves it, which a one-terminal reading
+ * carries (r-1) times and vA - vB cancels. Undefined without the divider.
+ */
+export function vbSteady(
+  vb0Counts: number,
+  duty: number,
+  tapACounts: number,
+  tapBCounts: number,
+  sense: Sense,
+): number | undefined {
+  const { vmotorBiasTopOhm: top, vmotorBiasBotOhm: bot } = sense;
+  const leg = sense.vmotorDivTop + sense.vmotorDivBot;
+  if (top <= 0 || bot <= 0 || sense.vmotorDivBot <= 0) return undefined;
+  const zs = (top * bot) / (top + bot);
+  const [cT, cV, k] = [zs / sense.vmotorDivBot, zs / leg, sense.vmotorDivBot / leg];
+  return (
+    (vb0Counts + cT * duty * (tapACounts + tapBCounts)) / (1 + 2 * cV + 2 * cT * duty * (1 - k))
+  );
+}
+
+/** The share of a step VB follows in one tick: BIAS_CAP_F against the bias node. */
+export function vbAlpha(sense: Sense, tickHz: number): number {
+  const { vmotorBiasTopOhm: top, vmotorBiasBotOhm: bot } = sense;
+  const legs = (sense.vmotorDivTop + sense.vmotorDivBot) / 2;
+  const node = 1 / ((top + bot) / (top * bot) + 1 / legs);
+  return 1 - Math.exp(-1 / (tickHz * node * BIAS_CAP_F));
 }
 
 /**

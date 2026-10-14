@@ -17,6 +17,7 @@ import {
   unitsFor,
   windowValid,
   type FieldKey,
+  type Row,
   type StreamConfig,
 } from "./stream";
 import { calibrationFromTable, senseFromTable } from "./units";
@@ -230,7 +231,9 @@ function readFrom(table: Record<string, number>) {
 }
 
 const config: StreamConfig = {
-  sense: senseFromTable(readFrom(fixture.meta.sense)),
+  sense: senseFromTable(
+    readFrom({ ...fixture.meta.sense, vmotor_bias_top_ohm: 0, vmotor_bias_bot_ohm: 0 }),
+  ),
   cal: calibrationFromTable(
     readFrom({
       raw_min: 500,
@@ -296,4 +299,35 @@ test("the estimates scale out of Q16 into degrees, or counts under the raw prefe
   const [rawTheta, rawOmega] = unitsFor(names, config, true);
   expect(rawTheta?.convert(2048 * 65536 + 32768)).toBe(2048.5);
   expect(rawOmega).toMatchObject({ unit: "counts/s" });
+});
+
+test("one terminal reads through VB as leg current moves it: 100% at 8.4 V reads the rail", () => {
+  const vb0 = (4096 * 100) / 530;
+  const cfg: StreamConfig = {
+    ...config,
+    sense: {
+      ...config.sense,
+      vmotorDivTop: 6400,
+      vmotorDivBot: 1600,
+      vmotorBiasTopOhm: 430,
+      vmotorBiasBotOhm: 100,
+    },
+    biases: { currentBiasCounts: 0, vmotorBiasCounts: vb0 },
+  };
+  // the settled node with A at 8.4 V and B low, and the crest taps it gives
+  const [lsb, cv] = [3.3 / 4096, (430 * 100) / 530 / 8000];
+  const vb = (vb0 + (cv * 8.4) / lsb) / (1 + 2 * cv);
+  const [a, b] = [(0.2 * 8.4) / lsb + 0.8 * vb, 0.8 * vb];
+  const row = (sample: number, duty?: number): Row => ({
+    sample,
+    valid: undefined,
+    values: { vmotor_a: a, vmotor_b: b, duty_ticks: duty },
+  });
+  const rows = [...Array.from({ length: 64 }, (_, i) => row(i, 1200)), row(64)];
+  const [motorA] = unitsFor([{ name: "vmotor_a" }], cfg, false, rows);
+  const at = (i?: number) => motorA?.convert(a, i) ?? NaN;
+  expect(at() - 8.4).toBeCloseTo(0.284, 3);
+  expect(at(0) - 8.4).toBeCloseTo(0.284 * (1 - 0.06), 2);
+  expect(Math.abs(at(63) - 8.4)).toBeLessThan(0.006);
+  expect(at(64)).toBe(at());
 });

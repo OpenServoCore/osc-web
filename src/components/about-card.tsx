@@ -8,6 +8,7 @@ import { useReadOnce } from "@/lib/bus/hooks";
 import { modelName } from "@/lib/descriptor";
 import { formatVersion, hex16 } from "@/lib/format";
 import { features, identityFrom, IDENTITY_REGISTERS } from "@/lib/identity";
+import { useSession } from "@/lib/session";
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -19,7 +20,9 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 }
 
 export function AboutCard({ id, uid }: { id: number; uid: string }) {
-  const { snapshot, error } = useReadOnce(id, IDENTITY_REGISTERS);
+  const { descriptor, descriptorError } = useSession();
+  const { snapshot, error: readError } = useReadOnce(id, IDENTITY_REGISTERS, [descriptor]);
+  const error = (descriptor === undefined ? undefined : readError) ?? descriptorError;
   const identity = snapshot === undefined ? undefined : identityFrom(snapshot.read);
 
   const name = identity === undefined ? undefined : modelName(identity.model);

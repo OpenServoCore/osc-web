@@ -37,6 +37,19 @@ export async function writeTable(page: Page, id: number, points: number[]): Prom
   ] as const);
 }
 
+/** Holds every descriptor request until the returned release is called. */
+export async function holdDescriptors(page: Page): Promise<() => void> {
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/descriptors/**", async (route) => {
+    await released;
+    await route.continue();
+  });
+  return release;
+}
+
 /** Lands on the home page with a simulated fleet of `ids` already scanned. */
 export async function gotoSim(
   page: Page,

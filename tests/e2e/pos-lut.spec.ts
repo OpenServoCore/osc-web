@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { errorSeries, hoverWords } from "../../src/lib/pos-lut";
-import { gotoSim, MG90A, writeTable } from "./helpers";
+import { gotoSim, holdDescriptors, MG90A, writeTable } from "./helpers";
 
 /** The simulated servo's angle map: stops 5..4095 read 0..202 deg. */
 const SIM = {
@@ -83,4 +83,16 @@ test("the mg90-a table reads live, graded A, its error in degrees and percent of
   await expect(
     page.getByRole("region", { name: "Position calibration" }).getByLabel("Table state"),
   ).toHaveText("No table: the sensor is read as-is.");
+});
+
+test("a table written while the descriptor is still on its way lands live", async ({ page }) => {
+  const land = await holdDescriptors(page);
+  await gotoSim(page, [1, 2]);
+  const written = writeTable(page, 1, MG90A.points);
+  land();
+  await written;
+  await openServo(page, 1);
+  await expect(
+    page.getByRole("region", { name: "Position calibration" }).getByLabel("Table state"),
+  ).toHaveText("Live: the servo corrects every sensor sample through this table.");
 });

@@ -149,7 +149,7 @@ class Controller {
   private readonly cards = new Map<string, Partial<CardValues>>();
   private readonly subscriptions = new Map<string, () => void>();
   private readonly reading = new Set<string>();
-  private readonly fetching = new Set<string>();
+  private readonly fetching = new Map<string, Promise<void>>();
   private readonly listeners = new Set<() => void>();
 
   readonly subscribe = (listener: () => void): (() => void) => {
@@ -197,8 +197,7 @@ class Controller {
       if (ping === undefined) continue;
       const key = modelKey(ping);
       if (this.snap.models.has(key) || this.fetching.has(key)) continue;
-      this.fetching.add(key);
-      fetchDescriptor(ping.model, ping.fw)
+      const fetched = fetchDescriptor(ping.model, ping.fw)
         .then(
           (descriptor) => {
             if (this.snap.models.has(key)) {
@@ -224,6 +223,7 @@ class Controller {
         .finally(() => {
           this.fetching.delete(key);
         });
+      this.fetching.set(key, fetched);
     }
   }
 
@@ -425,10 +425,12 @@ class Controller {
   }
 
   /** Test hook: a table into a simulated servo, the way `osc lut write` puts one there. */
-  writePosLut(id: number, points: number[]): Promise<void> {
+  async writePosLut(id: number, points: number[]): Promise<void> {
     const servo = this.snap.state.servos.find((s) => s.id === id);
+    // The servo answers before its descriptor arrives; the write needs the descriptor.
+    if (servo?.ping !== undefined) await this.fetching.get(modelKey(servo.ping));
     const descriptor = servo === undefined ? undefined : this.modelFor(servo)?.descriptor;
-    if (descriptor === undefined) return Promise.reject(new Error(`no descriptor for ID ${id}`));
+    if (descriptor === undefined) throw new Error(`no descriptor for ID ${id}`);
     return this.bus.command((c) => c.writePosLut(id, descriptor, points));
   }
 

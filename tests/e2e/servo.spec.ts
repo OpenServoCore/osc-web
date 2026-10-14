@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { CORE_VERSION, gotoSim } from "./helpers";
+import { CORE_VERSION, gotoSim, holdDescriptors } from "./helpers";
 
 const UID_1 = "c94b8419d1092aec87de5fd151ce290f";
 
@@ -17,6 +17,17 @@ test("the servo page reports the selected servo's identity and health", async ({
 
   const health = page.getByRole("region", { name: "Health" });
   await expect(health.getByText("No faults.")).toBeVisible();
+});
+
+test("the about card reads the identity once a late descriptor lands", async ({ page }) => {
+  const land = await holdDescriptors(page);
+  await gotoSim(page, [1, 2]);
+  await page.getByRole("button", { name: "ID 1" }).click();
+  const about = page.getByRole("region", { name: "About" });
+  await expect(about).toBeVisible();
+  land();
+  await expect(about.getByText(CORE_VERSION)).toBeVisible();
+  await expect(about.getByText(UID_1)).toBeVisible();
 });
 
 test("the servo page asks for a selection while none is made", async ({ page }) => {

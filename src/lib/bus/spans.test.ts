@@ -28,8 +28,8 @@ test("the live span is one read from pos through vmotor_bias_counts", () => {
   expect(span(fields, LIVE_REGISTERS)).toEqual({ addr: 568, count: 56 });
 });
 
-test("the constants span is one read from raw_min through vmotor_bias_bot_ohm", () => {
-  expect(span(fields, CONSTANT_REGISTERS)).toEqual({ addr: 160, count: 46 });
+test("the constants span is one read from raw_min through gear_class", () => {
+  expect(span(fields, CONSTANT_REGISTERS)).toEqual({ addr: 160, count: 49 });
 });
 
 test("plan fails loudly on a descriptor missing a register", () => {
@@ -181,6 +181,7 @@ test("the live, health and constants layouts decode from a whole-table image", (
   put("angle_min_cdeg", -9500);
   put("angle_max_cdeg", 9500);
   put("gear_ratio_centi", 100);
+  put("gear_class", 2);
   put("shunt_r_mohm", 10);
   put("gain_milli", 32000);
   put("vdd_mv", 3300);
@@ -210,6 +211,7 @@ test("the live, health and constants layouts decode from a whole-table image", (
   });
   expect(constants.sense.gainMilli).toBe(32000);
   expect(constants.calibrated.valid).toBe(true);
+  expect(constants.gearClass).toBe("metal");
   expect(liveFrom(read(LIVE_REGISTERS))).toEqual({
     pos: 2054,
     current: 2100,

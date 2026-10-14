@@ -10,6 +10,7 @@ import {
   currentMa,
   degPerCount,
   degToCounts,
+  gearClassFromTable,
   motorV,
   positionDeg,
   senseFromTable,
@@ -121,6 +122,11 @@ test("calibrationStatus rejects an unset gear ratio", () => {
   const got = calibrationStatus({ ...CAL, gearRatioCenti: 0 });
   expect(got.valid).toBe(false);
   expect(got.reason).toMatch(/gear/);
+});
+
+test("gear_class names plastic and metal and reads anything else as unknown", () => {
+  const named = [0, 1, 2, 3, 255].map((code) => gearClassFromTable(readFrom({ gear_class: code })));
+  expect(named).toEqual(["unknown", "plastic", "metal", "unknown", "unknown"]);
 });
 
 test("positionDeg maps the calibrated span onto the angle endpoints", () => {

@@ -8,10 +8,12 @@ import {
   biasesFromTable,
   calibrationFromTable,
   calibrationStatus,
+  gearClassFromTable,
   senseFromTable,
   type Biases,
   type Calibration,
   type CalibrationStatus,
+  type GearClass,
   type ReadRegister,
   type Sense,
 } from "../units";
@@ -128,7 +130,7 @@ export function decodeSpan(fields: readonly Field[], span: Span, bytes: Uint8Arr
   };
 }
 
-/** CALIB pot, kinematics, sense and sense_ext: read once per servo. */
+/** CALIB pot, kinematics, sense, sense_ext and gear class: read once per servo. */
 export const CONSTANT_REGISTERS: readonly string[] = [
   "raw_min",
   "raw_max",
@@ -148,6 +150,7 @@ export const CONSTANT_REGISTERS: readonly string[] = [
   "vmotor_bias_nom_counts",
   "vmotor_bias_top_ohm",
   "vmotor_bias_bot_ohm",
+  "gear_class",
 ];
 
 /** TELEMETRY sensors the cards show, plus the biases their conversion needs. */
@@ -190,11 +193,17 @@ export interface Constants {
   sense: Sense;
   calibration: Calibration;
   calibrated: CalibrationStatus;
+  gearClass: GearClass;
 }
 
 export function constantsFrom(read: ReadRegister): Constants {
   const calibration = calibrationFromTable(read);
-  return { sense: senseFromTable(read), calibration, calibrated: calibrationStatus(calibration) };
+  return {
+    sense: senseFromTable(read),
+    calibration,
+    calibrated: calibrationStatus(calibration),
+    gearClass: gearClassFromTable(read),
+  };
 }
 
 export interface Live {

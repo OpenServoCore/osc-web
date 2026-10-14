@@ -348,6 +348,12 @@ describe("real units", () => {
     expect(realValue(rowOf("accel_limit_q88"), 3840, cal)).toBe("1500 deg/s^2");
   });
 
+  test("a descending angle map leaves the trajectory limits unsigned", () => {
+    const ccwLow = { ...cal, angleMinCdeg: 18000, angleMaxCdeg: 0 };
+    expect(realValue(rowOf("velocity_limit_cps"), 1500, ccwLow)).toBe("75 deg/s");
+    expect(realValue(rowOf("accel_limit_q88"), 3840, ccwLow)).toBe("1500 deg/s^2");
+  });
+
   test("without a usable calibration, or for any other register, the raw value stands alone", () => {
     expect(realValue(rowOf("velocity_limit_cps"), 1500, undefined)).toBeUndefined();
     expect(realValue(rowOf("velocity_limit_cps"), 1500, { ...cal, rawMax: 100 })).toBeUndefined();

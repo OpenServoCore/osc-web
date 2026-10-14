@@ -37,6 +37,7 @@ import {
   dutyPercent,
   goalOf,
   goalAtStop,
+  displayEnds,
   goalSpec,
   goalUnits,
   isWindow,
@@ -675,6 +676,7 @@ function Controls({
   };
 
   const fmt = (c: number) => (spec === undefined ? "" : spec.toDisplay(c).toFixed(spec.digits));
+  const ends = spec === undefined ? { low: 0, high: 0, inverted: false } : displayEnds(spec);
   // A latched fault holds the motor off whatever torque_enable says
   // (firmware kernel/faults.rs); the switch alone does not say so.
   const faulted = servo?.fault !== undefined;
@@ -758,6 +760,7 @@ function Controls({
             aria-label="Goal"
             min={spec.range.min}
             max={spec.range.max}
+            inverted={ends.inverted}
             step={1}
             value={[counts]}
             onValueChange={([v]) => {
@@ -765,8 +768,8 @@ function Controls({
             }}
           />
           <div className="flex justify-between text-xs text-text-3 tabular-nums">
-            <span>{fmt(spec.range.min)}</span>
-            <span>{fmt(spec.range.max)}</span>
+            <span>{fmt(ends.low)}</span>
+            <span>{fmt(ends.high)}</span>
           </div>
           <div className="flex items-center gap-2">
             <Label htmlFor={goalId} className="w-14">
@@ -775,8 +778,8 @@ function Controls({
             <GoalInput
               id={goalId}
               value={fmt(counts)}
-              min={fmt(spec.range.min)}
-              max={fmt(spec.range.max)}
+              min={fmt(ends.low)}
+              max={fmt(ends.high)}
               step={10 ** -spec.digits}
               unit={spec.unit}
               onCommit={(v) => {

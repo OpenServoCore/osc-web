@@ -53,6 +53,14 @@ export interface Calibration {
   gearRatioCenti: number;
 }
 
+/** `gear_class`, which cal writes; 0 or a code this build does not know is unknown. */
+export type GearClass = "unknown" | "plastic" | "metal";
+
+export function gearClassFromTable(read: ReadRegister): GearClass {
+  const code = read("gear_class");
+  return code === 1 ? "plastic" : code === 2 ? "metal" : "unknown";
+}
+
 /** Bias counts the servo measures for itself; both live in TELEMETRY, not CALIB. */
 export interface Biases {
   currentBiasCounts: number;

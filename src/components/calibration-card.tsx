@@ -13,7 +13,13 @@ import { CALIBRATION_REGISTERS, editReason, type CalibrationRegister } from "@/l
 import { hex16, hexAddr } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import { stampWords } from "@/lib/stamp";
-import { calibrationStatus, type Calibration } from "@/lib/units";
+import { calibrationStatus, type Calibration, type GearClass } from "@/lib/units";
+
+const GEAR_CLASS_TEXT: Record<GearClass, string> = {
+  unknown: "Unknown",
+  plastic: "Plastic",
+  metal: "Metal",
+};
 
 export function CalibrationCard({ id, uid }: { id: number; uid: string }) {
   const { descriptor, descriptorError, values, refreshConstants } = useSession();
@@ -79,6 +85,15 @@ export function CalibrationCard({ id, uid }: { id: number; uid: string }) {
                 onApply={apply}
               />
             ))}
+            {card !== undefined && (
+              <div role="group" aria-label="Gear train" className="flex flex-col gap-0.5">
+                <span className="text-xs text-text-3">Gear train</span>
+                <span className="text-base">{GEAR_CLASS_TEXT[card.constants.gearClass]}</span>
+                <span className="font-mono text-xs text-text-3">
+                  gear_class {hexAddr(fieldNamed(fields, "gear_class").addr)}
+                </span>
+              </div>
+            )}
             <div role="group" aria-label="Plant stamp" className="flex flex-col gap-0.5">
               <span className="text-xs text-text-3">Plant stamp</span>
               {stamp.error !== undefined ? (

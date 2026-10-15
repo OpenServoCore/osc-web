@@ -6,7 +6,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { StampNotice } from "@/components/stamp-notice";
+import { StampNotice, useStampNotice } from "@/components/stamp-notice";
 import { TableSearch } from "@/components/table-search";
 import { ValueEditor } from "@/components/value-editor";
 import { useBus, useReadOnce, useRegisters } from "@/lib/bus/hooks";
@@ -159,21 +159,12 @@ function Table({
 }) {
   const { servos, values } = useSession();
   const [refresh, setRefresh] = useState(0);
-  /** An edit landed while the stamp matched, so a mismatch now is that edit's doing. */
-  const [edited, setEdited] = useState(false);
   const servo = servos.find((s) => s.id === id);
   const flags = (servo === undefined ? undefined : values.get(servo.uid)?.data.flags) ?? 0;
-  const mismatch = (flags & STAMP_MISMATCH) !== 0;
+  const notice = useStampNotice((flags & STAMP_MISMATCH) !== 0);
   return (
     <>
-      {edited && mismatch && (
-        <StampNotice
-          id={id}
-          onStamped={() => {
-            setEdited(false);
-          }}
-        />
-      )}
+      {notice.shown && <StampNotice id={id} onStamped={notice.onStamped} />}
       <Tabs
         value={tab}
         onValueChange={(v) => {
@@ -211,9 +202,7 @@ function Table({
               open={open}
               onToggle={onToggle}
               jump={jump?.tab === t.name ? jump : undefined}
-              onEdit={() => {
-                if (!mismatch) setEdited(true);
-              }}
+              onEdit={notice.onEdit}
             />
           </TabsContent>
         ))}

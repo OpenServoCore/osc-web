@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { openTable, tableRow } from "./helpers";
+import { gotoSim, openTable, tableRow } from "./helpers";
 
 /** Opens the editor of velocity_limit_cps, a covered row low on the page, and lowers its value. */
 async function editLowRow(page: Page): Promise<Locator> {
@@ -72,4 +72,39 @@ test("a stamp notice that mounts while the editor closes stays in view", async (
   await expect(editor).toHaveCount(1);
   await expect(editor).toHaveCount(0);
   await expectInView(page, notice);
+});
+
+test("a calibration card edit raises the same notice, and save and stamp makes the stamp match again", async ({
+  page,
+}) => {
+  await gotoSim(page, [1]);
+  await page.getByRole("button", { name: "ID 1" }).click();
+  const card = page.getByRole("region", { name: "Calibration" });
+  const stamp = card.getByRole("group", { name: "Plant stamp" });
+  await expect(stamp).toContainText("Stamped: the calibration");
+
+  await card
+    .getByRole("group", { name: "Sensor highest" })
+    .getByRole("button", { name: "4095 counts" })
+    .click();
+  await page.getByRole("textbox").fill("4000");
+  await page.getByRole("button", { name: "Apply" }).click();
+  await expect(stamp).toContainText("Changed since it was stamped");
+
+  const notice = page.getByRole("status", { name: "Stamp" });
+  await expect(notice).toContainText("Closed loop is off: the stamp no longer matches.");
+  await notice.getByRole("button", { name: "Save and stamp" }).click();
+  await expect(notice).toHaveCount(0);
+
+  await expect(stamp).toContainText("Stamped: the calibration");
+  const [, stored, computed] =
+    /= (0x[0-9a-f]{4}), computed (0x[0-9a-f]{4})/i.exec((await stamp.textContent()) ?? "") ?? [];
+  expect(stored).toBeDefined();
+  expect(stored).toBe(computed);
+  await expect(
+    card
+      .getByRole("group", { name: "Sensor highest" })
+      .getByRole("button", { name: "4000 counts" }),
+  ).toBeVisible();
+  await expect(page.getByRole("status", { name: "Data state" })).toHaveCount(0);
 });

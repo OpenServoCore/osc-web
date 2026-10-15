@@ -1,6 +1,7 @@
 import type { Field } from "@openservocore/client";
 import { Check, CircleQuestionMark, Ruler } from "lucide-react";
 import { useId } from "react";
+import { StampNotice, useStampNotice } from "@/components/stamp-notice";
 import { ValueEditor } from "@/components/value-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useBus, useClientOnce } from "@/lib/bus/hooks";
 import { CALIBRATION_REGISTERS, editReason, type CalibrationRegister } from "@/lib/calibration";
+import { STAMP_MISMATCH } from "@/lib/data-state";
 import { hex16, hexAddr } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import { stampWords } from "@/lib/stamp";
@@ -34,12 +36,14 @@ export function CalibrationCard({ id, uid }: { id: number; uid: string }) {
     (c) => (descriptor === undefined ? Promise.resolve(undefined) : c.plantStamp(id, descriptor)),
     [id, descriptor, cal, card?.data.flags],
   );
+  const notice = useStampNotice(((card?.data.flags ?? 0) & STAMP_MISMATCH) !== 0);
 
   async function apply(field: Field, raw: number) {
     await bus.write(id, field.name, { kind: field.kind === "int" ? "int" : "uint", value: raw });
     // The write dirties the CALIB span; the session re-reads the constants
     // every card on the page shows.
     refreshConstants(uid);
+    notice.onEdit();
   }
 
   return (
@@ -67,6 +71,7 @@ export function CalibrationCard({ id, uid }: { id: number; uid: string }) {
         )}
       </CardHeader>
       <CardContent>
+        {notice.shown && <StampNotice id={id} onStamped={notice.onStamped} />}
         {descriptorError !== undefined && <p className="text-danger">{descriptorError}</p>}
         {cal === undefined || fields === undefined ? (
           <div className="grid grid-cols-2 gap-x-6 gap-y-3">

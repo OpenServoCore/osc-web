@@ -6,6 +6,20 @@ import { useBus } from "@/lib/bus/hooks";
 import { useSession } from "@/lib/session";
 import { saveAndStamp } from "@/lib/stamp";
 
+/** Whether the notice shows: an edit landed while the stamp matched, so a mismatch now is that edit's doing. */
+export function useStampNotice(mismatch: boolean) {
+  const [edited, setEdited] = useState(false);
+  return {
+    shown: edited && mismatch,
+    onEdit: () => {
+      if (!mismatch) setEdited(true);
+    },
+    onStamped: () => {
+      setEdited(false);
+    },
+  };
+}
+
 /** Why closed loop went off after a covered edit, and the one way back the editor offers. */
 export function StampNotice({ id, onStamped }: { id: number; onStamped: () => void }) {
   const bus = useBus();

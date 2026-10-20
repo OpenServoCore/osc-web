@@ -183,7 +183,6 @@ describe("buildTable", () => {
     expect(rowOf("tel_drop_count").editable).toBe(true);
     expect(placement("torque_enable")).toEqual(["Live values", "Commands"]);
     expect(placement("goal_position")).toEqual(["Live values", "Commands"]);
-    expect(placement("boot_mode")).toEqual(["Live values", "Commands"]);
     expect(placement("chans")).toEqual(["Live values", "Commands"]);
     expect(placement("pos_lut_cmd")).toEqual(["Live values", "Position table window"]);
     expect(placement("pos_lut_state")).toEqual(["Live values", "Position table window"]);

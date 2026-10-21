@@ -1,4 +1,11 @@
-import init, { OscClient, pid, requestDevice, vid, type Track } from "@openservocore/client";
+import init, {
+  OscClient,
+  pid,
+  requestDevice,
+  vid,
+  type FakeFail,
+  type Track,
+} from "@openservocore/client";
 
 const ID_MIN = 1;
 const ID_MAX = 0xf9;
@@ -41,6 +48,25 @@ export function parseSimDeadlines(search: string): Map<number, number> {
   return held;
 }
 
+/** `&boot=3` boots those ids as boards that carry only their bootloader. */
+export function parseSimBoot(search: string): number[] {
+  const raw = new URLSearchParams(search).get("boot");
+  return raw === null ? [] : parseIds(raw);
+}
+
+/** `&fail=1:write` makes that id's bootloader fail its next erase or write. */
+export function parseSimFail(search: string): Map<number, FakeFail> {
+  const raw = new URLSearchParams(search).get("fail");
+  const fails = new Map<number, FakeFail>();
+  for (const part of raw?.split(",") ?? []) {
+    const m = /^(\d+):(erase|write)$/.exec(part);
+    if (m === null) continue;
+    const id = Number(m[1]);
+    if (id >= ID_MIN && id <= ID_MAX) fails.set(id, m[2] as FakeFail);
+  }
+  return fails;
+}
+
 export function simRequested(): boolean {
   return parseSimIds(window.location.search) !== undefined;
 }
@@ -69,12 +95,16 @@ export async function openClient(): Promise<OscClient> {
     const track = await simTrack();
     const virgin = parseSimVirgin(window.location.search);
     const held = parseSimDeadlines(window.location.search);
+    const boot = parseSimBoot(window.location.search);
+    const fail = parseSimFail(window.location.search);
     return OscClient.fakeWithTracks(
       ids.map((id) => ({
         id,
         track,
         virgin: virgin.includes(id),
         responseDeadlineUs: held.get(id),
+        bootloader: boot.includes(id),
+        failNext: fail.get(id),
       })),
     );
   }

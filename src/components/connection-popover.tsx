@@ -99,9 +99,6 @@ export function ConnectionPopover({
             <span className="font-medium">{simulated ? "Simulated adapter" : "osc-adapter"}</span>
             <Badge className={badge.className}>{badge.text}</Badge>
           </div>
-          {linkInfo !== undefined && (
-            <span className="text-xs text-text-3">Firmware {linkInfo.version}</span>
-          )}
         </div>
 
         {connected ? (

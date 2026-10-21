@@ -20,6 +20,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { ConnectionPopover } from "@/components/connection-popover";
+import { FirmwareItem } from "@/components/firmware-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -95,6 +96,7 @@ export function AppSidebar() {
       <SidebarFooter>
         <SidebarMenu>
           <ConnectionItem open={connectionOpen} onOpenChange={setOpen} />
+          <FirmwareItem />
           <SettingsItem />
         </SidebarMenu>
       </SidebarFooter>

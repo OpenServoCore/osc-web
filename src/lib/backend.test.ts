@@ -1,5 +1,12 @@
 import { expect, test } from "vitest";
-import { parseSimDeadlines, parseSimIds, parseSimVirgin, permittedAdapter } from "./backend";
+import {
+  parseSimBoot,
+  parseSimDeadlines,
+  parseSimFail,
+  parseSimIds,
+  parseSimVirgin,
+  permittedAdapter,
+} from "./backend";
 
 test("parseSimIds is undefined without ?sim", () => {
   expect(parseSimIds("")).toBeUndefined();
@@ -32,6 +39,21 @@ test("parseSimDeadlines maps ids to the deadline they hold, none by default", ()
     new Map([
       [2, 400],
       [4, 0],
+    ]),
+  );
+});
+
+test("parseSimBoot names the bootloader-only boards, none by default", () => {
+  expect(parseSimBoot("?sim=1,2,3")).toEqual([]);
+  expect(parseSimBoot("?sim=1,2,3&boot=3,x,0")).toEqual([3]);
+});
+
+test("parseSimFail maps ids to the bootloader command that fails next", () => {
+  expect(parseSimFail("?sim=1,2")).toEqual(new Map());
+  expect(parseSimFail("?fail=1:write,2:erase,3:read,x,0:write")).toEqual(
+    new Map([
+      [1, "write"],
+      [2, "erase"],
     ]),
   );
 });

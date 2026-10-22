@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -39,6 +40,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ProgressRing } from "@/components/progress-ring";
 import { useBus } from "@/lib/bus/hooks";
 import { isDisconnect } from "@/lib/bus/stats";
 import {
@@ -51,8 +54,9 @@ import {
   leaveWarning,
   locked,
   matching,
+  overallPercent,
+  percent,
   preselect,
-  progressText,
   restartResult,
   shortUid,
   stepIndex,
@@ -169,7 +173,7 @@ function FirmwareDialog({
   const [devices, setDevices] = useState<Device[]>([]);
   const [listed, setListed] = useState(false);
   const [installed, setInstalled] = useState<ReadonlySet<string>>(new Set());
-  const [turn, setTurn] = useState<{ index: number; count: number }>();
+  const [turn, setTurn] = useState<{ index: number; sizes: number[]; written: number }>();
   const [result, setResult] = useState<RestartResult>();
   const [error, setError] = useState<string>();
   const [warned, setWarned] = useState(false);
@@ -247,18 +251,20 @@ function FirmwareDialog({
   }
 
   async function flash(c: OscClient) {
-    const queue = devices.filter((d) => d.checked && d.file !== undefined);
+    const queue = devices.flatMap((d) => {
+      const image = d.checked ? files.find((f) => f.key === d.file) : undefined;
+      return image === undefined ? [] : [{ uid: d.row.uid, image }];
+    });
+    const sizes = queue.map((q) => q.image.bytes.length);
     setPhase("flashing");
     setError(undefined);
-    for (const [index, d] of queue.entries()) {
-      setTurn({ index, count: queue.length });
-      const uid = d.row.uid;
-      const image = files.find((f) => f.key === d.file);
-      if (image === undefined) continue;
+    for (const [index, { uid, image }] of queue.entries()) {
+      setTurn({ index, sizes, written: 0 });
       update(uid, { progress: [0, image.bytes.length], result: undefined });
       try {
         const verdict = await c.bootInstall(uid, image.bytes, (written, total) => {
           update(uid, { progress: [written, total] });
+          setTurn({ index, sizes, written });
         });
         const ok = verdict.kind === "installed";
         update(uid, {
@@ -272,12 +278,13 @@ function FirmwareDialog({
         if (failed(e)) break;
       }
     }
-    setTurn(undefined);
+    setTurn({ index: queue.length, sizes, written: 0 });
     setPhase("flashed");
   }
 
   async function restart(c: OscClient) {
     const before = phase;
+    setTurn(undefined);
     setPhase("restarting");
     setError(undefined);
     try {
@@ -301,10 +308,11 @@ function FirmwareDialog({
     }
   }
 
+  const overall = turn && overallPercent(turn.sizes, turn.index, turn.written);
   const queued = devices.filter((d) => d.checked && d.file !== undefined).length;
   const description =
     phase === "flashing" && turn !== undefined
-      ? updatingText(turn.index, turn.count)
+      ? updatingText(turn.index, turn.sizes.length)
       : {
           prepare: "Load the firmware files, then put every servo in its bootloader.",
           entering: "Putting every servo in its bootloader ..",
@@ -346,6 +354,14 @@ function FirmwareDialog({
             </li>
           ))}
         </ol>
+
+        {overall !== undefined && (
+          <div className="flex items-center gap-3 text-sm">
+            <span className="text-text-3">Overall</span>
+            <Progress aria-label="Overall" value={overall} className="flex-1" />
+            <span className="w-10 text-right tabular-nums">{overall}%</span>
+          </div>
+        )}
 
         <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-auto">
           {phase === "prepare" ? (
@@ -485,9 +501,24 @@ function FileLine({ file }: { file: LoadedFile }) {
   );
 }
 
-function rowStatus(d: Device): { text: string; ok: boolean | undefined } | undefined {
-  if (d.progress !== undefined) return { text: progressText(...d.progress), ok: undefined };
-  return d.result;
+function StatusIcon({ device }: { device: Device }) {
+  if (device.progress !== undefined) {
+    return <ProgressRing label="Writing" value={percent(...device.progress)} />;
+  }
+  if (device.result === undefined) return null;
+  const { text, ok } = device.result;
+  const Icon = ok ? CircleCheck : CircleX;
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        className="flex data-[ok=false]:text-danger data-[ok=true]:text-success"
+        data-ok={ok}
+      >
+        <Icon role="img" aria-label={text} className="size-5" />
+      </TooltipTrigger>
+      <TooltipContent>{text}</TooltipContent>
+    </Tooltip>
+  );
 }
 
 function DeviceTable({
@@ -513,14 +544,13 @@ function DeviceTable({
           <th className="px-3 py-2 font-medium">Board key</th>
           <th className="px-3 py-2 font-medium">Installed</th>
           <th className="px-3 py-2 font-medium">File</th>
-          <th className="px-3 py-2 font-medium">Status</th>
+          <th className="w-20 px-3 py-2 font-medium">Status</th>
         </tr>
       </thead>
       <tbody>
         {devices.map((d) => {
           const label = deviceLabel(d.row, roster);
           const options = matching(d.row.compat, files);
-          const status = rowStatus(d);
           return (
             <tr key={d.row.uid} className="border-b align-top">
               <td className="px-3 py-3">
@@ -573,21 +603,7 @@ function DeviceTable({
                 )}
               </td>
               <td className="px-3 py-2">
-                {status !== undefined && (
-                  <span
-                    className="flex items-center gap-2 data-[ok=false]:text-danger data-[ok=true]:text-success"
-                    data-ok={status.ok}
-                  >
-                    {status.ok === undefined ? (
-                      <LoaderCircle className="size-4 animate-spin" />
-                    ) : status.ok ? (
-                      <CircleCheck className="size-4" />
-                    ) : (
-                      <CircleX className="size-4" />
-                    )}
-                    {status.text}
-                  </span>
-                )}
+                <StatusIcon device={d} />
               </td>
             </tr>
           );

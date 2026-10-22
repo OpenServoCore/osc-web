@@ -154,10 +154,20 @@ function kbDown(bytes: number): number {
   return Math.floor(bytes / 1024);
 }
 
-export function progressText(written: number, total: number): string {
-  if (written === 0) return "Preparing";
-  if (written >= total) return "Verifying";
-  return `Writing ${kbDown(written)} of ${kbUp(total)} KB`;
+export function percent(done: number, total: number): number {
+  return total === 0 ? 100 : Math.min(100, Math.floor((done * 100) / total));
+}
+
+/**
+ * The flash's share done, by bytes: every board before `index` counts whole,
+ * failed or not, so the run ends at 100.
+ */
+export function overallPercent(sizes: readonly number[], index: number, written: number): number {
+  const before = sizes.slice(0, index).reduce((a, b) => a + b, 0);
+  return percent(
+    before + written,
+    sizes.reduce((a, b) => a + b, 0),
+  );
 }
 
 export function updatingText(index: number, count: number): string {

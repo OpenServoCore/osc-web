@@ -267,7 +267,16 @@ export function faultText(faultFlags: number, faultCode: number): string | undef
 }
 
 /** `limit_flags` bits (firmware kernel/limits.rs), lowest bit first. */
-const LIMITS: readonly string[] = ["Current limit", "Stall yield", "End stop", "Stall permit"];
+const LIMITS: readonly string[] = [
+  "Current limit",
+  "Stall yield",
+  "End stop",
+  "Stall permit",
+  "I2t budget",
+  "Thermal derate",
+  "Rail fold",
+  "Goal current",
+];
 
 export function limitText(limitFlags: number): string {
   const set = LIMITS.filter((_, bit) => (limitFlags & (1 << bit)) !== 0);

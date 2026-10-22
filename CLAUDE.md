@@ -18,7 +18,7 @@
 - Dashes are plain `-` everywhere: never `--`, never an em-dash. Applies to all writing (comments, docs, commit/PR text).
 - No tracker/task numbers, plan references, or dates: state the substantive fact instead.
 - No unrequested UX affordances: hints, guardrails and convenience controls only when asked for.
-- Prettier owns formatting; ESLint owns correctness. Do not add stylistic lint rules.
+- Prettier owns formatting; Oxlint owns correctness. Do not add stylistic lint rules.
 
 ## Dependencies
 

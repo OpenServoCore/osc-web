@@ -11,7 +11,8 @@ import {
   LOST_WARNING,
   matching,
   preselect,
-  progressText,
+  overallPercent,
+  percent,
   restartResult,
   stepIndex,
   STUCK_WARNING,
@@ -110,11 +111,22 @@ test("each install verdict reads as words", () => {
   expect(verdictText({ kind: "noDevice" })).toBe("The board did not answer");
 });
 
-test("progress and the header count read as words", () => {
-  expect(progressText(0, 44_000)).toBe("Preparing");
-  expect(progressText(12_800, 44_000)).toBe("Writing 12 of 43 KB");
-  expect(progressText(44_000, 44_000)).toBe("Verifying");
+test("a board's percent rounds down and stops at 100", () => {
+  expect(percent(0, 44_000)).toBe(0);
+  expect(percent(12_800, 44_000)).toBe(29);
+  expect(percent(44_000, 44_000)).toBe(100);
+  expect(percent(0, 0)).toBe(100);
   expect(updatingText(1, 3)).toBe("Updating 2 of 3");
+});
+
+test("the overall percent weighs boards by bytes and counts earlier ones whole", () => {
+  const sizes = [1000, 3000];
+  expect(overallPercent(sizes, 0, 0)).toBe(0);
+  expect(overallPercent(sizes, 0, 1000)).toBe(25);
+  // A board that failed partway still counts whole once the next one starts.
+  expect(overallPercent(sizes, 1, 0)).toBe(25);
+  expect(overallPercent(sizes, 1, 1500)).toBe(62);
+  expect(overallPercent(sizes, 2, 0)).toBe(100);
 });
 
 test("a row names the roster servo by uid, else a board with no app", () => {

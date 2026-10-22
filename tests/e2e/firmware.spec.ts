@@ -37,6 +37,10 @@ function row(dialog: Locator, label: string): Locator {
   return dialog.getByRole("row").filter({ hasText: label });
 }
 
+function status(dialog: Locator, label: string, name: string): Locator {
+  return row(dialog, label).getByRole("img", { name });
+}
+
 test("a matching image installs on two boards and they come back on the new version", async ({
   page,
 }) => {
@@ -48,10 +52,17 @@ test("a matching image installs on two boards and they come back on the new vers
 
   await dialog.getByRole("checkbox", { name: /^Update ID 1 / }).click();
   await dialog.getByRole("checkbox", { name: /^Update No app / }).click();
+  const table = dialog.getByRole("table");
+  const width = (await table.boundingBox())?.width;
   await dialog.getByRole("button", { name: "Flash selected" }).click();
-  await expect(row(dialog, "ID 1")).toContainText("Installed");
-  await expect(row(dialog, "No app")).toContainText("Installed");
-  await expect(row(dialog, "ID 2")).not.toContainText("Installed");
+  await expect(status(dialog, "ID 1", "Installed")).toBeVisible();
+  await expect(status(dialog, "No app", "Installed")).toBeVisible();
+  await expect(status(dialog, "ID 2", "Installed")).toHaveCount(0);
+  await expect(dialog.getByRole("progressbar", { name: "Overall" })).toHaveAttribute(
+    "aria-valuenow",
+    "100",
+  );
+  expect((await table.boundingBox())?.width).toBe(width);
 
   await dialog.getByRole("button", { name: "Restart all" }).click();
   const back = (id: number) =>
@@ -87,8 +98,12 @@ test("after Enter the dialog stays open and a failed board still waits after Res
   await dialog.getByRole("checkbox", { name: /^Update ID 1 / }).click();
   await dialog.getByRole("checkbox", { name: /^Update ID 2 / }).click();
   await dialog.getByRole("button", { name: "Flash selected" }).click();
-  await expect(row(dialog, "ID 1")).toContainText("The board could not write its flash");
-  await expect(row(dialog, "ID 2")).toContainText("Installed");
+  await expect(status(dialog, "ID 1", "The board could not write its flash")).toBeVisible();
+  await expect(status(dialog, "ID 2", "Installed")).toBeVisible();
+  await expect(dialog.getByRole("progressbar", { name: "Overall" })).toHaveAttribute(
+    "aria-valuenow",
+    "100",
+  );
 
   await dialog.getByRole("button", { name: "Restart all" }).click();
   const waiting = dialog.getByRole("region", { name: "Waiting for firmware" });

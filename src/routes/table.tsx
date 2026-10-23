@@ -51,7 +51,7 @@ const HELP: ReadonlyMap<string, string> = new Map([
     "Gains of the current, velocity and position loops and the observer behind them.",
   ],
   ["Safety", "Trip thresholds and what the servo does when one is crossed."],
-  ["Thermal", "The winding temperature model and its cutoff."],
+  ["Thermal", "Derate and cutoff on the winding estimate."],
   ["Motor model", "Electrical and mechanical constants of the motor the estimators rely on."],
   ["Profile/capture", "Read profiles and the telemetry burst window."],
 ]);

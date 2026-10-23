@@ -1,8 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import { gotoSim, openTable, tableRow } from "./helpers";
 
-// The fake servo has no kernel: its thermometer registers hold what the
-// table boots with, and CONFIG carries the firmware's default thresholds.
+// The fake servo publishes the winding estimate as the kernel would, and
+// CONFIG carries the firmware's default thresholds.
 const THRESHOLDS = "Derate at 80.0 C, cutoff at 100.0 C, recover at 90.0 C";
 
 function winding(page: Page) {

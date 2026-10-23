@@ -153,8 +153,8 @@ test("degenerate calibration gives zero scale instead of infinity", () => {
   expect(degToCounts(10, flat)).toBe(flat.rawMin);
 });
 
-// No firmware math to mirror: t_winding_cc comes from the winding-resistance
-// thermometer, not from ntc_raw, so the divider plus beta lives only here.
+// No firmware math to mirror: the firmware reads ntc_raw through the
+// host-written quadratic in CALIB, so the divider plus beta lives only here.
 test("temperatureC reads 25 C when the NTC equals its R25", () => {
   expect(temperatureC(ADC_FULL_SCALE / 2, sense)).toBeCloseTo(25, 9);
 });

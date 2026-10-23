@@ -74,7 +74,6 @@ const LOOP_VELOCITY = 0x038;
 const LOOP_POSITION = 0x040;
 const LIMITS = 0x048;
 const THERMAL = 0x060;
-const THERMAL_EXT = 0x06a;
 const FUSION = 0x06e;
 const FAULT_CFG = 0x074;
 const MOTOR = 0x080;
@@ -119,7 +118,7 @@ const TABS: readonly TabSpec[] = [
       },
       // Fault thresholds are the other half of the stall and trip policy.
       { label: "Safety", help: true, blocks: [LIMITS, FAULT_CFG] },
-      { label: "Thermal", help: true, collapsed: true, blocks: [THERMAL, THERMAL_EXT] },
+      { label: "Thermal", help: true, collapsed: true, blocks: [THERMAL] },
     ],
   },
   {

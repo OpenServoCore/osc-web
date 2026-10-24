@@ -3,7 +3,7 @@ import { gotoSim, openTable, tableRow } from "./helpers";
 
 // The fake servo publishes the winding estimate as the kernel would, and
 // CONFIG carries the firmware's default thresholds.
-const THRESHOLDS = "Derate at 80.0 C, cutoff at 100.0 C, recover at 90.0 C";
+const THRESHOLDS = "Derate at 80.0 C, cutoff at 100.0 C";
 
 function winding(page: Page) {
   return page.getByRole("region", { name: "Health" }).getByRole("group", { name: "Winding" });
@@ -33,9 +33,7 @@ test("a derate start under the winding reads derating with the folded limit", as
 
   await page.getByRole("link", { name: "Servo" }).click();
   const row = winding(page);
-  await expect(row.getByLabel("Thresholds")).toHaveText(
-    "Derate at -1.5 C, cutoff at 100.0 C, recover at 90.0 C",
-  );
+  await expect(row.getByLabel("Thresholds")).toHaveText("Derate at -1.5 C, cutoff at 100.0 C");
   await expect(row.getByText("derating", { exact: true })).toBeVisible();
   await expect(row.getByLabel("Derated limit")).toHaveText(/^limit \d+ mA of \d+ mA$/);
 });

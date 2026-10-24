@@ -266,20 +266,20 @@ export function faultText(faultFlags: number, faultCode: number): string | undef
   return set.join(", ");
 }
 
-/** `limit_flags` bits (firmware kernel/limits.rs), lowest bit first. */
+/** `limit_flags` bits (firmware kernel/limits.rs), lowest bit first; bit 4 is retired and reads 0. */
 const LIMITS: readonly string[] = [
   "Current limit",
   "Stall yield",
   "End stop",
   "Stall permit",
-  "I2t budget",
+  "",
   "Thermal derate",
   "Rail fold",
   "Goal current",
 ];
 
 export function limitText(limitFlags: number): string {
-  const set = LIMITS.filter((_, bit) => (limitFlags & (1 << bit)) !== 0);
+  const set = LIMITS.filter((name, bit) => name !== "" && (limitFlags & (1 << bit)) !== 0);
   if (set.length === 0) return limitFlags === 0 ? "None" : `Limit 0x${limitFlags.toString(16)}`;
   return set.join(", ");
 }

@@ -252,7 +252,7 @@ test("limitText names what governs, lowest first", () => {
   expect(limitText(1 << 0)).toBe("Current limit");
   expect(limitText((1 << 1) | (1 << 2))).toBe("Stall yield, End stop");
   expect(limitText((1 << 0) | (1 << 3))).toBe("Current limit, Stall permit");
-  expect(limitText((1 << 4) | (1 << 6))).toBe("I2t budget, Rail fold");
+  expect(limitText((1 << 4) | (1 << 6))).toBe("Rail fold");
   expect(limitText(1 << 8)).toBe("Limit 0x100");
 });
 

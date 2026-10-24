@@ -14,7 +14,6 @@ export const THERMAL_REGISTERS: readonly string[] = [
   "current_limit_counts",
   "derate_start_cc",
   "cutoff_cc",
-  "recover_cc",
   "i_lim_counts",
   "t_winding_cc",
   "t_ntc_cc",
@@ -29,7 +28,6 @@ export interface Thermal {
   currentLimitCounts: number;
   derateStartCc: number;
   cutoffCc: number;
-  recoverCc: number;
 }
 
 export function thermalFrom(read: ReadRegister): Thermal {
@@ -41,7 +39,6 @@ export function thermalFrom(read: ReadRegister): Thermal {
     currentLimitCounts: read("current_limit_counts"),
     derateStartCc: read("derate_start_cc"),
     cutoffCc: read("cutoff_cc"),
-    recoverCc: read("recover_cc"),
   };
 }
 

@@ -11,7 +11,6 @@ const warm: Thermal = {
   currentLimitCounts: 280,
   derateStartCc: 8000,
   cutoffCc: 10000,
-  recoverCc: 9000,
 };
 
 const c = (cc: number) => formatQuantity(celsius(cc), DISPLAY.temperature);
@@ -77,7 +76,6 @@ test("thermalFrom reads every thermal register by name", () => {
     current_limit_counts: 280,
     derate_start_cc: 8000,
     cutoff_cc: 10000,
-    recover_cc: 9000,
   };
   expect(thermalFrom((name) => values[name] ?? NaN)).toEqual(warm);
 });

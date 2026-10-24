@@ -172,8 +172,7 @@ function WindingRow({ id, sense }: { id: number; sense: Sense | undefined }) {
       <div className="flex flex-col text-sm text-text-3">
         {!off && <span aria-label="Board temperature">Board {temp(t.ntcCc)}</span>}
         <span aria-label="Thresholds">
-          Derate at {temp(t.derateStartCc)}, cutoff at {temp(t.cutoffCc)}, recover at{" "}
-          {temp(t.recoverCc)}
+          Derate at {temp(t.derateStartCc)}, cutoff at {temp(t.cutoffCc)}
         </span>
       </div>
     </div>

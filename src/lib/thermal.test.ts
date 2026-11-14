@@ -1,16 +1,13 @@
 import { describe, expect, test } from "vitest";
 import { formatQuantity } from "./format";
-import { celsius, thermalFrom, thermStates, UNSET_CC, windingC, type Thermal } from "./thermal";
+import { celsius, thermalFrom, thermOff, UNSET_CC, windingC, type Thermal } from "./thermal";
 import { DISPLAY } from "./units";
 
 const warm: Thermal = {
   windingCc: 3141,
   ntcCc: 2437,
   flags: 0,
-  iLimCounts: 280,
-  currentLimitCounts: 280,
-  derateStartCc: 8000,
-  cutoffCc: 10000,
+  cutoffCc: 9000,
 };
 
 const c = (cc: number) => formatQuantity(celsius(cc), DISPLAY.temperature);
@@ -37,33 +34,22 @@ describe("centi-C to C", () => {
 
 describe("therm_flags", () => {
   test.each([
-    [0, []],
-    [1 << 0, ["off"]],
-    [1 << 1, []],
-    [1 << 2, []],
-    [1 << 3, []],
-    [1 << 4, []],
-    [1 << 5, []],
-    [1 << 6, []],
-    [1 << 7, []],
-    [0xff, ["off"]],
-  ])("flags %i states %j", (flags, words) => {
-    expect(thermStates({ ...warm, flags }).map((s) => s.word)).toEqual(words);
+    [0, false],
+    [1 << 0, true],
+    [1 << 1, false],
+    [1 << 2, false],
+    [1 << 3, false],
+    [1 << 4, false],
+    [1 << 5, false],
+    [1 << 6, false],
+    [1 << 7, false],
+    [0xff, true],
+  ])("flags %i read off: %j", (flags, off) => {
+    expect(thermOff({ ...warm, flags })).toBe(off);
   });
 
   test("the sentinel reads off even with the flag clear", () => {
-    expect(thermStates({ ...warm, windingCc: UNSET_CC })).toEqual([
-      { word: "off", level: "notice" },
-    ]);
-  });
-
-  test("derating is the winding past the start with the limit folded under", () => {
-    const hot = { ...warm, windingCc: 9000, iLimCounts: 140 };
-    expect(thermStates(hot)).toEqual([{ word: "derating", level: "warn" }]);
-    expect(thermStates({ ...hot, iLimCounts: 280 })).toEqual([]);
-    expect(thermStates({ ...hot, windingCc: 8000 })).toEqual([]);
-    expect(thermStates({ ...warm, iLimCounts: 60 })).toEqual([]);
-    expect(thermStates({ ...hot, flags: 0xfe }).map((s) => s.word)).toEqual(["derating"]);
+    expect(thermOff({ ...warm, windingCc: UNSET_CC })).toBe(true);
   });
 });
 
@@ -72,10 +58,7 @@ test("thermalFrom reads every thermal register by name", () => {
     t_winding_cc: 3141,
     t_ntc_cc: 2437,
     therm_flags: 0,
-    i_lim_counts: 280,
-    current_limit_counts: 280,
-    derate_start_cc: 8000,
-    cutoff_cc: 10000,
+    cutoff_cc: 9000,
   };
   expect(thermalFrom((name) => values[name] ?? NaN)).toEqual(warm);
 });

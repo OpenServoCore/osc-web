@@ -44,7 +44,7 @@ export type Family = "position" | "electrical";
  */
 export const FIELDS = [
   { key: "pos", label: "Position", family: "position", estimate: false },
-  { key: "vcal", label: "Vcal", family: "electrical", estimate: false },
+  { key: "vref_raw", label: "Vref raw", family: "electrical", estimate: false },
   { key: "vbus_raw", label: "Bus raw", family: "electrical", estimate: false },
   { key: "ntc_raw", label: "NTC raw", family: "electrical", estimate: false },
   { key: "current_raw", label: "Current raw", family: "electrical", estimate: false },
@@ -83,7 +83,7 @@ export const PRESETS = [
   { label: "Ident four", keys: ["pos", "duty_ticks", "i_tick_counts", "vdiff_counts"] },
   {
     label: "Raw frame",
-    keys: ["pos", "vcal", "vbus_raw", "current_raw", "vmotor_a", "vmotor_b"],
+    keys: ["pos", "vref_raw", "vbus_raw", "current_raw", "vmotor_a", "vmotor_b"],
   },
 ] as const satisfies readonly { label: string; keys: readonly FieldKey[] }[];
 

@@ -141,8 +141,7 @@ function ServoCard({
   onOpen: () => void;
 }) {
   const { ping } = servo;
-  const fault =
-    values === undefined ? undefined : faultText(values.health.faultFlags, values.data.faultCode);
+  const fault = values === undefined ? undefined : faultText(values.health.faultFlags);
   const calibrated = values?.constants.calibrated.valid;
   return (
     <Link

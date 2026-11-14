@@ -470,7 +470,7 @@ function withHealth(servo: Servo, values: CardValues | undefined): Servo {
   if (values === undefined) return servo;
   return {
     ...servo,
-    fault: faultText(values.health.faultFlags, values.data.faultCode),
+    fault: faultText(values.health.faultFlags),
     unsaved: values.health.configDirty,
     calibrated: values.constants.calibrated.valid,
   };

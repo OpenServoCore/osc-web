@@ -3,7 +3,7 @@
 
 import type { Descriptor, Field, Health, Value } from "@openservocore/client";
 import { dutyPercent } from "../control";
-import { FAULT_DATA_BIT, FAULT_DRIVE_REVERSED, type DataState } from "../data-state";
+import type { DataState } from "../data-state";
 import {
   biasesFromTable,
   calibrationFromTable,
@@ -256,24 +256,20 @@ const FAULTS: readonly string[] = [
   "Closed loop refused",
 ];
 
-export function faultText(faultFlags: number, faultCode: number): string | undefined {
-  const set = FAULTS.flatMap((name, bit) => {
-    if ((faultFlags & (1 << bit)) === 0) return [];
-    const reversed = bit === FAULT_DATA_BIT && faultCode === FAULT_DRIVE_REVERSED;
-    return [reversed ? "Drive reversed" : name];
-  });
+export function faultText(faultFlags: number): string | undefined {
+  const set = FAULTS.filter((_, bit) => (faultFlags & (1 << bit)) !== 0);
   if (set.length === 0) return faultFlags === 0 ? undefined : `Fault 0x${faultFlags.toString(16)}`;
   return set.join(", ");
 }
 
-/** `limit_flags` bits (firmware kernel/limits.rs), lowest bit first; bit 4 is retired and reads 0. */
+/** `limit_flags` bits (firmware kernel/limits.rs), lowest bit first; bits 4 and 5 are retired and read 0. */
 const LIMITS: readonly string[] = [
   "Current limit",
   "Stall yield",
   "End stop",
   "Stall permit",
   "",
-  "Thermal derate",
+  "",
   "Rail fold",
   "Goal current",
 ];

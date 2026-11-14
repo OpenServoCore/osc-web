@@ -1,6 +1,14 @@
 import { describe, expect, test } from "vitest";
 import { formatQuantity } from "./format";
-import { celsius, thermalFrom, thermOff, UNSET_CC, windingC, type Thermal } from "./thermal";
+import {
+  celsius,
+  sensorFault,
+  thermalFrom,
+  thermOff,
+  UNSET_CC,
+  windingC,
+  type Thermal,
+} from "./thermal";
 import { DISPLAY } from "./units";
 
 const warm: Thermal = {
@@ -50,6 +58,21 @@ describe("therm_flags", () => {
 
   test("the sentinel reads off even with the flag clear", () => {
     expect(thermOff({ ...warm, windingCc: UNSET_CC })).toBe(true);
+  });
+
+  test.each([
+    [0, false],
+    [1 << 0, false],
+    [1 << 1, true],
+    [1 << 2, false],
+    [1 << 7, false],
+    [0xff, true],
+  ])("flags %i read a sensor fault: %j", (flags, fault) => {
+    expect(sensorFault({ ...warm, flags })).toBe(fault);
+  });
+
+  test("a saturated estimate with the flag clear is no sensor fault", () => {
+    expect(sensorFault({ ...warm, windingCc: 32767 })).toBe(false);
   });
 });
 

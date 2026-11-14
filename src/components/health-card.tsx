@@ -11,25 +11,14 @@ import { ackFault } from "@/lib/fault-ack";
 import { formatQuantity } from "@/lib/format";
 import { countersLine, statements, trimLine, type Level } from "@/lib/health";
 import { useSession } from "@/lib/session";
-import {
-  celsius,
-  THERMAL_REGISTERS,
-  thermalFrom,
-  thermOff,
-  thermStates,
-  type ThermLevel,
-} from "@/lib/thermal";
-import { currentMa, DISPLAY, type Sense } from "@/lib/units";
+import { celsius, THERMAL_REGISTERS, thermalFrom, thermOff } from "@/lib/thermal";
+import { DISPLAY } from "@/lib/units";
 
 const icons = { fault: CircleAlert, warn: TriangleAlert, ok: CircleCheck };
 const tone: Record<Level, string> = {
   fault: "text-danger",
   warn: "text-warning",
   ok: "text-success",
-};
-const stateTone: Record<ThermLevel, string> = {
-  warn: "bg-warning-soft text-warning",
-  notice: "border-border text-text-3",
 };
 
 export function HealthCard({ id }: { id: number }) {
@@ -115,7 +104,7 @@ export function HealthCard({ id }: { id: number }) {
                 Clear fault
               </Button>
             )}
-            <WindingRow id={id} sense={card?.constants.sense} />
+            <WindingRow id={id} />
             <Separator />
             <div className="flex items-baseline justify-between gap-4 text-text-3">
               <span>{trimLine(health)}</span>
@@ -134,19 +123,14 @@ export function HealthCard({ id }: { id: number }) {
 }
 
 const temp = (cc: number) => formatQuantity(celsius(cc), DISPLAY.temperature);
-/** i_lim and current_limit are bias-free magnitudes, like the kernel's own current. */
-const mA = (counts: number, sense: Sense) =>
-  formatQuantity(currentMa(counts, 0, sense), DISPLAY.current);
 
-function WindingRow({ id, sense }: { id: number; sense: Sense | undefined }) {
+function WindingRow({ id }: { id: number }) {
   const snapshot = useRegisters(id, THERMAL_REGISTERS, "slow");
   if (snapshot === undefined || !THERMAL_REGISTERS.every((name) => snapshot.values.has(name))) {
     return <Skeleton className="h-5 w-full" />;
   }
   const t = thermalFrom(snapshot.read);
   const off = thermOff(t);
-  const states = thermStates(t);
-  const derating = states.some((s) => s.word === "derating");
   return (
     <div role="group" aria-label="Winding" className="flex flex-col gap-1">
       <div className="flex items-center justify-between gap-4">
@@ -157,23 +141,16 @@ function WindingRow({ id, sense }: { id: number; sense: Sense | undefined }) {
               {temp(t.windingCc)}
             </span>
           )}
-          {states.map((s) => (
-            <Badge key={s.word} variant="outline" className={stateTone[s.level]}>
-              {s.word}
+          {off && (
+            <Badge variant="outline" className="border-border text-text-3">
+              off
             </Badge>
-          ))}
+          )}
         </span>
       </div>
-      {derating && sense !== undefined && (
-        <span aria-label="Derated limit" className="self-end text-sm text-warning">
-          limit {mA(t.iLimCounts, sense)} of {mA(t.currentLimitCounts, sense)}
-        </span>
-      )}
       <div className="flex flex-col text-sm text-text-3">
         {!off && <span aria-label="Board temperature">Board {temp(t.ntcCc)}</span>}
-        <span aria-label="Thresholds">
-          Derate at {temp(t.derateStartCc)}, cutoff at {temp(t.cutoffCc)}
-        </span>
+        <span aria-label="Cutoff">Cutoff at {temp(t.cutoffCc)}</span>
       </div>
     </div>
   );

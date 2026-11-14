@@ -216,7 +216,7 @@ describe("labelParts", () => {
     expect(labelParts("i_kp_q88")).toEqual({ label: "I kp", hint: "Q8.8" });
     expect(labelParts("l1_q016")).toEqual({ label: "L1", hint: "Q0.16" });
     expect(labelParts("duty_max_q15")).toEqual({ label: "Duty max", hint: "Q15" });
-    expect(labelParts("derate_start_cc")).toEqual({ label: "Derate start", hint: "0.01 C" });
+    expect(labelParts("cutoff_cc")).toEqual({ label: "Cutoff", hint: "0.01 C" });
     expect(labelParts("angle_min_cdeg")).toEqual({ label: "Angle min", hint: "0.01 deg" });
     expect(labelParts("vdd_mv")).toEqual({ label: "Vdd", hint: "mV" });
     expect(labelParts("response_deadline_us")).toEqual({

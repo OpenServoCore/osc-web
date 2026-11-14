@@ -7,8 +7,9 @@ import type { ReadRegister } from "./units";
 /** `t_winding_cc` while the estimate is unset (thermal.rs `UNSET_CC`). */
 export const UNSET_CC = -32768;
 
-/** `therm_flags` bit 0 (thermal.rs `flag`); bits 1-7 are reserved. */
+/** `therm_flags` bits (thermal.rs `flag`); bits 2-7 are reserved. */
 const UNSET = 1 << 0;
+const NTC_FAULT = 1 << 1;
 
 export const THERMAL_REGISTERS: readonly string[] = [
   "cutoff_cc",
@@ -44,4 +45,13 @@ export function windingC(cc: number): number {
 
 export function thermOff(t: Thermal): boolean {
   return (t.flags & UNSET) !== 0 || t.windingCc === UNSET_CC;
+}
+
+/**
+ * The board sensor reads a rail or a temperature outside its band: the
+ * winding reads over every cutoff and the board holds its last good value,
+ * so neither is a temperature.
+ */
+export function sensorFault(t: Thermal): boolean {
+  return (t.flags & NTC_FAULT) !== 0;
 }

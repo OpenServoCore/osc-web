@@ -11,7 +11,7 @@ import { ackFault } from "@/lib/fault-ack";
 import { formatQuantity } from "@/lib/format";
 import { countersLine, statements, trimLine, type Level } from "@/lib/health";
 import { useSession } from "@/lib/session";
-import { celsius, THERMAL_REGISTERS, thermalFrom, thermOff } from "@/lib/thermal";
+import { celsius, sensorFault, THERMAL_REGISTERS, thermalFrom, thermOff } from "@/lib/thermal";
 import { DISPLAY } from "@/lib/units";
 
 const icons = { fault: CircleAlert, warn: TriangleAlert, ok: CircleCheck };
@@ -131,12 +131,14 @@ function WindingRow({ id }: { id: number }) {
   }
   const t = thermalFrom(snapshot.read);
   const off = thermOff(t);
+  const fault = sensorFault(t);
+  const reads = !off && !fault;
   return (
     <div role="group" aria-label="Winding" className="flex flex-col gap-1">
       <div className="flex items-center justify-between gap-4">
         <span>Winding</span>
         <span className="flex items-center gap-2">
-          {!off && (
+          {reads && (
             <span aria-label="Winding temperature" className="font-mono tabular-nums">
               {temp(t.windingCc)}
             </span>
@@ -146,10 +148,15 @@ function WindingRow({ id }: { id: number }) {
               off
             </Badge>
           )}
+          {fault && (
+            <Badge variant="outline" className="border-danger text-danger">
+              sensor fault
+            </Badge>
+          )}
         </span>
       </div>
       <div className="flex flex-col text-sm text-text-3">
-        {!off && <span aria-label="Board temperature">Board {temp(t.ntcCc)}</span>}
+        {reads && <span aria-label="Board temperature">Board {temp(t.ntcCc)}</span>}
         <span aria-label="Cutoff">Cutoff at {temp(t.cutoffCc)}</span>
       </div>
     </div>

@@ -72,13 +72,12 @@ const POS_SOFT = 0x028;
 const LOOP_CURRENT = 0x030;
 const LOOP_VELOCITY = 0x038;
 const LOOP_POSITION = 0x040;
-const LIMITS = 0x048;
-const THERMAL = 0x060;
-const FUSION = 0x066;
-const FAULT_CFG = 0x06c;
+const LIMITS = 0x04c;
+const THERMAL = 0x064;
+const FUSION = 0x06a;
+const FAULT_CFG = 0x070;
 const MOTOR = 0x080;
-const WINDING = 0x08c;
-const CALIB_THERMAL = 0x08e;
+const CALIB_THERMAL = 0x090;
 const MOTOR_EXT = 0x09c;
 const CALIB_POT = 0x0a0;
 const KINEMATICS = 0x0a4;
@@ -129,7 +128,7 @@ const TABS: readonly TabSpec[] = [
     name: "Board",
     groups: [
       { label: "Board constants", blocks: [CALIB_THERMAL, SENSE, SENSE_EXT, PWM] },
-      { label: "Motor model", help: true, collapsed: true, blocks: [MOTOR, WINDING, MOTOR_EXT] },
+      { label: "Motor model", help: true, collapsed: true, blocks: [MOTOR, MOTOR_EXT] },
     ],
   },
   {
@@ -185,13 +184,14 @@ const TEXT: ReadonlyMap<string, (value: number) => string> = new Map([
   ["window_floor_q15", windowFloorText],
 ]);
 
+const speed = (v: number, cal: Calibration): string =>
+  formatQuantity(Math.abs(velocityDegPerS(v, cal)), DISPLAY.velocity);
+
 /** Registers that read in real units through a usable calibration; the raw value stays beside them. */
 const REAL: ReadonlyMap<string, (counts: number, cal: Calibration) => string> = new Map([
   // limits are magnitudes: a descending angle map must not sign them
-  [
-    "velocity_limit_cps",
-    (v, cal) => formatQuantity(Math.abs(velocityDegPerS(v, cal)), DISPLAY.velocity),
-  ],
+  ["speed_ceiling_cps", speed],
+  ["velocity_limit_cps", speed],
   [
     "accel_limit_q88",
     (v, cal) => formatQuantity(Math.abs(accelDegPerS2(v, cal)), DISPLAY.acceleration),

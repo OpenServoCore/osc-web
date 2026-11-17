@@ -1,10 +1,10 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { gotoSim, openTable, tableRow } from "./helpers";
 
-/** Opens the editor of velocity_limit_cps, a covered row low on the page, and lowers its value. */
+/** Opens the editor of accel_limit_q88, a covered row low on the page, and lowers its value. */
 async function editLowRow(page: Page): Promise<Locator> {
   await page.getByRole("button", { name: /^Control loops/ }).click();
-  const row = tableRow(page, "velocity_limit_cps");
+  const row = tableRow(page, "accel_limit_q88");
   await row.evaluate((el) => {
     el.scrollIntoView({ block: "end" });
   });

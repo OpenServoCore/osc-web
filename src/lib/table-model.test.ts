@@ -108,13 +108,17 @@ describe("buildTable", () => {
     expect(placement("pos_max_soft_counts")).toEqual(["Settings", "Motion limits"]);
     expect(placement("i_kp_q88")).toEqual(["Settings", "Control loops"]);
     expect(placement("j_ff_q88")).toEqual(["Settings", "Control loops"]);
+    expect(placement("speed_ceiling_cps")).toEqual(["Settings", "Control loops"]);
+    expect(placement("velocity_limit_cps")).toEqual(["Settings", "Control loops"]);
     expect(placement("accel_limit_q88")).toEqual(["Settings", "Control loops"]);
     expect(placement("l1_q016")).toEqual(["Settings", "Control loops"]);
     expect(placement("current_limit_counts")).toEqual(["Settings", "Safety"]);
+    expect(placement("thermal_tau_s")).toEqual(["Settings", "Safety"]);
     expect(placement("openloop_zero_brake")).toEqual(["Settings", "Safety"]);
     expect(placement("pos_error_counts")).toEqual(["Settings", "Safety"]);
     expect(placement("sensor_bad_count")).toEqual(["Settings", "Safety"]);
     expect(placement("cutoff_cc")).toEqual(["Settings", "Thermal"]);
+    expect(placement("thermal_tau2_s")).toEqual(["Settings", "Thermal"]);
   });
 
   test("id and baud are read-only with links; the deadline is editable", () => {
@@ -150,10 +154,13 @@ describe("buildTable", () => {
     expect(placement("vmotor_bias_nom_counts")).toEqual(["Board", "Board constants"]);
     expect(rowOf("shunt_r_mohm").editable).toBe(false);
     expect(rowOf("vdd_mv").editable).toBe(true);
-    expect(placement("r0_q12")).toEqual(["Board", "Motor model"]);
+    expect(placement("r_q12")).toEqual(["Board", "Motor model"]);
+    expect(placement("r_brush_q12")).toEqual(["Board", "Motor model"]);
+    expect(placement("brush_cps")).toEqual(["Board", "Motor model"]);
     expect(placement("ke_uvs_per_rad")).toEqual(["Board", "Motor model"]);
     expect(placement("ke_vpc_q")).toEqual(["Board", "Motor model"]);
-    expect(rowOf("r0_q12").editable).toBe(true);
+    expect(rowOf("r_brush_q12").editable).toBe(true);
+    expect(rowOf("brush_cps").editable).toBe(true);
   });
 
   test("live values follow the telemetry, control, profile and burst blocks", () => {
@@ -343,12 +350,14 @@ describe("real units", () => {
   };
 
   test("the trajectory limits read in deg/s and deg/s^2 through the calibration", () => {
+    expect(realValue(rowOf("speed_ceiling_cps"), 1500, cal)).toBe("75 deg/s");
     expect(realValue(rowOf("velocity_limit_cps"), 1500, cal)).toBe("75 deg/s");
     expect(realValue(rowOf("accel_limit_q88"), 3840, cal)).toBe("1500 deg/s^2");
   });
 
   test("a descending angle map leaves the trajectory limits unsigned", () => {
     const ccwLow = { ...cal, angleMinCdeg: 18000, angleMaxCdeg: 0 };
+    expect(realValue(rowOf("speed_ceiling_cps"), 1500, ccwLow)).toBe("75 deg/s");
     expect(realValue(rowOf("velocity_limit_cps"), 1500, ccwLow)).toBe("75 deg/s");
     expect(realValue(rowOf("accel_limit_q88"), 3840, ccwLow)).toBe("1500 deg/s^2");
   });

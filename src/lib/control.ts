@@ -58,7 +58,7 @@ export const LIMIT_REGISTERS: readonly string[] = [
   "pos_min_soft_counts",
   "pos_max_soft_counts",
   "duty_max_q15",
-  "velocity_limit_cps",
+  "speed_ceiling_cps",
   "current_limit_counts",
 ];
 
@@ -74,7 +74,7 @@ export interface Limits {
   posMinSoftCounts: number;
   posMaxSoftCounts: number;
   dutyMaxQ15: number;
-  velocityLimitCps: number;
+  speedCeilingCps: number;
   currentLimitCounts: number;
 }
 
@@ -96,7 +96,7 @@ export function limitsFromTable(read: ReadRegister): Limits {
     posMinSoftCounts: read("pos_min_soft_counts"),
     posMaxSoftCounts: read("pos_max_soft_counts"),
     dutyMaxQ15: read("duty_max_q15"),
-    velocityLimitCps: read("velocity_limit_cps"),
+    speedCeilingCps: read("speed_ceiling_cps"),
     currentLimitCounts: read("current_limit_counts"),
   };
 }
@@ -126,7 +126,7 @@ export function goalRange(mode: ModeName, cal: Calibration, limits: Limits): Ran
     case "Current":
       return symmetric(limits.currentLimitCounts);
     case "Velocity":
-      return symmetric(limits.velocityLimitCps);
+      return symmetric(limits.speedCeilingCps);
     case "Position":
       return positionRange(cal);
   }

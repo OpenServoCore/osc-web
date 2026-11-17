@@ -83,7 +83,7 @@ test("a velocity goal reads back into the Motion goal readout in the mode's unit
 }) => {
   await openLive(page);
   await pickMode(page, "Velocity");
-  // Inside velocity_limit_cps, which caps the slider at 74 deg/s.
+  // Inside speed_ceiling_cps, which caps the slider at 74 deg/s.
   await setGoal(page, "50");
   await expect(page.getByLabel("Goal readout")).toHaveText("50 deg/s");
   const motion = page.getByRole("region", { name: /^Motion/ });

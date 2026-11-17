@@ -7,7 +7,7 @@ test("the trajectory limits read in degrees with the register's own value beside
 }) => {
   await openTable(page);
   await page.getByRole("button", { name: /^Control loops/ }).click();
-  const velocity = tableRow(page, "velocity_limit_cps").getByRole("cell");
+  const velocity = tableRow(page, "speed_ceiling_cps").getByRole("cell");
   await expect(velocity).toContainText("74 deg/s");
   await expect(velocity).toContainText("1500 counts/s");
   // 3840 / 256 = 15 counts/s per medium tick, at 2 kHz 30000 counts/s^2.

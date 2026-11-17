@@ -47,14 +47,14 @@ const limits: Limits = {
   posMinSoftCounts: 0,
   posMaxSoftCounts: 4095,
   dutyMaxQ15: 30000,
-  velocityLimitCps: 4000,
+  speedCeilingCps: 4000,
   currentLimitCounts: 280,
 };
 const ctx: GoalContext = { cal, sense, limits, raw: false };
 
 test("the control and limit registers plan one read each", () => {
   expect(planSpans(fields, CONTROL_REGISTERS)).toEqual([{ addr: 384, count: 18 }]);
-  expect(planSpans(fields, LIMIT_REGISTERS)).toEqual([{ addr: 40, count: 34 }]);
+  expect(planSpans(fields, LIMIT_REGISTERS)).toEqual([{ addr: 40, count: 38 }]);
 });
 
 test("decodeControl reads the switch, the mode and every goal", () => {
@@ -84,7 +84,7 @@ test("limitsFromTable names the soft limits and the three ceilings", () => {
     pos_min_soft_counts: 0,
     pos_max_soft_counts: 4095,
     duty_max_q15: 30000,
-    velocity_limit_cps: 4000,
+    speed_ceiling_cps: 4000,
     current_limit_counts: 280,
   };
   expect(limitsFromTable((name) => regs[name] ?? NaN)).toEqual(limits);
@@ -173,7 +173,7 @@ test("a descending angle map reads its goal ends lowest degree first, the slider
   expect(displayEnds(raw).inverted).toBe(false);
 });
 
-test("the velocity goal is deg/s over the velocity limit, counts/s in raw mode", () => {
+test("the velocity goal is deg/s over the speed ceiling, counts/s in raw mode", () => {
   const spec = goalSpec("Velocity", ctx);
   expect(spec).toMatchObject({ register: "goal_velocity", unit: "deg/s", digits: 0 });
   expect(spec.range).toEqual({ min: -4000, max: 4000 });

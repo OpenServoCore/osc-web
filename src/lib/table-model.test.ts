@@ -157,10 +157,12 @@ describe("buildTable", () => {
     expect(placement("r_q12")).toEqual(["Board", "Motor model"]);
     expect(placement("r_brush_q12")).toEqual(["Board", "Motor model"]);
     expect(placement("brush_cps")).toEqual(["Board", "Motor model"]);
+    expect(placement("g_window_q016")).toEqual(["Board", "Motor model"]);
     expect(placement("ke_uvs_per_rad")).toEqual(["Board", "Motor model"]);
     expect(placement("ke_vpc_q")).toEqual(["Board", "Motor model"]);
     expect(rowOf("r_brush_q12").editable).toBe(true);
     expect(rowOf("brush_cps").editable).toBe(true);
+    expect(rowOf("g_window_q016").editable).toBe(true);
   });
 
   test("live values follow the telemetry, control, profile and burst blocks", () => {
@@ -182,12 +184,14 @@ describe("buildTable", () => {
     expect(placement("tel_count")).toEqual(["Live values", "Commands"]);
     expect(rowOf("tel_count").editable).toBe(true);
     expect(placement("tick_load_mean_q15")).toEqual(["Live values", "Health"]);
+    expect(placement("write_late_count")).toEqual(["Live values", "Health"]);
     expect(placement("stack_free_min")).toEqual(["Live values", "Health"]);
     expect(placement("window_v_floor_q15")).toEqual(["Live values", "Health"]);
     expect(placement("t_ntc_cc")).toEqual(["Live values", "Health"]);
     expect(placement("therm_flags")).toEqual(["Live values", "Health"]);
     expect(rowOf("tick_load_mean_q15").editable).toBe(false);
     expect(rowOf("tel_drop_count").editable).toBe(true);
+    expect(rowOf("write_late_count").editable).toBe(true);
     expect(placement("torque_enable")).toEqual(["Live values", "Commands"]);
     expect(placement("goal_position")).toEqual(["Live values", "Commands"]);
     expect(placement("chans")).toEqual(["Live values", "Commands"]);

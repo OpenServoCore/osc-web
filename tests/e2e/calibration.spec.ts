@@ -32,10 +32,10 @@ test("the card shows the status chip and one row per calibration register", asyn
     const group = card.getByRole("group", { name: row });
     await expect(group.getByRole("button", { name: value })).toBeVisible();
   }
-  await expect(card.getByText("raw_max 0x0a2")).toBeVisible();
+  await expect(card.getByText("raw_max 0x0a6")).toBeVisible();
   const gears = card.getByRole("group", { name: "Gear train" });
   await expect(gears).toContainText("Plastic");
-  await expect(gears).toContainText("gear_class 0x0d0");
+  await expect(gears).toContainText("gear_class 0x0d4");
 });
 
 test("edits write through, the row shows the new value and the status stays Calibrated", async ({

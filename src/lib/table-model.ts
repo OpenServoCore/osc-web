@@ -75,7 +75,7 @@ const LOOP_POSITION = 0x040;
 const LIMITS = 0x04c;
 const THERMAL = 0x064;
 const FUSION = 0x06a;
-const FAULT_CFG = 0x070;
+const FAULT_CFG = 0x074;
 const MOTOR = 0x080;
 const CALIB_THERMAL = 0x094;
 const MOTOR_EXT = 0x0a0;
@@ -154,6 +154,7 @@ const LINKS: ReadonlyMap<string, Link> = new Map([
 
 const UNITS: ReadonlyMap<string, string> = new Map([
   ["uvs_per_rad", "uV.s/rad"],
+  ["counts_per_a", "counts/A"],
   ["counts", "counts"],
   ["cps", "counts/s"],
   ["cdeg", "0.01 deg"],

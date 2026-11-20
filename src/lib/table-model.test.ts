@@ -112,6 +112,11 @@ describe("buildTable", () => {
     expect(placement("velocity_limit_cps")).toEqual(["Settings", "Control loops"]);
     expect(placement("accel_limit_q88")).toEqual(["Settings", "Control loops"]);
     expect(placement("l1_q016")).toEqual(["Settings", "Control loops"]);
+    expect(placement("pot_steady_counts_per_a")).toEqual(["Settings", "Control loops"]);
+    expect(placement("pot_fast_counts_per_a")).toEqual(["Settings", "Control loops"]);
+    expect(rowOf("pot_steady_counts_per_a").editable).toBe(true);
+    expect(rowOf("pot_fast_counts_per_a").editable).toBe(true);
+    expect(placement("pos_error_time_ticks")).toEqual(["Settings", "Safety"]);
     expect(placement("current_limit_counts")).toEqual(["Settings", "Safety"]);
     expect(placement("thermal_tau_s")).toEqual(["Settings", "Safety"]);
     expect(placement("openloop_zero_brake")).toEqual(["Settings", "Safety"]);
@@ -235,6 +240,10 @@ describe("labelParts", () => {
       hint: "us",
     });
     expect(labelParts("ke_uvs_per_rad")).toEqual({ label: "Ke", hint: "uV.s/rad" });
+    expect(labelParts("pot_steady_counts_per_a")).toEqual({
+      label: "Pot steady",
+      hint: "counts/A",
+    });
     expect(labelParts("vbus_raw")).toEqual({ label: "Vbus", hint: "raw counts" });
     expect(labelParts("shunt_r_mohm")).toEqual({ label: "Shunt r", hint: "mOhm" });
   });

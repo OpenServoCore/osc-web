@@ -1,5 +1,6 @@
 import type { Descriptor, Field, Value } from "@openservocore/client";
 import { limitText, windowFloorText } from "./bus/spans";
+import { SOFT_LIMITS, softLimitsFromTable, softLimitsOff } from "./control";
 import { fieldKind, formatValue, type EditValue, type FieldKind } from "./edit";
 import { formatQuantity, hexAddr } from "./format";
 import {
@@ -8,6 +9,7 @@ import {
   DISPLAY,
   velocityDegPerS,
   type Calibration,
+  type ReadRegister,
 } from "./units";
 
 export type TabName = "Settings" | "Calibration" | "Board" | "Live values";
@@ -270,6 +272,21 @@ export function editValues(values: ReadonlyMap<string, Value>): Values {
   const rows = new Map<string, EditValue>();
   for (const [name, value] of values) rows.set(name, value.value);
   return rows;
+}
+
+/** The rows' numeric values by name; throws for a register they do not hold as a number. */
+export function numberReader(values: Values): ReadRegister {
+  return (name) => {
+    const v = values.get(name);
+    if (typeof v !== "number") throw new Error(`no number for ${name}`);
+    return v;
+  };
+}
+
+/** Whether the soft limits are off, where the values hold both. */
+export function softLimitsState(values: Values): { off: boolean } | undefined {
+  if (!SOFT_LIMITS.every((n) => typeof values.get(n) === "number")) return undefined;
+  return { off: softLimitsOff(softLimitsFromTable(numberReader(values))) };
 }
 
 export function summarizeBlob(bytes: Uint8Array): string {

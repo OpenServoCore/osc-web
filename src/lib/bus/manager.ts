@@ -122,8 +122,8 @@ interface Settle<T> {
 interface WriteItem {
   kind: "write";
   id: number;
-  register: string;
-  value: Value;
+  /** Fields at adjacent addresses, lowest first: one write carries them all. */
+  values: (readonly [string, Value])[];
   settle: Settle<void>[];
   queuedAt: number;
 }
@@ -178,6 +178,22 @@ type Job =
 
 function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
+}
+
+/** Each field's bytes back to back; refused unless each field starts where the one before ends. */
+function joined(fields: readonly Field[], parts: readonly Uint8Array[]): Uint8Array {
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let at = 0;
+  fields.forEach((f, i) => {
+    const prev = fields[i - 1];
+    if (prev !== undefined && prev.addr + prev.width !== f.addr) {
+      throw new Error(`${prev.name} and ${f.name} are not adjacent: one write cannot carry both`);
+    }
+    const part = parts[i] ?? new Uint8Array();
+    out.set(part, at);
+    at += part.length;
+  });
+  return out;
 }
 
 export class BusManager {
@@ -337,16 +353,26 @@ export class BusManager {
   }
 
   write(id: number, register: string, value: Value): Promise<void> {
+    return this.writeRun(id, [[register, value]]);
+  }
+
+  /**
+   * Fields at adjacent addresses, lowest first, as one write: a pair the
+   * servo checks side against side as stored goes whole.
+   */
+  writeRun(id: number, values: readonly (readonly [string, Value])[]): Promise<void> {
+    const names = values.map(([name]) => name).join(",");
     return new Promise<void>((resolve, reject) => {
       if (this.client === undefined) {
         reject(new Error("not connected"));
         return;
       }
       const pending = this.control.find(
-        (i): i is WriteItem => i.kind === "write" && i.id === id && i.register === register,
+        (i): i is WriteItem =>
+          i.kind === "write" && i.id === id && i.values.map(([name]) => name).join(",") === names,
       );
       if (pending !== undefined) {
-        pending.value = value;
+        pending.values = [...values];
         pending.settle.push({ resolve, reject });
         this.recorder.coalesce();
         return;
@@ -354,8 +380,7 @@ export class BusManager {
       this.control.push({
         kind: "write",
         id,
-        register,
-        value,
+        values: [...values],
         settle: [{ resolve, reject }],
         queuedAt: this.nowMs(),
       });
@@ -694,24 +719,31 @@ export class BusManager {
           kind = "write";
           id = job.item.id;
           const item = job.item;
-          let f: Field;
+          let fields: Field[];
+          let first: Field;
           let data: Uint8Array;
           try {
             const layout = this.layoutOf?.(item.id);
             if (layout === undefined) throw new Error(`no layout for ID ${item.id}`);
-            f = field(layout.fields, item.register);
-            data = layout.encode(item.register, item.value);
+            fields = item.values.map(([name]) => field(layout.fields, name));
+            const [head] = fields;
+            if (head === undefined) throw new Error("a write names no field");
+            first = head;
+            data = joined(
+              fields,
+              item.values.map(([name, value]) => layout.encode(name, value)),
+            );
           } catch (e) {
             outcome = "error";
             this.rejectControl(item, e);
             break;
           }
-          addr = f.addr;
+          addr = first.addr;
           bytes = data.length;
           try {
-            await client.write(item.id, f.addr, data);
+            await client.write(item.id, first.addr, data);
             for (const s of item.settle) s.resolve();
-            this.markDirty(item.id, f);
+            for (const f of fields) this.markDirty(item.id, f);
           } catch (e) {
             outcome = this.outcome(e);
             this.rejectControl(item, e);

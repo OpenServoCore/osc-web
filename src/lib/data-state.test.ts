@@ -32,7 +32,7 @@ test("every bit is one reason and they come most urgent first", () => {
 test("a factory-fresh servo reads as never set up, with the next step", () => {
   const [first] = reasons(CONFIG_VIRGIN | CALIB_VIRGIN | STAMP_MISMATCH | PLANT_UNSET);
   expect(first?.text).toBe(
-    "Closed loop is off: this servo has never been set up. Run osc cal and osc ident, then save.",
+    "Closed loop is off: this servo has never been set up. Run osc-ident run, then osc-ident save.",
   );
 });
 
@@ -60,9 +60,9 @@ test("the headline is the urgent reason, marked when the kernel refused an enabl
   expect(headline({ flags: 0, faultCode: 0 })).toBeUndefined();
   expect(headline({ flags: 0, faultCode: 7 })).toBeUndefined();
   expect(headline({ flags: PLANT_UNSET, faultCode: 0 })).toBe(
-    "Closed loop is off: the motor has not been identified. Run osc ident, then save.",
+    "Closed loop is off: the motor has not been identified. Run osc-ident run, then osc-ident save.",
   );
   expect(headline({ flags: PLANT_UNSET, faultCode: 7 })).toBe(
-    "Closed loop refused. Closed loop is off: the motor has not been identified. Run osc ident, then save.",
+    "Closed loop refused. Closed loop is off: the motor has not been identified. Run osc-ident run, then osc-ident save.",
   );
 });

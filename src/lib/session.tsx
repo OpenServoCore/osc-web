@@ -424,7 +424,7 @@ class Controller {
     this.lost(DISCONNECTED);
   }
 
-  /** Test hook: a table into a simulated servo, the way `osc lut write` puts one there. */
+  /** Test hook: a table into a simulated servo, the way osc-ident puts one there. */
   async writePosLut(id: number, points: number[]): Promise<void> {
     const servo = this.snap.state.servos.find((s) => s.id === id);
     // The servo answers before its descriptor arrives; the write needs the descriptor.

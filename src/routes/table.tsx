@@ -11,6 +11,7 @@ import { TableSearch } from "@/components/table-search";
 import { ValueEditor } from "@/components/value-editor";
 import { useBus, useReadOnce, useRegisters } from "@/lib/bus/hooks";
 import type { Snapshot } from "@/lib/bus/manager";
+import { SOFT_LIMITS, softLimitsAfter, softLimitsWrite } from "@/lib/control";
 import { STAMP_MISMATCH } from "@/lib/data-state";
 import { toValue, type EditValue } from "@/lib/edit";
 import { hexAddr } from "@/lib/format";
@@ -19,7 +20,9 @@ import {
   buildTable,
   editValues,
   formatRow,
+  numberReader,
   realValue,
+  softLimitsState,
   searchIndex,
   type Group,
   type Link as LinkTarget,
@@ -324,11 +327,22 @@ function Panel({
     };
   }, [flash]);
 
-  async function apply(row: Row, raw: EditValue): Promise<void> {
-    await bus.write(id, row.field.name, toValue(row.field, raw));
-    setPending({ name: row.field.name, after: seen.current });
+  const soft = values === undefined ? undefined : softLimitsState(values);
+
+  function wrote(name: string): void {
+    setPending({ name, after: seen.current });
     onEdit();
     onWrite?.();
+  }
+
+  async function apply(row: Row, raw: EditValue): Promise<void> {
+    const pair =
+      typeof raw === "number" && values !== undefined
+        ? softLimitsAfter(row.field.name, raw, numberReader(values))
+        : undefined;
+    if (pair !== undefined) await bus.writeRun(id, softLimitsWrite(pair));
+    else await bus.write(id, row.field.name, toValue(row.field, raw));
+    wrote(row.field.name);
   }
 
   return (
@@ -346,6 +360,7 @@ function Panel({
           cal={cal}
           loading={values === undefined && error === undefined}
           flashed={jump?.row ?? flash?.name}
+          softOff={soft?.off}
           onApply={apply}
         />
       ))}
@@ -361,6 +376,7 @@ function GroupSection({
   cal,
   loading,
   flashed,
+  softOff,
   onApply,
 }: {
   group: Group;
@@ -370,6 +386,8 @@ function GroupSection({
   cal: Calibration | undefined;
   loading: boolean;
   flashed: string | undefined;
+  /** Whether the soft limits read 0 / 0, off; undefined where the group does not hold them. */
+  softOff: boolean | undefined;
   onApply: (row: Row, raw: EditValue) => Promise<void>;
 }) {
   return (
@@ -393,6 +411,7 @@ function GroupSection({
                 cal={cal}
                 loading={loading}
                 flashed={row.field.name === flashed}
+                softOff={SOFT_LIMITS.some((n) => n === row.field.name) ? softOff : undefined}
                 onApply={onApply}
               />
             ))}
@@ -424,6 +443,7 @@ function RowLine({
   cal,
   loading,
   flashed,
+  softOff,
   onApply,
 }: {
   row: Row;
@@ -431,6 +451,7 @@ function RowLine({
   cal: Calibration | undefined;
   loading: boolean;
   flashed: boolean;
+  softOff: boolean | undefined;
   onApply: (row: Row, raw: EditValue) => Promise<void>;
 }) {
   return (
@@ -446,7 +467,12 @@ function RowLine({
       </th>
       <td className="px-3 py-2 align-top font-mono tabular-nums">
         {value !== undefined ? (
-          <ValueCell row={row} value={value} real={realValue(row, value, cal)} onApply={onApply} />
+          <ValueCell
+            row={row}
+            value={value}
+            real={softOff === true ? "off, at the physical stops" : realValue(row, value, cal)}
+            onApply={onApply}
+          />
         ) : loading ? (
           <Skeleton className="h-4 w-16" />
         ) : (

@@ -1,6 +1,6 @@
 // The position linearization table (protocol sec 5.7) minus React: the firmware's
 // interpolation ported bit for bit, the sensor error the table removes at each
-// position, and the advisory grade the CLI prints (osc lut grade). The
+// position, and the advisory grade osc-ident table prints. The
 // firmware judges physics only; quality is the operator's call.
 
 import { ADC_FULL_SCALE, ADC_MAX_COUNT, degPerCount, positionDeg, type Calibration } from "./units";

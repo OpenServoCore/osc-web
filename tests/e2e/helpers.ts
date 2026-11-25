@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 
-/** The table nb09 built for the bench MG90, as osc lut write takes it. */
+/** The table nb09 built for the bench MG90, as osc-ident writes it. */
 export const MG90A = JSON.parse(
   readFileSync(
     new URL(
@@ -29,7 +29,7 @@ interface SimWindow {
   __osc?: { writePosLut: (id: number, points: number[]) => Promise<void> };
 }
 
-/** Puts a table into simulated servo `id` the way osc lut write does: STORE, COMMIT, readback. */
+/** Puts a table into simulated servo `id` the way osc-ident does: STORE, COMMIT, readback. */
 export async function writeTable(page: Page, id: number, points: number[]): Promise<void> {
   await page.evaluate(([id, points]) => (window as SimWindow).__osc?.writePosLut(id, points), [
     id,

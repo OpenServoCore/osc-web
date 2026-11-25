@@ -163,6 +163,7 @@ export function useClientOnce<T>(
 
 export interface Bus {
   write: (id: number, register: string, value: Value) => Promise<void>;
+  writeRun: (id: number, values: readonly (readonly [string, Value])[]) => Promise<void>;
   command: <T>(fn: (client: OscClient) => Promise<T>) => Promise<T>;
   exclusive: <T>(fn: (client: OscClient) => Promise<T>) => Promise<T>;
 }
@@ -172,6 +173,7 @@ export function useBus(): Bus {
   return useMemo<Bus>(
     () => ({
       write: (id, register, value) => manager.write(id, register, value),
+      writeRun: (id, values) => manager.writeRun(id, values),
       command: (fn) => manager.command(fn),
       exclusive: (fn) => manager.exclusive(fn),
     }),

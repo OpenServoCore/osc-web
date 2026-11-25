@@ -317,6 +317,54 @@ test("writes to different registers of one servo keep submission order", async (
   expect(writes).toEqual([0, 2, 3, 0]);
 });
 
+test("a run of adjacent registers goes as one write at the first one's address", async () => {
+  const { clock, client, manager } = makeBus();
+  const run = manager.writeRun(1, [
+    ["goal", { kind: "int", value: -2 }],
+    ["torque", { kind: "bool", value: true }],
+    ["mode", { kind: "enum", value: 3 }],
+  ]);
+  await clock.advance(10);
+  await run;
+  const writes = client.log.filter((c) => c.kind === "write");
+  expect(writes).toHaveLength(1);
+  expect(writes[0]).toMatchObject({ addr: 0, count: 4, data: [0xfe, 0xff, 1, 3] });
+});
+
+test("a run with a gap is refused and nothing goes on the wire", async () => {
+  const { clock, client, manager } = makeBus();
+  const run = manager.writeRun(1, [
+    ["goal", { kind: "int", value: 1 }],
+    ["mode", { kind: "enum", value: 3 }],
+  ]);
+  const failed = expect(run).rejects.toThrow("goal and mode are not adjacent");
+  await clock.advance(10);
+  await failed;
+  expect(client.log.filter((c) => c.kind === "write")).toHaveLength(0);
+});
+
+test("runs of the same registers while one is in flight collapse to the newest", async () => {
+  const { clock, client, manager } = makeBus();
+  client.latency = 20;
+  const pair = (v: number) =>
+    manager.writeRun(1, [
+      ["goal", { kind: "int", value: v }],
+      ["torque", { kind: "bool", value: false }],
+    ]);
+  const first = pair(1);
+  await flush();
+  const second = pair(2);
+  const third = pair(3);
+  await clock.advance(60);
+  await Promise.all([first, second, third]);
+  const writes = client.log.filter((c) => c.kind === "write");
+  expect(writes.map((w) => w.data)).toEqual([
+    [1, 0, 0],
+    [3, 0, 0],
+  ]);
+  expect(manager.stats().coalesced).toBe(1);
+});
+
 test("a command is never coalesced with a write or reordered past one", async () => {
   const { clock, client, manager } = makeBus();
   client.latency = 5;

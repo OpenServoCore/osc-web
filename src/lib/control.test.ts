@@ -20,6 +20,9 @@ import {
   modeLabel,
   modeName,
   positionRange,
+  softLimitsAfter,
+  softLimitsWrite,
+  travelFromTable,
   type GoalContext,
   type Limits,
 } from "./control";
@@ -44,8 +47,7 @@ const cal: Calibration = {
 };
 const swapped: Calibration = { ...cal, rawMin: 3800, rawMax: 200 };
 const limits: Limits = {
-  posMinSoftCounts: 0,
-  posMaxSoftCounts: 4095,
+  travel: { min: 0, max: 4095 },
   dutyMaxQ15: 30000,
   speedCeilingCps: 4000,
   currentLimitCounts: 280,
@@ -54,7 +56,7 @@ const ctx: GoalContext = { cal, sense, limits, raw: false };
 
 test("the control and limit registers plan one read each", () => {
   expect(planSpans(fields, CONTROL_REGISTERS)).toEqual([{ addr: 384, count: 18 }]);
-  expect(planSpans(fields, LIMIT_REGISTERS)).toEqual([{ addr: 40, count: 38 }]);
+  expect(planSpans(fields, LIMIT_REGISTERS)).toEqual([{ addr: 32, count: 46 }]);
 });
 
 test("decodeControl reads the switch, the mode and every goal", () => {
@@ -81,6 +83,8 @@ test("decodeControl reads the switch, the mode and every goal", () => {
 
 test("limitsFromTable names the soft limits and the three ceilings", () => {
   const regs: Record<string, number> = {
+    pos_min_phys_counts: 82,
+    pos_max_phys_counts: 3792,
     pos_min_soft_counts: 0,
     pos_max_soft_counts: 4095,
     duty_max_q15: 30000,
@@ -88,6 +92,70 @@ test("limitsFromTable names the soft limits and the three ceilings", () => {
     current_limit_counts: 280,
   };
   expect(limitsFromTable((name) => regs[name] ?? NaN)).toEqual(limits);
+});
+
+const stops = { pos_min_phys_counts: 82, pos_max_phys_counts: 3792 };
+const reader =
+  (regs: Record<string, number>) =>
+  (name: string): number => {
+    const v = regs[name];
+    if (v === undefined) throw new Error(`no ${name}`);
+    return v;
+  };
+
+test("soft limits of 0 / 0 are off: the travel is the physical stops", () => {
+  const off = reader({ ...stops, pos_min_soft_counts: 0, pos_max_soft_counts: 0 });
+  expect(travelFromTable(off)).toEqual({ min: 82, max: 3792 });
+  expect(
+    limitsFromTable(
+      reader({
+        ...stops,
+        pos_min_soft_counts: 0,
+        pos_max_soft_counts: 0,
+        duty_max_q15: 0,
+        speed_ceiling_cps: 0,
+        current_limit_counts: 0,
+      }),
+    ).travel,
+  ).toEqual({ min: 82, max: 3792 });
+  const on = reader({ ...stops, pos_min_soft_counts: 314, pos_max_soft_counts: 3560 });
+  expect(travelFromTable(on)).toEqual({ min: 314, max: 3560 });
+  // one side 0 is a pair like any other, judged by the servo as before
+  const oneSide = reader({ ...stops, pos_min_soft_counts: 0, pos_max_soft_counts: 3560 });
+  expect(travelFromTable(oneSide)).toEqual({ min: 0, max: 3560 });
+});
+
+test("a goal is judged by the physical stops while the soft limits are off", () => {
+  const off = {
+    ...limits,
+    travel: travelFromTable(reader({ ...stops, pos_min_soft_counts: 0, pos_max_soft_counts: 0 })),
+  };
+  expect(goalAtStop(2000, cal, off)).toBe(false);
+  expect(goalAtStop(300, cal, off)).toBe(false);
+  expect(goalAtStop(3792, cal, off)).toBe(true);
+  expect(goalAtStop(82, swapped, off)).toBe(true);
+  expect(goalAtStop(83, swapped, off)).toBe(false);
+});
+
+test("an edit of one soft limit carries the other side as stored, or its stop while off", () => {
+  const on = reader({ ...stops, pos_min_soft_counts: 314, pos_max_soft_counts: 3560 });
+  expect(softLimitsAfter("pos_min_soft_counts", 400, on)).toEqual({ min: 400, max: 3560 });
+  expect(softLimitsAfter("pos_max_soft_counts", 3000, on)).toEqual({ min: 314, max: 3000 });
+  const off = reader({ ...stops, pos_min_soft_counts: 0, pos_max_soft_counts: 0 });
+  expect(softLimitsAfter("pos_min_soft_counts", 400, off)).toEqual({ min: 400, max: 3792 });
+  expect(softLimitsAfter("pos_max_soft_counts", 3000, off)).toEqual({ min: 82, max: 3000 });
+  expect(softLimitsAfter("pos_min_phys_counts", 90, on)).toBeUndefined();
+});
+
+test("the soft limits go as one write of both sides, low first", () => {
+  expect(softLimitsWrite({ min: 0, max: 0 })).toEqual([
+    ["pos_min_soft_counts", { kind: "int", value: 0 }],
+    ["pos_max_soft_counts", { kind: "int", value: 0 }],
+  ]);
+  const [lo, hi] = ["pos_min_soft_counts", "pos_max_soft_counts"].map((n) =>
+    fields.find((f) => f.name === n),
+  );
+  expect(lo !== undefined && hi !== undefined && lo.addr + lo.width === hi.addr).toBe(true);
 });
 
 test("the modes carry the descriptor's variant names and plain labels", () => {
@@ -124,7 +192,7 @@ test("a goal at or past either end of the calibrated span is at a stop", () => {
 });
 
 test("soft limits inside the calibrated span are the stops the goal is judged by", () => {
-  const soft = { ...limits, posMinSoftCounts: 1000, posMaxSoftCounts: 3000 };
+  const soft = { ...limits, travel: { min: 1000, max: 3000 } };
   expect(goalAtStop(1000, cal, soft)).toBe(true);
   expect(goalAtStop(1001, cal, soft)).toBe(false);
   expect(goalAtStop(2999, cal, soft)).toBe(false);

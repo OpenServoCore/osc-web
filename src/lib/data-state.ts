@@ -24,14 +24,14 @@ const CONFIG_CORRUPT = 1 << 1;
 /** The stored plant stamp differs from the set the servo holds. */
 export const STAMP_MISMATCH = 1 << 4;
 
-const NEXT = "Run osc cal and osc ident, then save.";
+const NEXT = "Run osc-ident run, then osc-ident save.";
 
 /** Most urgent first: the order the servo core's host half reports them in. */
 const REASONS: readonly (Reason & { bit: number })[] = [
   {
     bit: 1 << 1,
     name: "CONFIG_CORRUPT",
-    text: `Torque is refused: the saved settings are unreadable, so board defaults are running. Factory reset the servo, then run osc cal and osc ident, or osc recover from a backup.`,
+    text: `Torque is refused: the saved settings are unreadable, so board defaults are running. Factory reset the servo, then run osc-ident run and osc-ident save, or osc recover from a backup.`,
   },
   {
     bit: 1 << 3,
@@ -61,12 +61,12 @@ const REASONS: readonly (Reason & { bit: number })[] = [
   {
     bit: STAMP_MISMATCH,
     name: "STAMP_MISMATCH",
-    text: "Closed loop is off: the position table and the identified values are not one set (edited, rebuilt or partly written). Run osc ident, or re-run the tool that was interrupted.",
+    text: "Closed loop is off: the position table and the identified values are not one set (edited, rebuilt or partly written). Run osc-ident run, or re-run the tool that was interrupted.",
   },
   {
     bit: 1 << 5,
     name: "PLANT_UNSET",
-    text: "Closed loop is off: the motor has not been identified. Run osc ident, then save.",
+    text: `Closed loop is off: the motor has not been identified. ${NEXT}`,
   },
 ];
 

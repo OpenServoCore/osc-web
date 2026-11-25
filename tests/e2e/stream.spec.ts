@@ -40,7 +40,7 @@ async function downloadCsv(page: Page): Promise<string[]> {
 // The simulated fleet boots at the factory 1 M.
 test("at 1 M a capture is refused: TEL streams at 3 M only", async ({ page }) => {
   await openStream(page);
-  await expect(page.getByText("chunks 0x0238+2, 0x0240+10 - tel_count 120")).toBeVisible();
+  await expect(page.getByText("chunks 0x0236+2, 0x023c+10 - tel_count 120")).toBeVisible();
   await page.getByRole("button", { name: "Capture", exact: true }).click();
   await expect(
     page.getByText(
@@ -52,7 +52,7 @@ test("at 1 M a capture is refused: TEL streams at 3 M only", async ({ page }) =>
 
 test("at 3 M the default six fill the summary and download matching CSV rows", async ({ page }) => {
   await openStream(page, "3 M");
-  await expect(page.getByText("chunks 0x0238+2, 0x0240+10 - tel_count 120")).toBeVisible();
+  await expect(page.getByText("chunks 0x0236+2, 0x023c+10 - tel_count 120")).toBeVisible();
   const { frames, samples } = await capture(page);
   expect(frames).toBeGreaterThan(0);
   expect(samples).toBeGreaterThan(0);

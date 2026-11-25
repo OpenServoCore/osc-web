@@ -185,6 +185,7 @@ describe("buildTable", () => {
     expect(placement("vbus_counts")).toEqual(["Live values", "Estimates"]);
     expect(placement("pos")).toEqual(["Live values", "Raw samples"]);
     expect(placement("vmotor_bias_counts")).toEqual(["Live values", "Raw samples"]);
+    expect(placement("vref_raw")).toEqual(["Live values", "Raw samples"]);
     expect(placement("chunk0_addr")).toEqual(["Live values", "Commands"]);
     expect(placement("tel_count")).toEqual(["Live values", "Commands"]);
     expect(rowOf("tel_count").editable).toBe(true);

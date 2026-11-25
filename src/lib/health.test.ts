@@ -36,7 +36,7 @@ test("an undefined flag still states its bit", () => {
 test("the data fault names the reason the servo refused the enable", () => {
   const s = statements({ ...clean, faultFlags: 1 << 6 }, { flags: 1 << 5, faultCode: 7 });
   expect(s[0]?.text).toBe(
-    "Closed loop refused. Closed loop is off: the motor has not been identified. Run osc ident, then save. The motor stays off until torque is switched off and on again.",
+    "Closed loop refused. Closed loop is off: the motor has not been identified. Run osc-ident run, then osc-ident save. The motor stays off until torque is switched off and on again.",
   );
   expect(statements({ ...clean, faultFlags: 1 << 6 })[0]?.text).toContain(
     "Closed loop refused: the servo's data state does not allow it.",

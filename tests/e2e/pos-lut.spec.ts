@@ -71,7 +71,7 @@ test("the mg90-a table reads live, graded A, its error in degrees and percent of
   expect(candidates).toContain(text);
   expect(text).toMatch(/reads (high|low)/);
   // A new table re-defines the domain the constants were fitted in: the
-  // COMMIT checkpoint leaves the set unstamped until osc ident runs.
+  // COMMIT checkpoint leaves the set unstamped until osc-ident runs.
   await expect(page.getByRole("status", { name: "Data state" })).toContainText(
     "the position table and the identified values are not one set",
   );

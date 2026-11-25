@@ -234,8 +234,8 @@ export function PosLutCard({ id, uid }: { id: number; uid: string }) {
             <p className="font-mono text-xs text-text-3">
               pos_lut_state {stateField === undefined ? "" : hexAddr(stateField.addr)} ={" "}
               {table.state}
-              {table.stateName === undefined ? "" : ` ${table.stateName}`}; tables are written with
-              osc lut write
+              {table.stateName === undefined ? "" : ` ${table.stateName}`}; tables are written by
+              osc-ident
             </p>
           </>
         )}

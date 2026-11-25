@@ -9,7 +9,7 @@ import { STAMP_MISMATCH } from "./data-state";
 export function stampWords(v: StampVerdict): string {
   if (v.stored === 0) return "Never stamped: no identification has been committed to this servo.";
   if (v.matches) return "Stamped: the calibration, identified values and position table match it.";
-  return "Changed since it was stamped: a covered value or the position table differs from the set osc ident committed.";
+  return "Changed since it was stamped: a covered value or the position table differs from the set osc-ident installed.";
 }
 
 type Client = Pick<OscClient, "write" | "restamp" | "dataState" | "save">;

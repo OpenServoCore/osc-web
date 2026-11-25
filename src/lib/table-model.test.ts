@@ -7,8 +7,10 @@ import {
   formatRow,
   labelParts,
   matchRows,
+  numberReader,
   realValue,
   searchIndex,
+  softLimitsState,
   summarizeBlob,
   SEARCH_LIMIT,
   type Row,
@@ -380,5 +382,31 @@ describe("real units", () => {
     expect(realValue(rowOf("velocity_limit_cps"), 1500, undefined)).toBeUndefined();
     expect(realValue(rowOf("velocity_limit_cps"), 1500, { ...cal, rawMax: 100 })).toBeUndefined();
     expect(realValue(rowOf("stall_omega_max_cps"), 1500, cal)).toBeUndefined();
+  });
+});
+
+describe("soft limits", () => {
+  const values = (lo: number, hi: number) =>
+    new Map([
+      ["pos_min_phys_counts", 82],
+      ["pos_max_phys_counts", 3792],
+      ["pos_min_soft_counts", lo],
+      ["pos_max_soft_counts", hi],
+    ]);
+
+  test("0 / 0 reads as off, any other pair as on", () => {
+    expect(softLimitsState(values(0, 0))).toEqual({ off: true });
+    expect(softLimitsState(values(314, 3560))).toEqual({ off: false });
+    expect(softLimitsState(values(0, 3560))).toEqual({ off: false });
+  });
+
+  test("a tab without both soft limits says nothing of them", () => {
+    expect(softLimitsState(new Map([["pos_min_soft_counts", 0]]))).toBeUndefined();
+  });
+
+  test("the reader gives the rows' numbers and refuses what they do not hold", () => {
+    const read = numberReader(values(314, 3560));
+    expect(read("pos_max_phys_counts")).toBe(3792);
+    expect(() => read("duty_max_q15")).toThrow("no number for duty_max_q15");
   });
 });

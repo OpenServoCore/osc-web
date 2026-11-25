@@ -1,6 +1,7 @@
 // The Live page's control cluster, minus React: the servo's mode and goal
 // registers, and each goal's range and unit conversion.
 
+import type { Value } from "@openservocore/client";
 import type { Sample } from "./telemetry";
 import {
   ADC_MAX_COUNT,
@@ -54,9 +55,14 @@ export const CONTROL_REGISTERS: readonly string[] = [
   ...MODES.map((m) => m.goal),
 ];
 
+/** The soft limits, low then high: an application's travel inside the physical stops. */
+export const SOFT_LIMITS = ["pos_min_soft_counts", "pos_max_soft_counts"] as const;
+/** The physical stops, low then high, which stand in for the soft limits while those are off. */
+export const PHYS_STOPS = ["pos_min_phys_counts", "pos_max_phys_counts"] as const;
+
 export const LIMIT_REGISTERS: readonly string[] = [
-  "pos_min_soft_counts",
-  "pos_max_soft_counts",
+  ...PHYS_STOPS,
+  ...SOFT_LIMITS,
   "duty_max_q15",
   "speed_ceiling_cps",
   "current_limit_counts",
@@ -71,8 +77,8 @@ export interface ControlState {
 
 /** The config ceilings the goal validators and the trajectory clamp to. */
 export interface Limits {
-  posMinSoftCounts: number;
-  posMaxSoftCounts: number;
+  /** The travel the trajectory clamps to: the soft limits, or the physical stops while those are off. */
+  travel: Range;
   dutyMaxQ15: number;
   speedCeilingCps: number;
   currentLimitCounts: number;
@@ -91,10 +97,52 @@ export function decodeControl(read: ReadRegister): ControlState {
   };
 }
 
+/** Soft limits of 0 / 0 are off (protocol sec 5.8). */
+export function softLimitsOff(soft: Range): boolean {
+  return soft.min === 0 && soft.max === 0;
+}
+
+/** The soft limits as stored, 0 / 0 while off. */
+export function softLimitsFromTable(read: ReadRegister): Range {
+  return { min: read(SOFT_LIMITS[0]), max: read(SOFT_LIMITS[1]) };
+}
+
+/** The travel the servo holds to: its soft limits, or its physical stops while those are off. */
+export function travelFromTable(read: ReadRegister): Range {
+  const soft = softLimitsFromTable(read);
+  return softLimitsOff(soft) ? { min: read(PHYS_STOPS[0]), max: read(PHYS_STOPS[1]) } : soft;
+}
+
+/**
+ * The soft limits after `value` is written to one side, `name`: the other
+ * side as stored, or its physical stop while the pair is off. Undefined
+ * for any other register.
+ */
+export function softLimitsAfter(
+  name: string,
+  value: number,
+  read: ReadRegister,
+): Range | undefined {
+  const side = SOFT_LIMITS.findIndex((n) => n === name);
+  if (side < 0) return undefined;
+  const travel = travelFromTable(read);
+  return side === 0 ? { min: value, max: travel.max } : { min: travel.min, max: value };
+}
+
+/**
+ * Both soft limits as one write: the servo checks each side against the
+ * other as stored, so 0 / 0, off, is reached in no other way.
+ */
+export function softLimitsWrite(soft: Range): [string, Value][] {
+  return [
+    [SOFT_LIMITS[0], { kind: "int", value: soft.min }],
+    [SOFT_LIMITS[1], { kind: "int", value: soft.max }],
+  ];
+}
+
 export function limitsFromTable(read: ReadRegister): Limits {
   return {
-    posMinSoftCounts: read("pos_min_soft_counts"),
-    posMaxSoftCounts: read("pos_max_soft_counts"),
+    travel: travelFromTable(read),
     dutyMaxQ15: read("duty_max_q15"),
     speedCeilingCps: read("speed_ceiling_cps"),
     currentLimitCounts: read("current_limit_counts"),
@@ -134,13 +182,12 @@ export function goalRange(mode: ModeName, cal: Calibration, limits: Limits): Ran
 
 /**
  * The position goal sits at or past an end of travel: the calibrated span or
- * the soft limits the trajectory clamps to, whichever end is nearer.
+ * the travel the trajectory clamps to, whichever end is nearer.
  */
 export function goalAtStop(goal: number, cal: Calibration, limits: Limits): boolean {
   const span = positionRange(cal);
   return (
-    goal <= Math.max(span.min, limits.posMinSoftCounts) ||
-    goal >= Math.min(span.max, limits.posMaxSoftCounts)
+    goal <= Math.max(span.min, limits.travel.min) || goal >= Math.min(span.max, limits.travel.max)
   );
 }
 

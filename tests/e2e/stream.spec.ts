@@ -78,15 +78,15 @@ test("presets and ticked fields drive the chunks, the burst and the CSV header",
 }) => {
   await openStream(page, "3 M");
   await page.getByRole("button", { name: "Raw frame" }).click();
-  await expect(page.getByText("chunks 0x0238+6, 0x0240+6 - tel_count 120")).toBeVisible();
+  await expect(page.getByText("chunks 0x0236+12 - tel_count 120")).toBeVisible();
   await page.getByRole("button", { name: "Ident four" }).click();
-  await expect(page.getByText("chunks 0x0238+2, 0x0246+8 - tel_count 120")).toBeVisible();
+  await expect(page.getByText("chunks 0x0236+2, 0x0242+8 - tel_count 120")).toBeVisible();
   await page.getByRole("checkbox", { name: "Position", exact: true }).click();
-  await expect(page.getByText("chunks 0x0246+8 - tel_count 120")).toBeVisible();
+  await expect(page.getByText("chunks 0x0242+8 - tel_count 120")).toBeVisible();
   // An estimate rides in a chunk of its own.
   await page.getByRole("checkbox", { name: "Velocity estimate", exact: true }).click();
   await page.getByRole("spinbutton", { name: "Samples" }).fill("40");
-  await expect(page.getByText("chunks 0x0246+8, 0x025c+4 - tel_count 40")).toBeVisible();
+  await expect(page.getByText("chunks 0x0242+8, 0x025c+4 - tel_count 40")).toBeVisible();
   const { samples } = await capture(page);
   expect(samples).toBeGreaterThan(0);
   expect(samples).toBeLessThanOrEqual(40);
@@ -106,7 +106,7 @@ test("a selection two chunks cannot cover says so and cannot be captured", async
   }
   await expect(
     page.getByText(
-      "these fields need 26 B rows; a row copies at most 12 B in at most 2 runs of the table. Untick some fields or capture them over two bursts.",
+      "these fields need 24 B rows; a row copies at most 12 B in at most 2 runs of the table. Untick some fields or capture them over two bursts.",
     ),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Capture", exact: true })).toBeDisabled();

@@ -57,14 +57,14 @@ test("the presets are the protocol's common rows", () => {
   const [six, ident, raw] = PRESETS.map((p) => chunksOf(p.keys));
   // protocol sec 5.6: the six in two runs, pos and current to trough;
   // identification's four in two with current_trough riding along; the raw
-  // frame in two, pos to the rail and current to the B tap.
+  // frame in one, pos to the B tap.
   expect(six).toEqual([
-    { addr: 0x238, len: 2 },
-    { addr: 0x240, len: 10 },
+    { addr: 0x236, len: 2 },
+    { addr: 0x23c, len: 10 },
   ]);
   expect(ident).toEqual([
-    { addr: 0x238, len: 2 },
-    { addr: 0x246, len: 8 },
+    { addr: 0x236, len: 2 },
+    { addr: 0x242, len: 8 },
   ]);
   expect(telColumns(descriptor, chunksOf(PRESETS[1].keys)).map((c) => c.name)).toEqual([
     "pos",
@@ -73,10 +73,7 @@ test("the presets are the protocol's common rows", () => {
     "i_tick_counts",
     "vdiff_counts",
   ]);
-  expect(raw).toEqual([
-    { addr: 0x238, len: 6 },
-    { addr: 0x240, len: 6 },
-  ]);
+  expect(raw).toEqual([{ addr: 0x236, len: 12 }]);
   expect(DEFAULT_FIELDS).toEqual(PRESETS[0].keys);
 });
 
@@ -91,15 +88,15 @@ test("an estimate rides in the second chunk behind the tick block", () => {
 
 test("one block wider than a row splits at its widest gap", () => {
   expect(chunksOf(["current_raw", "vmotor_a", "i_tick_counts", "vdiff_counts"])).toEqual([
-    { addr: 0x240, len: 4 },
-    { addr: 0x24a, len: 4 },
+    { addr: 0x23c, len: 4 },
+    { addr: 0x246, len: 4 },
   ]);
 });
 
 test("a selection no two runs of 12 B cover is refused in plain words", () => {
   expect(coverFields(["pos", "vmotor_b", "sample_tick"], layout)).toEqual({
     issue:
-      "these fields need 18 B rows; a row copies at most 12 B in at most 2 runs of the table. Untick some fields or capture them over two bursts.",
+      "these fields need 16 B rows; a row copies at most 12 B in at most 2 runs of the table. Untick some fields or capture them over two bursts.",
   });
   expect(coverFields([], layout)).toEqual({ issue: "pick at least one field" });
   expect(coverFields(["pos"], new Map())).toEqual({ issue: "the servo's table has no pos" });
@@ -254,7 +251,11 @@ const config: StreamConfig = {
 };
 
 test("the CSV names every carried field with its unit, valid empty where the row cannot say", () => {
-  const columns = telColumns(descriptor, chunksOf(["pos", "current_raw", "vmotor_a", "vmotor_b"]));
+  // Two runs by hand, so no field rides along between pos and the current.
+  const columns = telColumns(descriptor, [
+    { addr: layout.get("pos")?.addr ?? 0, len: 2 },
+    { addr: layout.get("current_raw")?.addr ?? 0, len: 6 },
+  ]);
   const rows = decodeBurst(
     [frame(0, true, 0, [[...u16(0x800), ...u16(0x101), ...u16(800), ...u16(700)]])],
     columns,

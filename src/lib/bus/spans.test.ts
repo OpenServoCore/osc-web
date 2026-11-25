@@ -25,7 +25,7 @@ import {
 const fields = descriptor.fields as Field[];
 
 test("the live span is one read from pos through vmotor_bias_counts", () => {
-  expect(span(fields, LIVE_REGISTERS)).toEqual({ addr: 568, count: 56 });
+  expect(span(fields, LIVE_REGISTERS)).toEqual({ addr: 566, count: 58 });
 });
 
 test("the constants span is one read from raw_min through gear_class", () => {

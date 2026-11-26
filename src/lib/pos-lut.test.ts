@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import image from "../../../open-servo-core/ident/testdata/lut/pos-lut-mg90-a-grid.json";
+import image from "../../../open-servo-core/client/testdata/lut/pos-lut-mg90-a-grid.json";
 import {
   counts,
   errorSeries,

@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 export const MG90A = JSON.parse(
   readFileSync(
     new URL(
-      "../../../open-servo-core/ident/testdata/lut/pos-lut-mg90-a-grid.json",
+      "../../../open-servo-core/client/testdata/lut/pos-lut-mg90-a-grid.json",
       import.meta.url,
     ),
     "utf8",

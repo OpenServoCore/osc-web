@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import uPlot from "uplot";
 import { Chart, type ChartOptions } from "@/components/uplot";
@@ -56,7 +57,15 @@ export function ReportCard<T>({
   );
 }
 
-export function Tiles({ tiles }: { tiles: readonly ReportCardData<Tile>[] }) {
+export function Tiles({
+  tiles,
+  uid,
+  utc,
+}: {
+  tiles: readonly ReportCardData<Tile>[];
+  uid: string;
+  utc: string;
+}) {
   return (
     <section
       aria-label="Headline numbers"
@@ -72,14 +81,21 @@ export function Tiles({ tiles }: { tiles: readonly ReportCardData<Tile>[] }) {
             key={t.data.label}
             role="group"
             aria-label={t.data.label}
-            className="flex flex-col gap-0.5 rounded-lg border bg-card p-3"
+            className="rounded-lg border bg-card hover:border-border-strong"
           >
-            <span className="text-sm text-text-3">{t.data.label}</span>
-            <span className="text-xl font-semibold tabular-nums">{t.data.value}</span>
-            {t.data.spread !== undefined && (
-              <span className="text-sm text-text-2 tabular-nums">{t.data.spread}</span>
-            )}
-            <span className="text-xs text-text-3">{t.data.about}</span>
+            <Link
+              to="/runs/$uid/$utc/$step"
+              params={{ uid, utc, step: t.data.step }}
+              search={true}
+              className="flex flex-col gap-0.5 p-3"
+            >
+              <span className="text-sm text-text-3">{t.data.label}</span>
+              <span className="text-xl font-semibold tabular-nums">{t.data.value}</span>
+              {t.data.spread !== undefined && (
+                <span className="text-sm text-text-2 tabular-nums">{t.data.spread}</span>
+              )}
+              <span className="text-xs text-text-3">{t.data.about}</span>
+            </Link>
           </div>
         ),
       )}

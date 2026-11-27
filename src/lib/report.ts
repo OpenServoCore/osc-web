@@ -295,13 +295,14 @@ export interface MoveCapture {
   tickHz: number;
 }
 
-/** The final check's move captures, in file order. */
+/** A self-test's move captures, in file order: the final check's, or those in `folder`. */
 export async function moveCaptures(
   root: OpfsDir,
   uid: string,
   utc: string,
+  folder: string = VERIFY_CAPTURES,
 ): Promise<MoveCapture[]> {
-  const dir = `${runAt(uid, utc)}/${VERIFY_CAPTURES}`;
+  const dir = `${runAt(uid, utc)}/${folder}`;
   const found: MoveCapture[] = [];
   for (const name of await listFiles(root, dir)) {
     if (!name.endsWith(".meta.json")) continue;

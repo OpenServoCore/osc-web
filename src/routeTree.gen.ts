@@ -17,6 +17,7 @@ import { Route as RunsRouteImport } from './routes/runs'
 import { Route as ServoRouteImport } from './routes/servo'
 import { Route as TableRouteImport } from './routes/table'
 import { Route as RunsUidUtcRouteImport } from './routes/runs_.$uid.$utc'
+import { Route as RunsUidUtcStepRouteImport } from './routes/runs_.$uid.$utc_.$step'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -58,6 +59,11 @@ const RunsUidUtcRoute = RunsUidUtcRouteImport.update({
   path: '/runs/$uid/$utc',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RunsUidUtcStepRoute = RunsUidUtcStepRouteImport.update({
+  id: '/runs_/$uid/$utc_/$step',
+  path: '/runs/$uid/$utc/$step',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -68,6 +74,7 @@ export interface FileRoutesByFullPath {
   '/servo': typeof ServoRoute
   '/table': typeof TableRoute
   '/runs/$uid/$utc': typeof RunsUidUtcRoute
+  '/runs/$uid/$utc/$step': typeof RunsUidUtcStepRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -78,6 +85,7 @@ export interface FileRoutesByTo {
   '/servo': typeof ServoRoute
   '/table': typeof TableRoute
   '/runs/$uid/$utc': typeof RunsUidUtcRoute
+  '/runs/$uid/$utc/$step': typeof RunsUidUtcStepRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -89,6 +97,7 @@ export interface FileRoutesById {
   '/servo': typeof ServoRoute
   '/table': typeof TableRoute
   '/runs_/$uid/$utc': typeof RunsUidUtcRoute
+  '/runs_/$uid/$utc_/$step': typeof RunsUidUtcStepRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -101,6 +110,7 @@ export interface FileRouteTypes {
     | '/servo'
     | '/table'
     | '/runs/$uid/$utc'
+    | '/runs/$uid/$utc/$step'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -111,6 +121,7 @@ export interface FileRouteTypes {
     | '/servo'
     | '/table'
     | '/runs/$uid/$utc'
+    | '/runs/$uid/$utc/$step'
   id:
     | '__root__'
     | '/'
@@ -121,6 +132,7 @@ export interface FileRouteTypes {
     | '/servo'
     | '/table'
     | '/runs_/$uid/$utc'
+    | '/runs_/$uid/$utc_/$step'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -132,6 +144,7 @@ export interface RootRouteChildren {
   ServoRoute: typeof ServoRoute
   TableRoute: typeof TableRoute
   RunsUidUtcRoute: typeof RunsUidUtcRoute
+  RunsUidUtcStepRoute: typeof RunsUidUtcStepRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -192,6 +205,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RunsUidUtcRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/runs_/$uid/$utc_/$step': {
+      id: '/runs_/$uid/$utc_/$step'
+      path: '/runs/$uid/$utc/$step'
+      fullPath: '/runs/$uid/$utc/$step'
+      preLoaderRoute: typeof RunsUidUtcStepRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -204,6 +224,7 @@ const rootRouteChildren: RootRouteChildren = {
   ServoRoute: ServoRoute,
   TableRoute: TableRoute,
   RunsUidUtcRoute: RunsUidUtcRoute,
+  RunsUidUtcStepRoute: RunsUidUtcStepRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

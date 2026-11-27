@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { expect, test } from "vitest";
 import {
+  listSetups,
   policies,
   profiles,
   readSetup,
@@ -155,6 +156,24 @@ test("setup.json is kept per servo under its uid", async () => {
   await writeSetup(root, uid2, { profile: changed, policy: null });
   expect((await readSetup(root, uid2))?.profile?.revision).toBe(2);
   expect((await readSetup(root, uid1))?.profile).toEqual(profile);
+});
+
+test("every servo's setup lists by uid, other folders left out", async () => {
+  const root = memoryOpfs();
+  const uid1 = "00000000ffffffff1a2b3c4d5e6f7081";
+  const uid2 = "00000000ffffffff0102030405060708";
+  const profile = refOf(await profiles(root).save(mg90));
+  await writeSetup(root, uid1, { profile, policy: null });
+  await writeSetup(root, uid2, { profile: null, policy: null });
+  await writeFile(
+    root,
+    `00000000ffffffff0000000000000003/2026-11-27T00-00-00Z/report.json`,
+    new Uint8Array([1]),
+  );
+  await writeFile(root, "notes/setup.json", new TextEncoder().encode("{}"));
+  const setups = await listSetups(root);
+  expect([...setups.keys()]).toEqual([uid2, uid1]);
+  expect(setups.get(uid1)).toEqual({ profile, policy: null });
 });
 
 test("a uid of the wrong form is refused", async () => {

@@ -102,3 +102,12 @@ export async function listFiles(root: OpfsDir, path: string): Promise<string[]> 
   }
   return names.sort();
 }
+
+/** The names of the folders in the root, sorted. */
+export async function listDirs(root: OpfsDir): Promise<string[]> {
+  const names: string[] = [];
+  for await (const entry of root.values()) {
+    if (entry.kind === "directory") names.push(entry.name);
+  }
+  return names.sort();
+}

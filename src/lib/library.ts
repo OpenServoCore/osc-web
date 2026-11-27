@@ -1,5 +1,5 @@
 import type { ServoProfile, TuningPolicy } from "@openservocore/client";
-import { listFiles, readFile, writeFile, type OpfsDir } from "./opfs";
+import { listDirs, listFiles, readFile, writeFile, type OpfsDir } from "./opfs";
 
 export type { ServoProfile, TuningPolicy };
 
@@ -149,6 +149,7 @@ export interface InputRef {
 
 export interface ServoSetup {
   profile: InputRef | null;
+  /** Null is the built-in Default. */
   policy: InputRef | null;
 }
 
@@ -192,4 +193,15 @@ export async function writeSetup(root: OpfsDir, uid: string, setup: ServoSetup):
   const { profile, policy } = setup;
   const bytes = new TextEncoder().encode(`${JSON.stringify({ profile, policy }, null, 2)}\n`);
   await writeFile(root, path, bytes);
+}
+
+/** Every servo's setup, by uid; the uid folders without one are left out. */
+export async function listSetups(root: OpfsDir): Promise<Map<string, ServoSetup>> {
+  const uids = (await listDirs(root)).filter((name) => UID_PATTERN.test(name));
+  const setups = new Map<string, ServoSetup>();
+  for (const uid of uids) {
+    const setup = await readSetup(root, uid);
+    if (setup !== null) setups.set(uid, setup);
+  }
+  return setups;
 }

@@ -7,10 +7,21 @@ import { ProfileCard, ProfileStatus } from "@/components/profile-card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { profiles, type Stored } from "@/lib/library";
+import { usedBy } from "@/lib/ident-setup";
 import { blankProfile, GEAR_TEXT, identifiable, profileKey } from "@/lib/profile-form";
+import { useSession } from "@/lib/session";
 import { download, useLibrary } from "@/lib/use-library";
+import { loadWasm } from "@/lib/wasm";
+import { useSetups } from "@/lib/use-setup";
 
-export const Route = createFileRoute("/profiles")({ component: ProfilesPage });
+export const Route = createFileRoute("/profiles")({
+  component: ProfilesPage,
+  // The rest of the query (`?sim`) passes through untouched.
+  validateSearch: (search: Record<string, unknown>): { profile?: string } => ({
+    ...search,
+    profile: typeof search.profile === "string" ? search.profile : undefined,
+  }),
+});
 
 interface Note {
   text: string;
@@ -23,7 +34,9 @@ function message(e: unknown): string {
 
 function ProfilesPage() {
   const library = useLibrary(profiles);
-  const [chosen, setChosen] = useState<string>();
+  const { setups, error: setupsError } = useSetups();
+  const { servos } = useSession();
+  const [chosen, setChosen] = useState(Route.useSearch().profile);
   const [note, setNote] = useState<Note>();
   const entries = library.entries;
   const selected = entries?.find((e) => e.value.key === chosen) ?? entries?.[0];
@@ -37,6 +50,8 @@ function ProfilesPage() {
 
   async function importFile(file: File) {
     try {
+      // The file input is live before the library's first read has loaded the checks.
+      await loadWasm();
       let parsed: unknown;
       try {
         parsed = JSON.parse(await file.text());
@@ -79,6 +94,7 @@ function ProfilesPage() {
         </p>
       )}
       {library.error !== undefined && <p className="mb-3 text-danger">{library.error}</p>}
+      {setupsError !== undefined && <p className="mb-3 text-danger">{setupsError}</p>}
       {entries === undefined ? (
         library.error === undefined && <Skeleton className="h-64 w-full" />
       ) : selected === undefined ? (
@@ -89,6 +105,11 @@ function ProfilesPage() {
         <div className="grid grid-cols-[18rem_1fr] items-start gap-4">
           <ProfileList
             entries={entries}
+            usedBy={(key) =>
+              setups === undefined
+                ? undefined
+                : usedBy(key, setups, (uid) => servos.find((s) => s.uid === uid)?.id)
+            }
             selected={selected.value.key}
             onSelect={(key) => {
               setChosen(key);
@@ -109,10 +130,12 @@ function ProfilesPage() {
 
 function ProfileList({
   entries,
+  usedBy,
   selected,
   onSelect,
 }: {
   entries: readonly Stored<ServoProfile>[];
+  usedBy: (key: string) => string | undefined;
   selected: string;
   onSelect: (key: string) => void;
 }) {
@@ -135,8 +158,13 @@ function ProfileList({
             </span>
           </span>
           <span className="text-xs text-text-3">
-            {p.gear_class == null ? "gears not set" : GEAR_TEXT[p.gear_class].toLowerCase()}
-            {p.gear_class != null && !identifiable(p) && " . cannot identify"}
+            {[
+              p.gear_class == null ? "gears not set" : GEAR_TEXT[p.gear_class].toLowerCase(),
+              p.gear_class != null && !identifiable(p) ? "cannot identify" : undefined,
+              usedBy(p.key),
+            ]
+              .filter((part) => part !== undefined)
+              .join(" . ")}
           </span>
         </button>
       ))}

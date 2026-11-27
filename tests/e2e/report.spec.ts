@@ -57,9 +57,10 @@ test("a recorded run's report shows its measured values with their spread, the m
     "11 codes0.55 deg at raw 2048..2058; 10 listed",
   );
 
-  const holes = page.getByRole("table", { name: "Holes" });
-  await expect(holes.getByRole("row").filter({ hasText: "position hole" })).toContainText(
-    "6.75..118.80",
+  await page.getByRole("button", { name: "Show as table" }).click();
+  const marks = page.getByRole("table", { name: "Travel map as a table" });
+  await expect(marks.getByRole("row").filter({ hasText: "position hole" })).toContainText(
+    "6.75118.80",
   );
 
   const scores = page.getByRole("list", { name: "Move scores" });

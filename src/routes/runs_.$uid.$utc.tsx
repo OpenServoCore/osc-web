@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, FileChartColumn } from "lucide-react";
+import { HealthArc } from "@/components/report/health-arc";
 import {
   AccuracyChart,
   EffortChart,
@@ -8,9 +9,9 @@ import {
   ReportCard,
   SpeedChart,
   Tiles,
-  TravelStrip,
 } from "@/components/report/cards";
 import { Skeleton } from "@/components/ui/skeleton";
+import { healthArc } from "@/lib/health-arc";
 import { durationText, stoppedAt } from "@/lib/report";
 import {
   accuracy,
@@ -20,7 +21,6 @@ import {
   moves,
   saveLine,
   speed,
-  travelMap,
 } from "@/lib/report-cards";
 import { phrase, utcText, type Named } from "@/lib/run-folder";
 import { useSession } from "@/lib/session";
@@ -105,10 +105,10 @@ function Report({ run, uid, utc }: { run: LoadedRun; uid: string; utc: string })
       <Tiles tiles={headlineTiles(docs, steps)} />
       <ReportCard
         title="Travel map"
-        says="Where on the travel the position sensor skips: codes the pot never read on the slow passes, and the converter's wide codes, in horn degrees from the CW stop."
-        card={travelMap(docs, steps)}
+        says="The position sensor over the travel, in horn degrees from the CW stop: where the pot jumps, where the converter skips codes, and how many counts a degree the pot gives everywhere else."
+        card={healthArc(docs, steps)}
       >
-        {(t) => <TravelStrip travel={t} />}
+        {(a) => <HealthArc arc={a} />}
       </ReportCard>
       <ReportCard
         title="Accuracy across travel"

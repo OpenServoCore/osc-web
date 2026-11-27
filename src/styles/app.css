@@ -46,6 +46,9 @@
   --color-axis: #c3c9d1;
   --color-pos-hole: #9e2225;
   --color-adc-hole: #8b5cf6;
+  --color-pos-coarse: #68ca80;
+  --color-pos-typical: #41ae61;
+  --color-pos-fine: #2a904b;
 
   --font-*: initial;
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
@@ -118,6 +121,9 @@
     --color-axis: #3a4149;
     --color-pos-hole: #cb4644;
     --color-adc-hole: #9b7be9;
+    --color-pos-coarse: #3bb360;
+    --color-pos-typical: #5dcc7a;
+    --color-pos-fine: #7ce695;
 
     --shadow-el-1: 0 1px 2px rgb(0 0 0 / 0.4), 0 0 0 1px rgb(255 255 255 / 0.04);
     --shadow-el-2: 0 8px 24px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(255 255 255 / 0.06);

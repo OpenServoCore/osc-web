@@ -12,7 +12,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useChartTokens, type ChartTokens } from "@/lib/chart-theme";
 import { readFile } from "@/lib/opfs";
-import { moveCaptures, moveTrace, rawText, readRows, short, type MoveTrace } from "@/lib/report";
+import { moveCaptures, moveTrace, readRows, short, type MoveTrace } from "@/lib/report";
 import type {
   Accuracy,
   Card as ReportCardData,
@@ -20,9 +20,7 @@ import type {
   Inputs,
   Moves,
   Speed,
-  Stretch,
   Tile,
-  Travel,
 } from "@/lib/report-cards";
 import { storage } from "@/lib/use-library";
 import { axis, Legend, PointChart, readoutOf, seriesOf, type Series } from "./charts";
@@ -86,157 +84,6 @@ export function Tiles({ tiles }: { tiles: readonly ReportCardData<Tile>[] }) {
         ),
       )}
     </section>
-  );
-}
-
-const STRIP_W = 1000;
-const MIN_W = 2.5;
-const KIND_TEXT: Record<Stretch["kind"], string> = {
-  pot: "position hole",
-  adc: "ADC wide code",
-  "not judged": "not judged",
-};
-
-function deg(v: number): string {
-  return `${v.toFixed(2)} deg`;
-}
-
-export function TravelStrip({ travel }: { travel: Travel }) {
-  const x = (d: number) => (travel.travelDeg === 0 ? 0 : (d / travel.travelDeg) * STRIP_W);
-  const span = (s: Stretch) => {
-    const w = Math.max(x(s.toDeg) - x(s.fromDeg), MIN_W);
-    return { x: (x(s.fromDeg) + x(s.toDeg)) / 2 - w / 2, w };
-  };
-  const pot = travel.stretches.filter((s) => s.kind === "pot");
-  const adc = travel.stretches.filter((s) => s.kind === "adc");
-  return (
-    <div className="flex flex-col gap-2">
-      <svg
-        role="img"
-        aria-label={`Position sensor over ${travel.travelDeg.toFixed(2)} degrees: ${String(pot.length)} position ${pot.length === 1 ? "hole" : "holes"}, ${String(adc.length)} ADC wide codes`}
-        viewBox={`0 0 ${String(STRIP_W)} 44`}
-        preserveAspectRatio="none"
-        className="h-14 w-full"
-      >
-        <defs>
-          <pattern
-            id="strip-hole"
-            width="4"
-            height="4"
-            patternUnits="userSpaceOnUse"
-            patternTransform="rotate(45)"
-          >
-            <line x1="0" y1="0" x2="0" y2="4" stroke="var(--color-pos-hole)" strokeWidth="2" />
-          </pattern>
-          <pattern
-            id="strip-unjudged"
-            width="4"
-            height="4"
-            patternUnits="userSpaceOnUse"
-            patternTransform="rotate(135)"
-          >
-            <line x1="0" y1="0" x2="0" y2="4" stroke="var(--color-border-strong)" strokeWidth="2" />
-          </pattern>
-        </defs>
-        <rect
-          x={0}
-          y={16}
-          width={STRIP_W}
-          height={20}
-          fill="var(--color-series-ctx)"
-          opacity={0.35}
-        />
-        {travel.stretches.map((s, i) => {
-          const { x: at, w } = span(s);
-          if (s.kind === "adc") {
-            return <rect key={i} x={at} y={4} width={w} height={10} fill="var(--color-adc-hole)" />;
-          }
-          return (
-            <g key={i}>
-              <rect x={at} y={16} width={w} height={20} fill="var(--color-surface)" />
-              <rect
-                x={at}
-                y={16}
-                width={w}
-                height={20}
-                fill={s.kind === "pot" ? "url(#strip-hole)" : "url(#strip-unjudged)"}
-                stroke={s.kind === "pot" ? "var(--color-pos-hole)" : "none"}
-                strokeWidth={1.5}
-                vectorEffect="non-scaling-stroke"
-              />
-              {s.kind === "pot" && (
-                <rect x={at} y={38} width={w} height={6} fill="var(--color-pos-hole)" />
-              )}
-            </g>
-          );
-        })}
-      </svg>
-      <div className="flex justify-between text-sm text-text-3 tabular-nums">
-        <span>CW stop 0 deg</span>
-        <span>CCW stop {deg(travel.travelDeg)}</span>
-      </div>
-      <ul aria-label="Legend" className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-text-2">
-        <li className="flex items-center gap-1.5">
-          <svg width="18" height="10" aria-hidden="true">
-            <rect width="18" height="10" fill="var(--color-series-ctx)" opacity={0.35} />
-          </svg>
-          travel the slow passes crossed
-        </li>
-        <li className="flex items-center gap-1.5">
-          <svg width="18" height="10" aria-hidden="true">
-            <rect width="18" height="10" fill="url(#strip-hole)" stroke="var(--color-pos-hole)" />
-          </svg>
-          position hole
-        </li>
-        <li className="flex items-center gap-1.5">
-          <svg width="18" height="10" aria-hidden="true">
-            <rect x="7" width="4" height="10" fill="var(--color-adc-hole)" />
-          </svg>
-          ADC wide code
-        </li>
-        <li className="flex items-center gap-1.5">
-          <svg width="18" height="10" aria-hidden="true">
-            <rect width="18" height="10" fill="url(#strip-unjudged)" />
-          </svg>
-          not judged
-        </li>
-      </ul>
-      <p className="text-xs text-text-3">
-        A small hole is drawn wider than it is; the table gives its true size.
-      </p>
-      <table aria-label="Holes" className="w-full text-sm tabular-nums">
-        <thead className="text-left text-text-3">
-          <tr>
-            <th className="py-1 font-normal">Kind</th>
-            <th className="py-1 font-normal">From</th>
-            <th className="py-1 font-normal">To</th>
-            <th className="py-1 font-normal">Raw</th>
-            <th className="py-1 font-normal">Counts</th>
-          </tr>
-        </thead>
-        <tbody>
-          {travel.stretches.map((s, i) => (
-            <tr key={i} className="border-t">
-              <td className="py-1 pr-4">{KIND_TEXT[s.kind]}</td>
-              <td className="py-1 pr-4">{deg(s.fromDeg)}</td>
-              <td className="py-1 pr-4">{deg(s.toDeg)}</td>
-              <td className="py-1 pr-4">
-                {rawText(s.fromRaw)}..{rawText(s.toRaw)}
-              </td>
-              <td className="py-1">
-                {Number.isInteger(s.counts) ? s.counts : s.counts.toFixed(1)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {travel.potSource !== undefined && (
-        <p className="text-xs text-text-3">Position holes found by: {travel.potSource}</p>
-      )}
-      {travel.adcSource !== undefined && (
-        <p className="text-xs text-text-3">ADC wide codes found by: {travel.adcSource}</p>
-      )}
-    </div>
   );
 }
 

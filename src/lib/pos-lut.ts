@@ -1,7 +1,7 @@
 // The position linearization table (protocol sec 5.7) minus React: the firmware's
 // interpolation ported bit for bit, the sensor error the table removes at each
-// position, and the advisory grade osc-ident table prints. The
-// firmware judges physics only; quality is the operator's call.
+// position, and the local gains osc-ident table prints. The firmware judges
+// physics only; quality is the user's call.
 
 import { ADC_FULL_SCALE, ADC_MAX_COUNT, degPerCount, positionDeg, type Calibration } from "./units";
 
@@ -23,31 +23,8 @@ export const STATE = {
   REJECT_SHAPE: 5,
 } as const;
 
-/** Local gain is judged over this many raw counts, as nb09 did. */
+/** Local gain is read over this many raw counts, as nb09 did. */
 export const WINDOW = 25;
-/** Grade A: every window within this band of nominal. */
-export const SMOOTH: readonly [number, number] = [0.5, 2];
-/** Grade B: within this band (the SG90 class swings ~6x across 20 mV bins). */
-export const COARSE: readonly [number, number] = [0.25, 4];
-
-export type Grade = "A" | "B" | "C";
-
-export function gradeText(grade: Grade): string {
-  switch (grade) {
-    case "A":
-      return "smooth";
-    case "B":
-      return "coarse track";
-    case "C":
-      return "suspect";
-  }
-}
-
-export function gradeOf(min: number, max: number): Grade {
-  if (min >= SMOOTH[0] && max <= SMOOTH[1]) return "A";
-  if (min >= COARSE[0] && max <= COARSE[1]) return "B";
-  return "C";
-}
 
 /** The interval a raw sample falls in. */
 export function index(raw: number): number {
@@ -90,7 +67,6 @@ export interface Report {
   /** The raw counts the table changes a reading in, and the windows ran over. */
   band?: [number, number];
   windows?: Windows;
-  grade?: Grade;
 }
 
 function rawOf(k: number): number {
@@ -120,7 +96,6 @@ export function report(points: readonly number[]): Report {
   }
   r.band = [lo, hi];
   r.windows = { counts: WINDOW, min, max };
-  r.grade = gradeOf(min, max);
   return r;
 }
 
@@ -226,15 +201,22 @@ export function hoverWords(s: ErrorSeries, i: number): string {
   return `${at}: reads ${y < 0 ? "low" : "high"} by ${fmtValue(abs, s.unit)} (${fmtPct(abs, s)})`;
 }
 
+/** A raw count as the card names a position: in degrees through the map, else in counts. */
+function rawAt(raw: number, cal: Calibration | undefined): string {
+  return cal === undefined ? `raw ${raw} counts` : fmtValue(positionDeg(raw, cal), "deg");
+}
+
 /** How many calibration points the table holds and the positions they cover. */
 export function pointsWords(r: Report, cal: Calibration | undefined): string {
   if (r.span === undefined) return "No calibration points: the table is all zeros.";
-  const at = (raw: number) =>
-    cal === undefined ? `raw ${raw} counts` : fmtValue(positionDeg(raw, cal), "deg");
+  const at = (raw: number) => rawAt(raw, cal);
   return `${r.nonzero} calibration points between ${at(r.span[0])} and ${at(r.span[1])}.`;
 }
 
-/** What each grade means, with the thresholds; advisory, the graph decides. */
-export function gradeRule(): string {
-  return `A (smooth) has every ${WINDOW}-count window within ${SMOOTH[0]}x..${SMOOTH[1]}x of nominal, B (coarse track) within ${COARSE[0]}x..${COARSE[1]}x, C (suspect) beyond that: a worn track, a slipping seat or a capture artifact. Advisory only; the firmware accepts anything under 16x and the graph decides.`;
+/** The local gain over every window the table touches, x nominal, lowest to highest. */
+export function windowsWords(r: Report, cal: Calibration | undefined): string | undefined {
+  if (r.band === undefined || r.windows === undefined) return undefined;
+  const at = (raw: number) => rawAt(raw, cal);
+  const w = r.windows;
+  return `Local gain over every ${w.counts}-count window between ${at(r.band[0])} and ${at(r.band[1])}: ${w.min.toFixed(2)}x to ${w.max.toFixed(2)}x nominal.`;
 }

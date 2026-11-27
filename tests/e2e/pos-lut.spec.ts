@@ -16,7 +16,7 @@ async function openServo(page: Page, id: number): Promise<void> {
   await expect(page.getByRole("heading", { name: `ID ${id}` })).toBeVisible();
 }
 
-test("a servo without a table says so, with nothing to grade", async ({ page }) => {
+test("a servo without a table says so, with no gains to read", async ({ page }) => {
   await gotoSim(page, [1, 2]);
   await openServo(page, 1);
   const card = page.getByRole("region", { name: "Position calibration" });
@@ -25,12 +25,12 @@ test("a servo without a table says so, with nothing to grade", async ({ page }) 
     "No calibration points: the table is all zeros.",
   );
   await expect(card.getByLabel("Table facts")).toContainText("Stops at raw 5 and 4095");
-  await expect(card.getByLabel("Grade")).toHaveCount(0);
+  await expect(card.getByLabel("Table facts")).not.toContainText("Local gain");
   await expect(card.getByRole("region", { name: "Error vs position" })).toHaveCount(0);
   await expect(card.getByText("pos_lut_state 0x1de = 0 IDENTITY")).toBeVisible();
 });
 
-test("the mg90-a table reads live, graded A, its error in degrees and percent of travel", async ({
+test("the mg90-a table reads live, its gains and error in degrees and percent of travel", async ({
   page,
 }) => {
   await gotoSim(page, [1, 2]);
@@ -40,9 +40,12 @@ test("the mg90-a table reads live, graded A, its error in degrees and percent of
   await expect(card.getByLabel("Table state")).toHaveText(
     "Live: the servo corrects every sensor sample through this table.",
   );
-  await expect(card.getByLabel("Grade")).toHaveText("Grade A - smooth");
   const facts = card.getByLabel("Table facts");
   await expect(facts).toContainText("185 calibration points between 27.4 deg and 172.8 deg.");
+  await expect(facts).toContainText(
+    "Local gain over every 25-count window between 26.6 deg and 173.6 deg: 0.61x to 1.88x nominal.",
+  );
+  await expect(card).not.toContainText(/grade|smooth|suspect/i);
   await expect(facts).not.toContainText(/knot|correction/);
   const graph = card.getByRole("region", { name: "Error vs position" });
   await expect(graph).toHaveCount(1);
@@ -52,8 +55,6 @@ test("the mg90-a table reads live, graded A, its error in degrees and percent of
   await expect(card.getByRole("region", { name: "Local gain" })).toHaveCount(0);
   await expect(card.getByRole("region", { name: "Correction curve" })).toHaveCount(0);
   await expect(card.getByText("pos_lut_state 0x1de = 2 LIVE")).toBeVisible();
-  await card.getByLabel("Grade").hover();
-  await expect(page.getByRole("tooltip")).toContainText("0.5x..2x");
   // Hovering the plot reads the position under the cursor and the error the
   // table removes there. The readout rounds the position to 0.1 deg, which
   // is about two raw counts, so any of those counts' readouts is the answer.

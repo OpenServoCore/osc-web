@@ -6,13 +6,11 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { StampNotice, useStampNotice } from "@/components/stamp-notice";
 import { TableSearch } from "@/components/table-search";
 import { ValueEditor } from "@/components/value-editor";
 import { useBus, useReadOnce, useRegisters } from "@/lib/bus/hooks";
 import type { Snapshot } from "@/lib/bus/manager";
 import { SOFT_LIMITS, softLimitsAfter, softLimitsWrite } from "@/lib/control";
-import { STAMP_MISMATCH } from "@/lib/data-state";
 import { toValue, type EditValue } from "@/lib/edit";
 import { hexAddr } from "@/lib/format";
 import { useSession } from "@/lib/session";
@@ -163,57 +161,49 @@ function Table({
   onToggle: (group: string, open: boolean) => void;
   jump: Jump | undefined;
 }) {
-  const { servos, values } = useSession();
   const [refresh, setRefresh] = useState(0);
-  const servo = servos.find((s) => s.id === id);
-  const flags = (servo === undefined ? undefined : values.get(servo.uid)?.data.flags) ?? 0;
-  const notice = useStampNotice((flags & STAMP_MISMATCH) !== 0);
   return (
-    <>
-      {notice.shown && <StampNotice id={id} onStamped={notice.onStamped} />}
-      <Tabs
-        value={tab}
-        onValueChange={(v) => {
-          onTab(v as TabName);
-        }}
-      >
-        <div className="flex items-center justify-between">
-          <TabsList>
-            {model.tabs.map((t) => (
-              <TabsTrigger key={t.name} value={t.name}>
-                {t.name}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          {tab !== "Live values" && (
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={() => {
-                setRefresh((n) => n + 1);
-              }}
-            >
-              <RefreshCw />
-              Refresh
-            </Button>
-          )}
-        </div>
-        {model.tabs.map((t) => (
-          <TabsContent key={t.name} value={t.name}>
-            <TabPanel
-              key={id}
-              id={id}
-              tab={t}
-              refresh={refresh}
-              open={open}
-              onToggle={onToggle}
-              jump={jump?.tab === t.name ? jump : undefined}
-              onEdit={notice.onEdit}
-            />
-          </TabsContent>
-        ))}
-      </Tabs>
-    </>
+    <Tabs
+      value={tab}
+      onValueChange={(v) => {
+        onTab(v as TabName);
+      }}
+    >
+      <div className="flex items-center justify-between">
+        <TabsList>
+          {model.tabs.map((t) => (
+            <TabsTrigger key={t.name} value={t.name}>
+              {t.name}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        {tab !== "Live values" && (
+          <Button
+            variant="outline"
+            size="xs"
+            onClick={() => {
+              setRefresh((n) => n + 1);
+            }}
+          >
+            <RefreshCw />
+            Refresh
+          </Button>
+        )}
+      </div>
+      {model.tabs.map((t) => (
+        <TabsContent key={t.name} value={t.name}>
+          <TabPanel
+            key={id}
+            id={id}
+            tab={t}
+            refresh={refresh}
+            open={open}
+            onToggle={onToggle}
+            jump={jump?.tab === t.name ? jump : undefined}
+          />
+        </TabsContent>
+      ))}
+    </Tabs>
   );
 }
 
@@ -235,7 +225,6 @@ interface PanelProps {
   open: OpenGroups;
   onToggle: (group: string, open: boolean) => void;
   jump: Jump | undefined;
-  onEdit: () => void;
 }
 
 function TabPanel(props: PanelProps) {
@@ -285,7 +274,6 @@ function Panel({
   values,
   error,
   seq,
-  onEdit,
   onWrite,
 }: PanelProps & {
   values: Values | undefined;
@@ -331,7 +319,6 @@ function Panel({
 
   function wrote(name: string): void {
     setPending({ name, after: seen.current });
-    onEdit();
     onWrite?.();
   }
 

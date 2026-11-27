@@ -4,7 +4,7 @@ import { countersLine, latchedLine, statements, trimLine } from "./health";
 
 const clean: Health = {
   faultFlags: 0,
-  configDirty: false,
+  unsaved: false,
   trimSteps: 0,
   crcFailCount: 0,
   framingDropCount: 0,
@@ -33,13 +33,23 @@ test("an undefined flag still states its bit", () => {
   expect(statements({ ...clean, faultFlags: 1 << 7 })[0]?.text).toContain("Unknown fault, bit 7.");
 });
 
-test("the data fault names the reason the servo refused the enable", () => {
-  const s = statements({ ...clean, faultFlags: 1 << 6 }, { flags: 1 << 5, faultCode: 7 });
-  expect(s[0]?.text).toBe(
-    "Closed loop refused. Closed loop is off: the motor has not been identified. Run osc-ident run, then osc-ident save. The motor stays off until torque is switched off and on again.",
+const SET = { recipKeQ: 3700, keVpcQ: 1150, currentLimitCounts: 1043, speedCeilingCps: 8050 };
+
+test("the data fault names the constant the belt refused the enable on", () => {
+  const ke = statements(
+    { ...clean, faultFlags: 1 << 6 },
+    { flags: 0, faultCode: 7, belt: { ...SET, recipKeQ: 0 } },
   );
+  expect(ke[0]?.text).toBe(
+    "Closed loop refused: the motor's Ke is unset. Run an identification: osc-ident run. The motor stays off until torque is switched off and on again.",
+  );
+  const cap = statements(
+    { ...clean, faultFlags: 1 << 6 },
+    { flags: 1 << 0, faultCode: 7, belt: { ...SET, currentLimitCounts: 0 } },
+  );
+  expect(cap[0]?.text).toContain("the current cap or the speed ceiling is unset");
   expect(statements({ ...clean, faultFlags: 1 << 6 })[0]?.text).toContain(
-    "Closed loop refused: the servo's data state does not allow it.",
+    "Closed loop refused: Ke, the current cap or the speed ceiling is unset.",
   );
 });
 
@@ -54,11 +64,11 @@ test("every fault statement says how to clear it: torque off and on", () => {
 });
 
 test("unsaved changes rank under the faults and above the all-clear", () => {
-  expect(statements({ ...clean, configDirty: true })).toEqual([
-    { level: "warn", text: "Unsaved changes: settings differ from the saved ones." },
+  expect(statements({ ...clean, unsaved: true })).toEqual([
+    { level: "warn", text: "Changes not saved: a reboot loses them." },
     { level: "ok", text: "No faults." },
   ]);
-  expect(statements({ ...clean, faultFlags: 1, configDirty: true }).map((s) => s.level)).toEqual([
+  expect(statements({ ...clean, faultFlags: 1, unsaved: true }).map((s) => s.level)).toEqual([
     "fault",
     "warn",
   ]);

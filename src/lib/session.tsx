@@ -471,7 +471,7 @@ function withHealth(servo: Servo, values: CardValues | undefined): Servo {
   return {
     ...servo,
     fault: faultText(values.health.faultFlags),
-    unsaved: values.health.configDirty,
+    unsaved: values.health.unsaved,
     calibrated: values.constants.calibrated.valid,
   };
 }

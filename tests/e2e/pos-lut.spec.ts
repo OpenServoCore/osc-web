@@ -70,14 +70,14 @@ test("the mg90-a table reads live, graded A, its error in degrees and percent of
   const candidates = [-2, -1, 0, 1, 2].map((d) => hoverWords(s, raw + d - SIM.rawMin));
   expect(candidates).toContain(text);
   expect(text).toMatch(/reads (high|low)/);
-  // A new table re-defines the domain the constants were fitted in: the
-  // COMMIT checkpoint leaves the set unstamped until osc-ident runs.
-  await expect(page.getByRole("status", { name: "Data state" })).toContainText(
-    "the position table and the identified values are not one set",
-  );
-  await expect(page.getByRole("group", { name: "Plant stamp" })).toContainText(
-    "Changed since it was stamped",
-  );
+  // A table written is not saved: the servo reads unsaved, and names no
+  // data-state reason.
+  await expect(page.getByRole("status", { name: "Data state" })).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("region", { name: "Health" })
+      .getByText("Changes not saved: a reboot loses them."),
+  ).toBeVisible();
   // The other servo keeps its own state.
   await openServo(page, 2);
   await expect(

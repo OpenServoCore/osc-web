@@ -22,7 +22,8 @@ import {
   saveLine,
   speed,
 } from "@/lib/report-cards";
-import { phrase, utcText, type Named } from "@/lib/run-folder";
+import { isDrillStep } from "@/lib/drill";
+import { phrase, stepTitle, utcText, type Named, type RunStep } from "@/lib/run-folder";
 import { useSession } from "@/lib/session";
 import { useRunReport, type LoadedRun } from "@/lib/use-report";
 
@@ -93,6 +94,31 @@ function RunLine({ run, uid, utc }: { run: LoadedRun; uid: string; utc: string }
   );
 }
 
+/** Every entry of run.json, each with its data where it has a drill-in. */
+function StepList({ steps, uid, utc }: { steps: readonly RunStep[]; uid: string; utc: string }) {
+  return (
+    <nav aria-label="Step data" className="flex flex-wrap gap-2">
+      {steps.map((s) =>
+        isDrillStep(s.name) ? (
+          <Link
+            key={s.name}
+            to="/runs/$uid/$utc/$step"
+            params={{ uid, utc, step: s.name }}
+            search={true}
+            className="rounded-md border px-2 py-1 text-sm hover:border-border-strong"
+          >
+            {stepTitle(s.name)} <span className="text-text-3">{s.state}</span>
+          </Link>
+        ) : (
+          <span key={s.name} className="rounded-md border border-dashed px-2 py-1 text-sm">
+            {stepTitle(s.name)} <span className="text-text-3">{s.state}</span>
+          </span>
+        ),
+      )}
+    </nav>
+  );
+}
+
 function Report({ run, uid, utc }: { run: LoadedRun; uid: string; utc: string }) {
   const { servos } = useSession();
   const steps = run.identity.steps;
@@ -102,7 +128,8 @@ function Report({ run, uid, utc }: { run: LoadedRun; uid: string; utc: string })
   return (
     <div className="flex flex-col gap-4">
       <RunLine run={run} uid={uid} utc={utc} />
-      <Tiles tiles={headlineTiles(docs, steps)} />
+      <StepList steps={steps} uid={uid} utc={utc} />
+      <Tiles tiles={headlineTiles(docs, steps)} uid={uid} utc={utc} />
       <ReportCard
         title="Travel map"
         says="The position sensor over the travel, in horn degrees from the CW stop: where the pot jumps, where the converter skips codes, and how many counts a degree the pot gives everywhere else."

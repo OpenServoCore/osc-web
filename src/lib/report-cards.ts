@@ -46,11 +46,19 @@ export interface Tile {
   value: string;
   spread?: string;
   about: string;
+  /** The step whose drill-in holds the data behind it. */
+  step: string;
 }
 
-function termTile(label: string, t: Term | undefined, file: string, about: string): Tile | string {
+function termTile(
+  label: string,
+  t: Term | undefined,
+  file: string,
+  about: string,
+  step: string,
+): Tile | string {
   if (t === undefined) return lacks(file);
-  return { label, value: valueSaid(t), spread: spreadSaid(t), about };
+  return { label, value: valueSaid(t), spread: spreadSaid(t), about, step };
 }
 
 /** The run voltage the policy states, V. */
@@ -95,6 +103,7 @@ export function headlineTiles(docs: RunDocs, steps: readonly RunStep[]): Card<Ti
         label: "Travel",
         value: `${(Math.abs(cal.angleMaxCdeg - cal.angleMinCdeg) / 100).toFixed(2)} deg`,
         about: `the set's angle map, raw ${String(cal.rawMin)} to ${String(cal.rawMax)}`,
+        step: "stops",
       };
     }),
     card(steps, ["gather"], () => {
@@ -106,6 +115,7 @@ export function headlineTiles(docs: RunDocs, steps: readonly RunStep[]): Card<Ti
         board === undefined
           ? "seated at both stops"
           : `seated at both stops, the board at ${board.toFixed(1)} C`,
+        "stops",
       );
     }),
     card(steps, ["stops"], () =>
@@ -114,6 +124,7 @@ export function headlineTiles(docs: RunDocs, steps: readonly RunStep[]): Card<Ti
         termAt(docs.get("results/stops.json"), "estimates.r_seated_25c_ohm"),
         "results/stops.json",
         "the seated resistance through copper's slope to 25 C",
+        "stops",
       ),
     ),
     card(steps, ["gather"], () =>
@@ -122,6 +133,7 @@ export function headlineTiles(docs: RunDocs, steps: readonly RunStep[]): Card<Ti
         termAt(measured, "ke_v_s_per_rad"),
         "inputs/measured.json",
         "volts per motor rad/s, from the coasts",
+        "spins",
       ),
     ),
     card(steps, ["gather"], () =>
@@ -130,6 +142,7 @@ export function headlineTiles(docs: RunDocs, steps: readonly RunStep[]): Card<Ti
         termAt(measured, "j_kg_m2"),
         "inputs/measured.json",
         "at the motor, from the run-ups",
+        "spins",
       ),
     ),
     card(steps, ["gather"], () => {
@@ -146,6 +159,7 @@ export function headlineTiles(docs: RunDocs, steps: readonly RunStep[]): Card<Ti
         value: valueSaid(speed),
         spread: spreadSaid(speed),
         about: `${String(volts)} V over Ke is ${short(volts / ke.value)} motor rad/s; over the gear ratio ${String(gear)}, ${short(speed.value)} deg/s at the horn`,
+        step: "spins",
       };
     }),
     card(steps, ["cruise"], () =>
@@ -154,6 +168,7 @@ export function headlineTiles(docs: RunDocs, steps: readonly RunStep[]): Card<Ti
         termAt(docs.get("results/cruise.json"), "estimates.friction_coulomb_ma"),
         "results/cruise.json",
         "the current that keeps the horn moving, the cruise line at zero speed",
+        "cruise",
       ),
     ),
     card(steps, ["final"], () => {
@@ -171,6 +186,7 @@ export function headlineTiles(docs: RunDocs, steps: readonly RunStep[]): Card<Ti
           .filter(Boolean)
           .join(", "),
         about: gainText(docs),
+        step: "final",
       };
     }),
     card(steps, ["table"], () => {
@@ -179,13 +195,20 @@ export function headlineTiles(docs: RunDocs, steps: readonly RunStep[]): Card<Ti
       const longest = at(holes, "pot.longest");
       const n = `${String(all.length)} ${all.length === 1 ? "hole" : "holes"} listed`;
       if (longest === undefined || longest === null) {
-        return { label: "Longest position hole", value: "none", spread: n, about: "the pot" };
+        return {
+          label: "Longest position hole",
+          value: "none",
+          spread: n,
+          about: "the pot",
+          step: "table",
+        };
       }
       return {
         label: "Longest position hole",
         value: `${(num(longest, "deg") ?? 0).toFixed(2)} deg`,
         spread: `${(num(longest, "counts") ?? 0).toFixed(1)} counts at raw ${rawText(num(longest, "from_counts") ?? 0)}..${rawText(num(longest, "to_counts") ?? 0)}; ${n}`,
         about: "the pot",
+        step: "table",
       };
     }),
     card(steps, ["table"], () => {
@@ -194,13 +217,20 @@ export function headlineTiles(docs: RunDocs, steps: readonly RunStep[]): Card<Ti
       const longest = at(holes, "adc.longest");
       const n = `${String(runs.length)} listed`;
       if (longest === undefined || longest === null) {
-        return { label: "Widest ADC wide code", value: "none", spread: n, about: "the converter" };
+        return {
+          label: "Widest ADC wide code",
+          value: "none",
+          spread: n,
+          about: "the converter",
+          step: "table",
+        };
       }
       return {
         label: "Widest ADC wide code",
         value: `${String(num(longest, "counts") ?? 0)} codes`,
         spread: `${(num(longest, "deg") ?? 0).toFixed(2)} deg at raw ${rawText(num(longest, "from_counts") ?? 0)}..${rawText(num(longest, "to_counts") ?? 0)}; ${n}`,
         about: "the converter, the same on every channel",
+        step: "table",
       };
     }),
   ];
@@ -266,36 +296,49 @@ export interface Moves {
 }
 
 export function moves(docs: RunDocs, steps: readonly RunStep[]): Card<Moves> {
-  return card(steps, ["final"], () => {
-    const set = docs.get("final/set.json");
-    const verify = docs.get("final/results/verify.json");
-    const cal = angleMap(set);
-    if (cal === undefined) return lacks("final/set.json angle map");
-    if (verify === undefined) return lacks("final/results/verify.json");
-    const zero = num(verify, "units.current_zero_counts");
-    const perA = num(verify, "units.counts_per_a.value");
-    if (zero === undefined || perA === undefined) return lacks("final/results/verify.json units");
-    const scores = list(verify, "moves").map((m): MoveScore => ({
-      name: str(m, "name") ?? "",
-      fromCounts: num(m, "from_counts") ?? 0,
-      goalCounts: num(m, "goal_counts") ?? 0,
-      stepDeg: num(m, "step_deg"),
-      overshootDeg: num(m, "overshoot_deg"),
-      overshootBoundDeg: num(m, "overshoot_bound_deg"),
-      settleS: num(m, "settle_s"),
-      restErrorDeg: num(m, "rest_error_deg"),
-      currentPeakA: num(m, "current_peak_a"),
-      followPeakDeg: num(m, "follow_peak_deg"),
-    }));
-    return {
-      moves: scores,
-      cal,
-      points: tablePoints(docs.get("final/inputs/pos_lut.json")),
-      slots: wideSlots(set),
-      currentZeroCounts: zero,
-      countsPerA: perA,
-    };
-  });
+  return card(steps, ["final"], () =>
+    movesOf(
+      docs.get("final/set.json"),
+      docs.get("final/results/verify.json"),
+      docs.get("final/inputs/pos_lut.json"),
+      "final/",
+    ),
+  );
+}
+
+/** A self-test's moves with the units to draw them, from the set it ran, its results and the table. */
+export function movesOf(
+  set: unknown,
+  verify: unknown,
+  posLut: unknown,
+  at0: string,
+): Moves | string {
+  const cal = angleMap(set);
+  if (cal === undefined) return lacks(`${at0}set.json angle map`);
+  if (verify === undefined) return lacks(`${at0}results/verify.json`);
+  const zero = num(verify, "units.current_zero_counts");
+  const perA = num(verify, "units.counts_per_a.value");
+  if (zero === undefined || perA === undefined) return lacks(`${at0}results/verify.json units`);
+  const scores = list(verify, "moves").map((m): MoveScore => ({
+    name: str(m, "name") ?? "",
+    fromCounts: num(m, "from_counts") ?? 0,
+    goalCounts: num(m, "goal_counts") ?? 0,
+    stepDeg: num(m, "step_deg"),
+    overshootDeg: num(m, "overshoot_deg"),
+    overshootBoundDeg: num(m, "overshoot_bound_deg"),
+    settleS: num(m, "settle_s"),
+    restErrorDeg: num(m, "rest_error_deg"),
+    currentPeakA: num(m, "current_peak_a"),
+    followPeakDeg: num(m, "follow_peak_deg"),
+  }));
+  return {
+    moves: scores,
+    cal,
+    points: tablePoints(posLut),
+    slots: wideSlots(set),
+    currentZeroCounts: zero,
+    countsPerA: perA,
+  };
 }
 
 export interface Point {

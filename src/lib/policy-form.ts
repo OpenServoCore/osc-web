@@ -157,42 +157,31 @@ export function portability(policy: TuningPolicy): string {
   return n === 0 ? "portable" : `${n} fixed`;
 }
 
-/** The rule forms the run binds from what it measures, taken out so the rest previews. */
-export function withoutRules(policy: TuningPolicy): { policy: TuningPolicy; byRun: Set<string> } {
-  const byRun = new Set<string>();
-  let out = policy;
-  for (const f of RULE_FIELDS) {
-    const form = formOf(valueAt(policy, f));
-    if (form !== undefined && !FIXED_TAGS.has(form.tag)) {
-      byRun.add(f);
-      out = withValue(out, f, null);
-    }
-  }
-  return { policy: out, byRun };
-}
-
 export interface PolicyPreview {
   preview?: Preview;
   /** The CLI's refusal of this pair, when it refuses. */
   refusal?: string;
+  /** The rule forms the run binds from what it measures. */
   byRun: Set<string>;
 }
 
-/** What the run resolves with this profile, the rule-bound values left to the run. */
+/** What the run resolves with this profile, each rule form's line saying the run sets it. */
 export function previewOf(
   policy: TuningPolicy,
   profile: ServoProfile | undefined,
   rOhm: number | undefined,
 ): PolicyPreview {
-  const stripped = withoutRules(policy);
-  if (profile === undefined) return { byRun: stripped.byRun };
+  const byRun = new Set<string>(
+    RULE_FIELDS.filter((f) => {
+      const form = formOf(valueAt(policy, f));
+      return form !== undefined && !FIXED_TAGS.has(form.tag);
+    }),
+  );
+  if (profile === undefined) return { byRun };
   try {
-    return {
-      preview: resolvePreview(profile, stripped.policy, rOhm ?? 1),
-      byRun: stripped.byRun,
-    };
+    return { preview: resolvePreview(profile, policy, rOhm ?? 1), byRun };
   } catch (e) {
-    return { refusal: e instanceof Error ? e.message : String(e), byRun: stripped.byRun };
+    return { refusal: e instanceof Error ? e.message : String(e), byRun };
   }
 }
 

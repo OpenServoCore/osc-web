@@ -246,9 +246,10 @@ test("the fleet card reads the live sensors, the health block and the stored sta
 test("faultText names the latched bits, lowest first", () => {
   expect(faultText(0)).toBeUndefined();
   expect(faultText(1 << 2)).toBe("Stall detected");
-  expect(faultText((1 << 0) | (1 << 5))).toBe("Overcurrent, Undervoltage");
   expect(faultText((1 << 2) | (1 << 6))).toBe("Stall detected, Closed loop refused");
-  expect(faultText(1 << 7)).toBe("Fault 0x80");
+  expect(faultText((1 << 0) | (1 << 7))).toBe("Overcurrent, Bus dead-man");
+  expect(faultText(1 << 5)).toBe("Fault 0x20");
+  expect(faultText(1 << 8)).toBe("Fault 0x100");
 });
 
 test("limitText names what governs, lowest first", () => {

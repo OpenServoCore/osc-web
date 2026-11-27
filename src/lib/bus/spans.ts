@@ -246,19 +246,22 @@ export interface CardValues {
   store: StoreState;
 }
 
-/** Kernel fault latch bits (firmware kernel/faults.rs), lowest bit first. */
-const FAULTS: readonly string[] = [
+/** Kernel fault latch bits (firmware kernel/phases/loops/faults.rs), lowest bit first; bit 5 is unassigned. */
+const FAULTS: readonly (string | undefined)[] = [
   "Overcurrent",
   "Overheated",
   "Stall detected",
   "Position error",
   "Sensor fault",
-  "Undervoltage",
+  undefined,
   "Closed loop refused",
+  "Bus dead-man",
 ];
 
 export function faultText(faultFlags: number): string | undefined {
-  const set = FAULTS.filter((_, bit) => (faultFlags & (1 << bit)) !== 0);
+  const set = FAULTS.filter(
+    (name, bit): name is string => name !== undefined && (faultFlags & (1 << bit)) !== 0,
+  );
   if (set.length === 0) return faultFlags === 0 ? undefined : `Fault 0x${faultFlags.toString(16)}`;
   return set.join(", ");
 }

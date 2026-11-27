@@ -16,6 +16,7 @@ import {
   Plug,
   RefreshCw,
   Settings2,
+  SlidersHorizontal,
   Sun,
   Table,
   Wrench,
@@ -58,7 +59,10 @@ const nav = [
 ] as const;
 
 // Files in the browser, so they stay open with no adapter.
-const library = [{ to: "/profiles", label: "Profiles", icon: BookOpen }] as const;
+const library = [
+  { to: "/profiles", label: "Profiles", icon: BookOpen },
+  { to: "/policies", label: "Policies", icon: SlidersHorizontal },
+] as const;
 
 const never = () => () => undefined;
 

@@ -1,4 +1,4 @@
-import init, {
+import {
   OscClient,
   pid,
   requestDevice,
@@ -6,6 +6,7 @@ import init, {
   type FakeFail,
   type Track,
 } from "@openservocore/client";
+import { loadWasm } from "./wasm";
 
 const ID_MIN = 1;
 const ID_MAX = 0xf9;
@@ -85,11 +86,8 @@ export function isAdapter(device: { vendorId: number; productId: number }): bool
   return device.vendorId === vid() && device.productId === pid();
 }
 
-let wasmReady: Promise<unknown> | undefined;
-
 export async function openClient(): Promise<OscClient> {
-  wasmReady ??= init();
-  await wasmReady;
+  await loadWasm();
   const ids = parseSimIds(window.location.search);
   if (ids !== undefined) {
     const track = await simTrack();

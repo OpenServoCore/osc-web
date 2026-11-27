@@ -16,8 +16,8 @@ const PROFILE = testdata("profile.json");
 const RECORD = { ...testdata("policy-of-record.json"), revision: 1 };
 const protection = testdata("policy-of-record.json").protection as Record<string, unknown>;
 
-const YIELD_NOT_YET =
-  'This tool does not set protection.yield by its rule yet (a max yield torque over the stated stall torque, times the stated volts over R), so the run would leave it as the servo holds it: state it fixed, as {"ma": ...}';
+const ZERO_JUMP =
+  "A share or a multiple of 0 or under sets nothing the servo can run on: the policy's sensor.pot_jump is 0; state one over 0";
 
 /** Writes files straight into the browser's storage, as the library pages would have saved them. */
 async function seed(page: Page, files: Record<string, unknown>): Promise<void> {
@@ -45,7 +45,7 @@ async function readStored(page: Page, path: string): Promise<unknown> {
   }, path);
 }
 
-/** A fleet of two with the record's profile, one lacking its gear ratio, and two policies. */
+/** A fleet of two with the record's profile, one lacking its gear ratio, and three policies. */
 async function openServo(page: Page, id: number): Promise<Locator> {
   await gotoSim(page, [1, 2]);
   await seed(page, {
@@ -56,6 +56,11 @@ async function openServo(page: Page, id: number): Promise<Locator> {
       ...RECORD,
       key: "seven-volts",
       protection: { ...protection, run_v: 7.0 },
+    },
+    "policies/zero-jump.json": {
+      ...RECORD,
+      key: "zero-jump",
+      sensor: { pot_jump: { multiple_of_step4: 0 }, bad_samples: 4 },
     },
   });
   return select(page, id);
@@ -132,31 +137,34 @@ test("an incomplete profile's open-it link lands on that profile", async ({ page
   );
 });
 
-test("Default's rules are refused in the CLI's words, and Copy for this servo makes ID 1's copy", async ({
+test("Default with the record's profile is ready, and Copy for this servo makes ID 1's copy", async ({
   page,
 }) => {
   const card = await openServo(page, 1);
   await choose(card, "Profile", "vorpal-mg90 rev 1");
   await expect(card.getByRole("combobox", { name: "Policy" })).toHaveText("Default");
-  await expect(card).toContainText(YIELD_NOT_YET);
-  await expect(card).toContainText(
-    "Identify stays off until the policy states its 6 rule-bound values as fixed numbers; Default cannot change, so copy it for this servo and fix them on Tuning policies.",
-  );
-  await expect(card.getByRole("button", { name: "Identify" })).toBeDisabled();
+  await expect(card.getByRole("button", { name: "Identify" })).toBeEnabled();
 
   await card.getByRole("button", { name: "Copy for this servo" }).click();
   await expect(card.getByRole("combobox", { name: "Policy" })).toHaveText("default-51ce290f rev 1");
   await expect(card.getByRole("button", { name: "Copy for this servo" })).toBeHidden();
-  await expect(card).toContainText(YIELD_NOT_YET);
-  await expect(card).toContainText(
-    "Identify stays off until the policy states its 6 rule-bound values as fixed numbers; fix them on Tuning policies.",
-  );
+  await expect(card.getByRole("button", { name: "Identify" })).toBeEnabled();
+});
 
-  await card.getByRole("link", { name: "Open default-51ce290f on Tuning policies" }).click();
+test("a policy the run refuses is named in the CLI's words, with a link to it", async ({
+  page,
+}) => {
+  const card = await openServo(page, 1);
+  await choose(card, "Profile", "vorpal-mg90 rev 1");
+  await choose(card, "Policy", "zero-jump rev 1");
+  await expect(card).toContainText(ZERO_JUMP);
+  await expect(card.getByRole("button", { name: "Identify" })).toBeDisabled();
+
+  await card.getByRole("link", { name: "Open zero-jump on Tuning policies" }).click();
   await expect(page.getByRole("heading", { name: "Tuning policies" })).toBeVisible();
   await expect(
     page.getByRole("navigation", { name: "Policies" }).locator('button[aria-current="true"]'),
-  ).toContainText("default-51ce290f");
+  ).toContainText("zero-jump");
 });
 
 test("a run voltage over the profile's range warns at setup and does not block", async ({

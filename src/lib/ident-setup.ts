@@ -5,7 +5,7 @@ import {
   type TuningPolicy,
 } from "@openservocore/client";
 import type { ServoSetup } from "./library";
-import { DEFAULT_KEY, WARN, withoutRules } from "./policy-form";
+import { WARN } from "./policy-form";
 import { fieldIssue, identifiable, NOT_METAL, REQUIRED, slug, type Required } from "./profile-form";
 
 /** Each required fact as a sentence names it: "The profile has no gear ratio". */
@@ -24,8 +24,8 @@ export type Blocker =
   | { kind: "not-metal"; text: string }
   /** `text` is the run's refusal of that field. */
   | { kind: "missing"; field: Required; text: string }
-  /** The run's refusal of the pair; `plain` says what to do when it is a rule this tool cannot set yet. */
-  | { kind: "refused"; text: string; plain?: string };
+  /** The run's refusal of the pair. */
+  | { kind: "refused"; text: string };
 
 export interface Readiness {
   /** Identify runs only without one. */
@@ -36,20 +36,6 @@ export interface Readiness {
 
 function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
-}
-
-const NOT_YET = "This tool does not set ";
-
-function plainOf(policy: TuningPolicy): string {
-  const n = withoutRules(policy).byRun.size;
-  const what =
-    n === 1
-      ? "its one rule-bound value as a fixed number"
-      : `its ${n} rule-bound values as fixed numbers`;
-  const fix = n === 1 ? "fix it" : "fix them";
-  return policy.key === DEFAULT_KEY
-    ? `Identify stays off until the policy states ${what}; Default cannot change, so copy it for this servo and ${fix} on Tuning policies.`
-    : `Identify stays off until the policy states ${what}; ${fix} on Tuning policies.`;
 }
 
 /** Whether a servo can be identified with this pair, in the order the user can act on it. */
@@ -72,9 +58,7 @@ export function readiness(profile: ServoProfile | undefined, policy: TuningPolic
     // The resistance moves only the previewed current limit, never whether the pair resolves.
     resolvePreview(profile, policy, 1);
   } catch (e) {
-    const text = message(e);
-    const plain = text.startsWith(NOT_YET) ? plainOf(policy) : undefined;
-    return { blocker: { kind: "refused", text, plain }, warning };
+    return { blocker: { kind: "refused", text: message(e) }, warning };
   }
   return { warning };
 }

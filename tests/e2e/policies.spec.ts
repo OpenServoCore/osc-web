@@ -85,6 +85,9 @@ test("a plastic profile shows the plastic limit, its checkbox and the stripping 
   await expect(limit).toContainText("not known yet");
   await expect(limit.getByRole("checkbox", { name: "Go above the plastic limit" })).toBeVisible();
   await expect(limit).toContainText("Above this, plastic teeth strip when the horn is blocked.");
+  await expect(card).toContainText(
+    "The yield current a stalled horn folds to cannot be set: the plastic torque limit, the yield torque of a plastic train, is not known yet",
+  );
 
   await card.getByRole("button", { name: "Show all" }).click();
   await expect(row(card, "Stall speed")).toContainText("set by the run");

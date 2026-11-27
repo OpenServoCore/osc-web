@@ -30,9 +30,6 @@ const testdata = (name: string): unknown =>
 const PROFILE = migrate(testdata("profile.json"), undefined).profile;
 const RECORD_POLICY = migrate(testdata("profile.json"), testdata("policy-of-record.json")).policy;
 
-const YIELD_NOT_YET =
-  'This tool does not set protection.yield by its rule yet (a max yield torque over the stated stall torque, times the stated volts over R), so the run would leave it as the servo holds it: state it fixed, as {"ma": ...}';
-
 test("no profile chosen blocks the run before anything else", () => {
   expect(readiness(undefined, RECORD_POLICY)).toEqual({ blocker: { kind: "no-profile" } });
 });
@@ -41,27 +38,18 @@ test("the record's profile and policy are ready", () => {
   expect(readiness(PROFILE, RECORD_POLICY)).toEqual({ warning: undefined });
 });
 
-test("Default is refused with the CLI's words, and the plain line says to copy it and fix its six rules", () => {
-  const r = readiness(PROFILE, DEFAULT_POLICY);
-  expect(r.blocker).toEqual({
-    kind: "refused",
-    text: YIELD_NOT_YET,
-    plain:
-      "Identify stays off until the policy states its 6 rule-bound values as fixed numbers; Default cannot change, so copy it for this servo and fix them on Tuning policies.",
-  });
-});
-
-test("a user copy with one rule left names the next refusal and needs no copy", () => {
+test("Default and a copy with its rule forms are ready: the run sets each rule", () => {
+  expect(readiness(PROFILE, DEFAULT_POLICY)).toEqual({ warning: undefined });
   let policy: TuningPolicy = { ...RECORD_POLICY, key: "arm-joints" };
   policy = withValue(policy, "loops.observer", { multiple_of_mechanical_corner: 1.9 });
-  const r = readiness(PROFILE, policy);
-  expect(r.blocker).toEqual({
+  expect(readiness(PROFILE, policy)).toEqual({ warning: undefined });
+});
+
+test("a rule share of 0 is refused in the CLI's words", () => {
+  const policy = withValue(DEFAULT_POLICY, "sensor.pot_jump", { multiple_of_step4: 0 });
+  expect(readiness(PROFILE, policy).blocker).toEqual({
     kind: "refused",
-    text: expect.stringContaining(
-      "This tool does not set loops.observer by its rule yet",
-    ) as string,
-    plain:
-      "Identify stays off until the policy states its one rule-bound value as a fixed number; fix it on Tuning policies.",
+    text: "A share or a multiple of 0 or under sets nothing the servo can run on: the policy's sensor.pot_jump is 0; state one over 0",
   });
 });
 

@@ -250,7 +250,6 @@ function BlockerLine({
       return (
         <div role="status" className="flex flex-col gap-1 text-sm">
           <p className="text-warning">{blocker.text}</p>
-          {blocker.plain !== undefined && <p className="text-text-3">{blocker.plain}</p>}
           {policyKey !== DEFAULT_KEY && (
             <Link
               to="/policies"

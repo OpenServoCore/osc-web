@@ -1,10 +1,4 @@
-import {
-  initSync,
-  migrate,
-  resolvePreview,
-  validatePolicy,
-  type TuningPolicy,
-} from "@openservocore/client";
+import { initSync, migrate, validatePolicy, type TuningPolicy } from "@openservocore/client";
 import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 import {
@@ -20,8 +14,6 @@ import {
   previewOf,
   RULE_FIELDS,
   speedUpOf,
-  valueAt,
-  withoutRules,
   withValue,
 } from "./policy-form";
 
@@ -61,18 +53,18 @@ test("a version 0 policy imports with every value fixed, keyed by its file name"
   expect(m.notes.join(" ")).toContain("version 0");
 });
 
-test("the rule forms go to the run, and the rest previews the record's 400, 200 and 4000", () => {
-  // The CLI refuses a rule form it does not bind yet; the preview leaves those to the run.
-  expect(() => resolvePreview(PROFILE, DEFAULT_POLICY, R_OHM)).toThrow(
-    "does not set protection.yield by its rule yet",
-  );
-  const { policy, byRun } = withoutRules(DEFAULT_POLICY);
-  expect([...byRun]).toEqual([...RULE_FIELDS]);
-  for (const f of RULE_FIELDS) expect(valueAt(policy, f)).toBeNull();
-  expect(valueAt(policy, "motion.move_speed")).toEqual({ share_of_ceiling: 0.5 });
-
+test("Default previews its rule forms as set by the run, and the record's 400, 200 and 4000", () => {
   const p = previewOf(DEFAULT_POLICY, PROFILE, R_OHM);
   expect(p.refusal).toBeUndefined();
+  expect([...p.byRun]).toEqual([...RULE_FIELDS]);
+  const line = (f: string) => p.preview?.report.fields.find((l) => l.field === f);
+  expect(line("protection.yield")).toMatchObject({ form: "share", value: "the cap" });
+  for (const f of RULE_FIELDS.filter((f) => f !== "protection.yield")) {
+    expect(line(f)?.form, f).toBe("share");
+    expect(line(f)?.note, f).toMatch(/set by the run$/);
+  }
+  expect(p.preview?.values.yield).toEqual({ torque_kg_cm: null });
+  expect(p.preview?.values.current_loop).toEqual({ multiple_of_electrical_corner: 1.25 });
   expect(p.preview?.speedCeilingDegS).toBe(400);
   expect(p.preview?.values.velocity_limit_deg_s).toBe(200);
   expect(p.preview?.values.accel_limit_deg_s2).toBe(4000);
@@ -81,6 +73,35 @@ test("the rule forms go to the run, and the rest previews the record's 400, 200 
   const record = previewOf(RECORD_POLICY, PROFILE, R_OHM);
   expect(record.byRun.size).toBe(0);
   expect(record.preview?.values.yield).toEqual({ ma: 350 });
+});
+
+test("a plastic train needs its plastic torque limit, and a yield torque over it needs the checkbox", () => {
+  const plastic = { ...PROFILE, gear_class: "plastic" as const };
+  expect(previewOf(DEFAULT_POLICY, plastic, R_OHM).refusal).toContain(
+    "the plastic torque limit, the yield torque of a plastic train, is not known yet",
+  );
+  const limited = withValue(DEFAULT_POLICY, "protection.plastic_torque_limit_kg_cm", 1.2);
+  const at = previewOf(limited, plastic, R_OHM);
+  expect(at.refusal).toBeUndefined();
+  expect(at.preview?.report.fields.find((l) => l.field === "protection.yield")?.note).toMatch(
+    /^the plastic torque limit, over the 1.8 kg cm stall torque at 4.8 V/,
+  );
+  const over = withValue(limited, "protection.yield", { torque_kg_cm: 1.5 });
+  expect(previewOf(over, plastic, R_OHM).refusal).toContain(
+    "a yield torque of 1.5 kg cm is over the plastic torque limit, 1.2 kg cm, and above_plastic_limit is not true",
+  );
+  const above = withValue(over, "protection.above_plastic_limit", true);
+  expect(previewOf(above, plastic, R_OHM).refusal).toBeUndefined();
+});
+
+test("a rule share or a yield torque of 0 or under is refused", () => {
+  const share = withValue(DEFAULT_POLICY, "protection.stall_release", { share_of_yield: 0 });
+  expect(validatePolicy(share)).toContain(
+    "A share or a multiple of 0 or under sets nothing the servo can run on: the policy's protection.stall_release is 0",
+  );
+  expect(previewOf(share, PROFILE, R_OHM).refusal).toBe(validatePolicy(share));
+  const torque = withValue(DEFAULT_POLICY, "protection.yield", { torque_kg_cm: 0 });
+  expect(validatePolicy(torque)).toContain("A yield torque of 0 or under would read as the cap");
 });
 
 test("move speed 0.75 of the ceiling previews 300 deg/s, and the two forms convert", () => {

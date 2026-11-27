@@ -474,7 +474,7 @@ export interface Inputs {
   headline: ResolvedLine[];
   lines: ResolvedLine[];
   clamps: string[];
-  heat: string | undefined;
+  heat: string;
   checks: CrossCheck[];
 }
 
@@ -513,6 +513,37 @@ function rowWhat(what: string, formula: string, c: unknown): string {
   return `${what} at ${v === undefined ? "?" : String(v)} V, ${formula}${binds}`;
 }
 
+function heatValues(get: (id: string) => number | undefined): string | undefined {
+  const [ft, fg, st, sg] = [
+    get("fast_tau_s"),
+    get("fast_gain_c_per_w"),
+    get("slow_tau_s"),
+    get("slow_gain_c_per_w"),
+  ];
+  if (ft === undefined || fg === undefined || st === undefined || sg === undefined)
+    return undefined;
+  return `fast ${ft.toFixed(2)} s ${fg.toFixed(1)} C/W, slow ${st.toFixed(1)} s ${sg.toFixed(1)} C/W`;
+}
+
+/** Where the run's heat model came from and its four values, as osc-ident prints them. */
+export function heatSaid(resolved: unknown, thermalJson: unknown): string {
+  const fields = list(resolved, "fields");
+  const profile = heatValues((id) =>
+    num(
+      fields.find((f) => str(f, "field") === `thermal.${id}`),
+      "value",
+    ),
+  );
+  if (profile !== undefined) {
+    return `Heat model from the profile ${named(at(resolved, "profile"))}, not identified: ${profile}`;
+  }
+  const file = heatValues((id) => num(thermalJson, `${id}.value`));
+  if (file !== undefined) {
+    return `Heat model from inputs/thermal.json beside the version 0 nameplate, not identified: ${file}`;
+  }
+  return NO_HEAT_MODEL;
+}
+
 export function inputs(docs: RunDocs, steps: readonly RunStep[]): Card<Inputs> {
   return card(steps, ["gather"], () => {
     const resolved = docs.get("inputs/resolved.json");
@@ -547,7 +578,7 @@ export function inputs(docs: RunDocs, steps: readonly RunStep[]): Card<Inputs> {
       headline,
       lines,
       clamps,
-      heat: docs.has("inputs/thermal.json") ? undefined : NO_HEAT_MODEL,
+      heat: heatSaid(resolved, docs.get("inputs/thermal.json")),
       checks,
     };
   });

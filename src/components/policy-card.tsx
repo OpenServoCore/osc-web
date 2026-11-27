@@ -37,7 +37,7 @@ import {
   WARN,
   withValue,
 } from "@/lib/policy-form";
-import { parseNumber } from "@/lib/profile-form";
+import { HEAT_FIELDS, parseNumber } from "@/lib/profile-form";
 
 interface Ctx {
   policy: TuningPolicy;
@@ -87,6 +87,10 @@ export function PolicyCard({
   const p = policy.protection ?? {};
   const v = pv.preview?.values;
   const line = (field: string) => pv.preview?.report.fields.find((l) => l.field === field);
+  const heat = HEAT_FIELDS.flatMap((f) => {
+    const l = line(`thermal.${f.id}`);
+    return l === undefined ? [] : [{ ...f, line: l }];
+  });
   const at = profile === undefined ? "" : ` with ${profile.key}`;
 
   const yieldRow = (
@@ -545,6 +549,18 @@ export function PolicyCard({
                 <Choice ctx={ctx} title="Brush term" path="behavior.brush_term" options={SWITCH} />
               </Row>
             </Section>
+            {heat.length > 0 && (
+              <Section title="Heat model">
+                {heat.map((h) => (
+                  <Row key={h.id} label={h.label} note={h.line.note} noteTone="grey">
+                    <span className="px-1 font-mono">
+                      {typeof h.line.value === "number" ? num(h.line.value) : ""} {h.line.unit}
+                    </span>
+                    <span className="font-mono text-sm text-text-3">{h.line.form}</span>
+                  </Row>
+                ))}
+              </Section>
+            )}
           </>
         )}
         <div className="flex justify-end gap-2">

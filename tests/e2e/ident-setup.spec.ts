@@ -45,12 +45,13 @@ async function readStored(page: Page, path: string): Promise<unknown> {
   }, path);
 }
 
-/** A fleet of two with the record's profile, one lacking its gear ratio, and three policies. */
+/** A fleet of two with the record's profile, one lacking its gear ratio, one its heat model, and three policies. */
 async function openServo(page: Page, id: number): Promise<Locator> {
   await gotoSim(page, [1, 2]);
   await seed(page, {
     "profiles/vorpal-mg90.json": PROFILE,
     "profiles/vorpal-mg90-new.json": { ...PROFILE, key: "vorpal-mg90-new", gear_ratio: null },
+    "profiles/vorpal-mg90-no-heat.json": { ...PROFILE, key: "vorpal-mg90-no-heat", thermal: null },
     "policies/mg90-d-record.json": RECORD,
     "policies/seven-volts.json": {
       ...RECORD,
@@ -87,25 +88,25 @@ test("the choice survives a reload for that servo, and a second sim servo keeps 
   await expect(card).toContainText("Choose the profile that describes this servo's model.");
   await expect(identify).toBeDisabled();
 
-  await choose(card, "Profile", "vorpal-mg90 rev 1");
+  await choose(card, "Profile", "vorpal-mg90 rev 2");
   await choose(card, "Policy", "mg90-d-record rev 1");
   await expect(identify).toBeEnabled();
   await expect(card).toContainText("The horn moves stop to stop.");
   expect(await readStored(page, `${UID_1}/setup.json`)).toMatchObject({
-    profile: { key: "vorpal-mg90", revision: 1 },
+    profile: { key: "vorpal-mg90", revision: 2 },
     policy: { key: "mg90-d-record", revision: 1 },
   });
 
   await page.reload();
   const again = await select(page, 1);
-  await expect(again.getByRole("combobox", { name: "Profile" })).toHaveText("vorpal-mg90 rev 1");
+  await expect(again.getByRole("combobox", { name: "Profile" })).toHaveText("vorpal-mg90 rev 2");
   await expect(again.getByRole("combobox", { name: "Policy" })).toHaveText("mg90-d-record rev 1");
   await expect(again.getByRole("button", { name: "Identify" })).toBeEnabled();
 
   const second = await select(page, 2);
   await expect(second.getByRole("combobox", { name: "Profile" })).toHaveText("Choose a profile");
   await expect(second.getByRole("combobox", { name: "Policy" })).toHaveText("Default");
-  await choose(second, "Profile", "vorpal-mg90-new rev 1");
+  await choose(second, "Profile", "vorpal-mg90-new rev 2");
   await expect(second).toContainText("The profile has no gear ratio: open it");
   await expect(second).toContainText(
     "Without the gear ratio the run cannot turn motor turns into horn degrees",
@@ -113,7 +114,7 @@ test("the choice survives a reload for that servo, and a second sim servo keeps 
   await expect(second.getByRole("button", { name: "Identify" })).toBeDisabled();
 
   const first = await select(page, 1);
-  await expect(first.getByRole("combobox", { name: "Profile" })).toHaveText("vorpal-mg90 rev 1");
+  await expect(first.getByRole("combobox", { name: "Profile" })).toHaveText("vorpal-mg90 rev 2");
   await expect(first.getByRole("button", { name: "Identify" })).toBeEnabled();
 
   await page.getByRole("link", { name: "Profiles" }).click();
@@ -126,22 +127,38 @@ test("the choice survives a reload for that servo, and a second sim servo keeps 
 
 test("an incomplete profile's open-it link lands on that profile", async ({ page }) => {
   const card = await openServo(page, 2);
-  await choose(card, "Profile", "vorpal-mg90-new rev 1");
+  await choose(card, "Profile", "vorpal-mg90-new rev 2");
   await card.getByRole("link", { name: "open it" }).click();
   await expect(page.getByRole("heading", { name: "Servo profiles" })).toBeVisible();
   await expect(
     page.getByRole("navigation", { name: "Profiles" }).locator('button[aria-current="true"]'),
   ).toContainText("vorpal-mg90-new");
   await expect(page.getByRole("region", { name: "Profile" })).toContainText(
-    "vorpal-mg90-new . revision 1",
+    "vorpal-mg90-new . revision 2",
   );
+});
+
+test("a profile with a blank heat model keeps Identify disabled, in the run's words", async ({
+  page,
+}) => {
+  const card = await openServo(page, 1);
+  await choose(card, "Profile", "vorpal-mg90-no-heat rev 2");
+  await choose(card, "Policy", "mg90-d-record rev 1");
+  await expect(card).toContainText("The profile has no heat model: open it");
+  await expect(card).toContainText(
+    "The run prices the heat of every drive and writes the winding temperature estimate from the motor's heat model: the profile has no usable thermal",
+  );
+  await expect(card.getByRole("button", { name: "Identify" })).toBeDisabled();
+
+  await choose(card, "Profile", "vorpal-mg90 rev 2");
+  await expect(card.getByRole("button", { name: "Identify" })).toBeEnabled();
 });
 
 test("Default with the record's profile is ready, and Copy for this servo makes ID 1's copy", async ({
   page,
 }) => {
   const card = await openServo(page, 1);
-  await choose(card, "Profile", "vorpal-mg90 rev 1");
+  await choose(card, "Profile", "vorpal-mg90 rev 2");
   await expect(card.getByRole("combobox", { name: "Policy" })).toHaveText("Default");
   await expect(card.getByRole("button", { name: "Identify" })).toBeEnabled();
 
@@ -155,7 +172,7 @@ test("a policy the run refuses is named in the CLI's words, with a link to it", 
   page,
 }) => {
   const card = await openServo(page, 1);
-  await choose(card, "Profile", "vorpal-mg90 rev 1");
+  await choose(card, "Profile", "vorpal-mg90 rev 2");
   await choose(card, "Policy", "zero-jump rev 1");
   await expect(card).toContainText(ZERO_JUMP);
   await expect(card.getByRole("button", { name: "Identify" })).toBeDisabled();
@@ -171,7 +188,7 @@ test("a run voltage over the profile's range warns at setup and does not block",
   page,
 }) => {
   const card = await openServo(page, 1);
-  await choose(card, "Profile", "vorpal-mg90 rev 1");
+  await choose(card, "Profile", "vorpal-mg90 rev 2");
   await choose(card, "Policy", "seven-volts rev 1");
   await expect(card).toContainText(
     "The servo would run above the maker's range: the motor heats more and its brushes wear fast.",

@@ -11,7 +11,7 @@ import {
 } from "./ident-setup";
 import type { InputRef, ServoSetup } from "./library";
 import { DEFAULT_POLICY, WARN, withValue } from "./policy-form";
-import { NOT_METAL } from "./profile-form";
+import { NO_HEAT_MODEL, NOT_METAL } from "./profile-form";
 
 initSync({
   module: readFileSync(
@@ -64,6 +64,16 @@ test("an incomplete profile names its first missing field with the run's sentenc
   });
   const counts = readiness({ ...PROFILE, brushes: null }, RECORD_POLICY);
   expect(counts.blocker).toMatchObject({ kind: "missing", field: "counts" });
+});
+
+test("a blank heat model blocks the run, checked after every other fact", () => {
+  expect(readiness({ ...PROFILE, thermal: null }, RECORD_POLICY).blocker).toEqual({
+    kind: "missing",
+    field: "thermal",
+    text: NO_HEAT_MODEL,
+  });
+  const both = readiness({ ...PROFILE, thermal: null, travel_deg: null }, RECORD_POLICY);
+  expect(both.blocker).toMatchObject({ kind: "missing", field: "travel_deg" });
 });
 
 test("a plastic train is refused first: no field it lacks would make it identifiable", () => {

@@ -127,8 +127,16 @@ export const NOT_METAL =
 export const PLASTIC_STOPPER =
   "The end stops are plastic: the servo's end-stop guard keeps it from pressing into them; open loop does not.";
 
+/** The run's refusal without a heat model, as `noHeatModel()` gives it; held here so the run report reads it without the wasm. */
 export const NO_HEAT_MODEL =
-  "Without this motor's heat values the servo estimates the winding temperature from the board's reference motor. A motor that heats faster can pass 90 C before the cutoff acts on a long stall.";
+  "The run prices the heat of every drive and writes the winding temperature estimate from the motor's heat model: the profile has no usable thermal (fast_tau_s, fast_gain_c_per_w, slow_tau_s and slow_gain_c_per_w: each node's time constant, s, and its rise over the board NTC per watt of copper loss, C/W): enter all four";
+
+export const HEAT_FIELDS = [
+  { id: "fast_tau_s", label: "Fast time constant", unit: "s" },
+  { id: "fast_gain_c_per_w", label: "Fast gain", unit: "C/W" },
+  { id: "slow_tau_s", label: "Slow time constant", unit: "s" },
+  { id: "slow_gain_c_per_w", label: "Slow gain", unit: "C/W" },
+] as const;
 
 export const NO_RATING =
   "The speed ceiling that protects the brushes cannot be set: no rating states a no-load speed inside the operating range.";
@@ -146,6 +154,7 @@ export const REQUIRED = [
   "counts",
   "operating_v",
   "no_load",
+  "thermal",
 ] as const;
 
 export type Required = (typeof REQUIRED)[number];
@@ -173,18 +182,12 @@ function inRange(profile: ServoProfile): NoLoad[] {
 /** Why the run refuses this field, the CLI's words; undefined when it passes. */
 export function fieldIssue(profile: ServoProfile, field: Required): string | undefined {
   if (field === "no_load") return inRange(profile).length === 0 ? NO_RATING : undefined;
+  if (field === "thermal" && profile.thermal == null) return NO_HEAT_MODEL;
   if (field === "counts") {
     const { brushes, rotor_segments } = profile;
     return validateProfile({ ...PASSING, brushes, rotor_segments });
   }
   return validateProfile({ ...PASSING, [field]: profile[field] });
-}
-
-/** The heat model's own check: all four over 0, or none. */
-export function heatIssue(profile: ServoProfile): string | undefined {
-  return profile.thermal == null
-    ? undefined
-    : validateProfile({ ...PASSING, thermal: profile.thermal });
 }
 
 export function missing(profile: ServoProfile): Required[] {

@@ -6,7 +6,7 @@ import { InputEditor } from "@/components/input-editor";
 import { ProfileCard, ProfileStatus } from "@/components/profile-card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { profiles, type Stored } from "@/lib/library";
+import { profiles, sha1, type Stored } from "@/lib/library";
 import { usedBy } from "@/lib/ident-setup";
 import { blankProfile, GEAR_TEXT, identifiable, profileKey } from "@/lib/profile-form";
 import { useSession } from "@/lib/session";
@@ -32,6 +32,18 @@ function message(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
+/** osc-ident reads the heat model beside a version 0 nameplate from this file name. */
+const THERMAL_JSON = "thermal.json";
+
+async function readJson(file: File): Promise<{ parsed: unknown; bytes: Uint8Array<ArrayBuffer> }> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  try {
+    return { parsed: JSON.parse(new TextDecoder().decode(bytes)), bytes };
+  } catch (e) {
+    throw new Error(`${file.name} is not JSON`, { cause: e });
+  }
+}
+
 function ProfilesPage() {
   const library = useLibrary(profiles);
   const { setups, error: setupsError } = useSetups();
@@ -48,26 +60,46 @@ function ProfilesPage() {
     setNote(undefined);
   }
 
-  async function importFile(file: File) {
+  async function importFiles(files: readonly File[]) {
+    const names = files.map((f) => f.name).join(" and ");
     try {
       // The file input is live before the library's first read has loaded the checks.
       await loadWasm();
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(await file.text());
-      } catch (e) {
-        throw new Error(`${file.name} is not JSON`, { cause: e });
+      const thermal = files.find((f) => f.name === THERMAL_JSON);
+      const [file, ...more] = files.filter((f) => f !== thermal);
+      if (file === undefined) {
+        throw new Error(
+          `${THERMAL_JSON} is the heat model beside a version 0 nameplate: import the nameplate with it`,
+        );
       }
-      const m = migrate(parsed, undefined);
+      if (more.length > 0) {
+        throw new Error(
+          `import one profile file at a time, with the ${THERMAL_JSON} beside a version 0 nameplate`,
+        );
+      }
+      const profile = await readJson(file);
+      const heat = thermal === undefined ? undefined : await readJson(thermal);
+      const m =
+        heat === undefined
+          ? migrate(profile.parsed, undefined)
+          : migrate(
+              profile.parsed,
+              undefined,
+              undefined,
+              heat.parsed,
+              THERMAL_JSON,
+              await sha1(heat.bytes),
+            );
       const replaced = keys.has(m.profile.key);
       const saved = await library.save(m.profile);
       setChosen(saved.value.key);
       const what = replaced
-        ? `Replaced ${saved.value.key} with ${file.name}, now revision ${saved.value.revision}.`
-        : `Imported ${saved.value.key} from ${file.name}.`;
+        ? `Replaced ${saved.value.key} with ${names}, now revision ${saved.value.revision}.`
+        : `Imported ${saved.value.key} from ${names}.`;
       setNote({ text: [what, ...m.notes].join(" "), error: false });
     } catch (e) {
-      setNote({ text: `${file.name} was not imported: ${message(e)}`, error: true });
+      const were = files.length > 1 ? "were" : "was";
+      setNote({ text: `${names} ${were} not imported: ${message(e)}`, error: true });
     }
   }
 
@@ -84,7 +116,7 @@ function ProfilesPage() {
           Servo profiles
         </h1>
         <div className="ml-auto flex gap-2">
-          <ImportButton onFile={(f) => void importFile(f)} />
+          <ImportButton onFiles={(f) => void importFiles(f)} />
           <NewProfile keys={keys} onCreate={create} />
         </div>
       </div>
@@ -172,7 +204,7 @@ function ProfileList({
   );
 }
 
-function ImportButton({ onFile }: { onFile: (file: File) => void }) {
+function ImportButton({ onFiles }: { onFiles: (files: File[]) => void }) {
   const input = useRef<HTMLInputElement>(null);
   return (
     <>
@@ -180,12 +212,13 @@ function ImportButton({ onFile }: { onFile: (file: File) => void }) {
         ref={input}
         type="file"
         accept=".json,application/json"
+        multiple
         className="hidden"
         aria-label="Profile file"
         onChange={(e) => {
-          const file = e.target.files?.[0];
+          const files = Array.from(e.target.files ?? []);
           e.target.value = "";
-          if (file !== undefined) onFile(file);
+          if (files.length > 0) onFiles(files);
         }}
       />
       <Button variant="outline" onClick={() => input.current?.click()}>

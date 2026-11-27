@@ -80,9 +80,18 @@ function decode<T extends InputFile>(bytes: Uint8Array, path: string, key: strin
   return parsed as unknown as Saved<T>;
 }
 
-async function sha256(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+async function hexDigest(algorithm: string, bytes: Uint8Array<ArrayBuffer>): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest(algorithm, bytes));
   return Array.from(digest, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function sha256(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
+  return hexDigest("SHA-256", bytes);
+}
+
+/** A file's sha1, as osc-ident names a source file. */
+export function sha1(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
+  return hexDigest("SHA-1", bytes);
 }
 
 function sameBytes(a: Uint8Array, b: Uint8Array): boolean {

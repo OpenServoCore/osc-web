@@ -1,5 +1,5 @@
 import type { ServoProfile } from "@openservocore/client";
-import { CircleAlert, CircleQuestionMark, Download, Plus, Trash2 } from "lucide-react";
+import { CircleQuestionMark, Download, Plus, Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { HandTurn } from "@/components/hand-turn";
 import { InputEditor, ValueButton, type Values, type Verdict } from "@/components/input-editor";
@@ -23,7 +23,7 @@ import {
   formatRpm,
   GEAR_TEXT,
   gearOf,
-  heatIssue,
+  HEAT_FIELDS,
   identifiable,
   missing,
   modelTitle,
@@ -282,25 +282,14 @@ export function ProfileCard({
           <RatingEditor profile={p} onSave={save} />
         </Section>
 
-        {p.thermal == null && !all && (
-          <p className="flex items-start gap-2 text-sm text-warning">
-            <CircleAlert className="mt-0.5 size-4 shrink-0" />
-            {NO_HEAT_MODEL}
-          </p>
-        )}
+        <Section title="Heat model">
+          <Row label="Heat model" issue={fieldIssue(p, "thermal")} grey={grey("thermal")}>
+            <HeatEditor profile={p} onSave={save} />
+          </Row>
+        </Section>
 
         {all && (
           <>
-            <Section title="Heat model (optional)">
-              <Row
-                label="Heat model"
-                issue={heatIssue(p)}
-                note={p.thermal == null ? NO_HEAT_MODEL : undefined}
-                grey={grey("thermal")}
-              >
-                <HeatEditor profile={p} onSave={save} />
-              </Row>
-            </Section>
             <Section title="Provenance">
               <Row label="Document" grey="provenance.document">
                 <DocumentEditor profile={p} onSave={save} />
@@ -645,13 +634,6 @@ function RatingEditor({
   );
 }
 
-const HEAT = [
-  { id: "fast_tau_s", label: "Fast time constant", unit: "s" },
-  { id: "fast_gain_c_per_w", label: "Fast gain", unit: "C/W" },
-  { id: "slow_tau_s", label: "Slow time constant", unit: "s" },
-  { id: "slow_gain_c_per_w", label: "Slow gain", unit: "C/W" },
-] as const;
-
 function HeatEditor({
   profile,
   onSave,
@@ -665,7 +647,7 @@ function HeatEditor({
       ? NOT_SET
       : `fast ${formatNumber(h.fast_tau_s)} s, ${formatNumber(h.fast_gain_c_per_w)} C/W; slow ${formatNumber(h.slow_tau_s)} s, ${formatNumber(h.slow_gain_c_per_w)} C/W`;
   const read = (v: Values) => {
-    const nums = HEAT.map((f) => parseNumber(v[f.id] ?? ""));
+    const nums = HEAT_FIELDS.map((f) => parseNumber(v[f.id] ?? ""));
     const bad = nums.find((n) => "error" in n);
     if (bad !== undefined && "error" in bad) return { error: bad.error };
     const values = nums.map((n) => ("value" in n ? n.value : null));
@@ -679,13 +661,15 @@ function HeatEditor({
     <InputEditor
       title="Heat model"
       current={shown}
-      fields={HEAT}
-      initial={() => Object.fromEntries(HEAT.map((f) => [f.id, h == null ? "" : String(h[f.id])]))}
+      fields={HEAT_FIELDS}
+      initial={() =>
+        Object.fromEntries(HEAT_FIELDS.map((f) => [f.id, h == null ? "" : String(h[f.id])]))
+      }
       check={(v) => {
         const r = read(v);
         if ("error" in r) return { error: r.error };
         if (r.thermal === null) return { warning: NO_HEAT_MODEL };
-        return { error: heatIssue({ ...profile, thermal: r.thermal }) };
+        return { error: fieldIssue({ ...profile, thermal: r.thermal }, "thermal") };
       }}
       onSave={(v) => {
         const r = read(v);

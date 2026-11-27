@@ -105,8 +105,8 @@ export function ValueEditor({
     }
   }
 
-  // Radix hands focus back with a plain focus(), which scrolls the value into view and cancels
-  // a stamp notice that mounted while the editor closed. A click outside keeps the focus it took.
+  // Radix hands focus back with a plain focus(), which scrolls the value into view. A click
+  // outside keeps the focus it took.
   function restoreFocus(e: Event) {
     e.preventDefault();
     if (document.activeElement === document.body) trigger.current?.focus({ preventScroll: true });

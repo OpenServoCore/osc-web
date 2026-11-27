@@ -51,7 +51,7 @@ import {
   type ModeName,
   type WindowS,
 } from "@/lib/control";
-import { closedLoopAllowed, openLoopAllowed, reasons } from "@/lib/data-state";
+import { FAULT_DATA, REFUSED, refusal } from "@/lib/data-state";
 import { enableHolding } from "@/lib/fault-ack";
 import { latchedLine } from "@/lib/health";
 import { counts as linearized, STATE as LUT } from "@/lib/pos-lut";
@@ -587,16 +587,17 @@ function Controls({
 
   const state = snapshot === undefined || snapshot.stale ? undefined : decodeControl(snapshot.read);
   const servo = servos.find((s) => s.id === id);
-  // The kernel's entry verdict (protocol sec 5.7): a refused enable would latch
-  // the data fault, so the modes it refuses are not offered. Unread = no gate.
+  // The kernel's belt (protocol sec 5.7): a zero Ke, cap or ceiling refuses the
+  // modes that run on it, and an enable into one latches the data fault, so
+  // those modes are not offered. Unread = no gate.
   const card = servo === undefined ? undefined : values.get(servo.uid);
-  const flags = card?.data.flags;
+  const belt = card?.data.belt;
   const allowed = (name: ModeName): boolean =>
-    flags === undefined ||
-    (name === "Velocity" || name === "Position"
-      ? closedLoopAllowed(flags)
-      : openLoopAllowed(flags));
-  const [gate] = flags === undefined ? [] : reasons(flags);
+    belt === undefined || refusal(name, belt) === undefined;
+  const gate =
+    belt === undefined
+      ? undefined
+      : (refusal("Position", belt) ?? (card?.data.faultCode === FAULT_DATA ? REFUSED : undefined));
   /** The preference as the servo's `mode` enum writes it. */
   const wanted = allowed(modePref)
     ? modeField?.variants.find((v) => v.name === modePref)?.value
@@ -735,7 +736,7 @@ function Controls({
       </div>
       {gate !== undefined && (
         <p className="text-sm text-warning" aria-label="Mode gate">
-          {gate.text}
+          {gate}
         </p>
       )}
       {active !== undefined && mode !== undefined && active !== mode && (

@@ -137,7 +137,7 @@ describe("buildTable", () => {
     expect(rowOf("model_number").link).toBeUndefined();
   });
 
-  test("calibration is the six host-facing rows, read-only with a servo link", () => {
+  test("calibration is the five host-facing rows, read-only with a servo link", () => {
     const [group] = model.tabs[1]?.groups ?? [];
     expect(group?.rows.map((r) => r.field.name)).toEqual([
       "raw_min",
@@ -145,7 +145,6 @@ describe("buildTable", () => {
       "angle_min_cdeg",
       "angle_max_cdeg",
       "gear_ratio_centi",
-      "plant_stamp",
     ]);
     for (const row of group?.rows ?? []) {
       expect(row.editable).toBe(false);

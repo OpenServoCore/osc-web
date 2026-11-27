@@ -1,8 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const FRESH = "Closed loop is off: this servo has never been set up.";
+const FRESH = "Settings not identified (defaults): run an identification.";
+const LIMITS = "Closed loop refused: the current cap or the speed ceiling is unset.";
 
-/** ID 1 stamped, ID 2 factory-fresh. */
+/** ID 1 seeded, ID 2 factory-fresh. */
 async function gotoFleet(page: Page): Promise<void> {
   await page.goto("/?sim=1,2&virgin=2");
   await expect(page.getByRole("button", { name: /^Connected/ })).toBeVisible();
@@ -19,55 +20,44 @@ async function openLive(page: Page): Promise<void> {
   await expect(page.getByRole("combobox", { name: "Mode" })).toBeEnabled();
 }
 
-test("a factory-fresh servo carries the banner on its card and page; a stamped one does not", async ({
+test("a factory-fresh servo carries the banner on its card and page; a seeded one does not", async ({
   page,
 }) => {
   await gotoFleet(page);
   const fresh = page.getByRole("link", { name: /^ID 2\b/ });
   await expect(fresh.getByText(FRESH)).toBeVisible();
-  const stamped = page.getByRole("link", { name: /^ID 1\b/ });
-  await expect(stamped.getByText("No faults")).toBeVisible();
+  const seeded = page.getByRole("link", { name: /^ID 1\b/ });
+  await expect(seeded.getByText("No faults")).toBeVisible();
 
   await openServo(page, 2);
   const banner = page.getByRole("status", { name: "Data state" });
   await expect(banner).toContainText(FRESH);
-  await expect(banner).toContainText(
-    "data_flags 0x35: CONFIG_VIRGIN | CALIB_VIRGIN | STAMP_MISMATCH | PLANT_UNSET",
-  );
-  await expect(banner).toContainText("the motor has not been identified");
+  await expect(banner).toContainText("data_flags 0x05: CONFIG_VIRGIN | CALIB_VIRGIN");
   await expect(
     page.getByRole("region", { name: "Calibration" }).getByText("Not calibrated"),
   ).toBeVisible();
-  const stamp = page.getByRole("group", { name: "Plant stamp" });
-  await expect(stamp).toContainText("Never stamped");
-  await expect(stamp).toContainText("plant_stamp 0x0ae = 0x0000");
 
   await openServo(page, 1);
   await expect(page.getByRole("status", { name: "Data state" })).toHaveCount(0);
-  await expect(page.getByRole("group", { name: "Plant stamp" })).toContainText(
-    "Stamped: the calibration",
-  );
 });
 
-test("the Live page offers a fresh servo open loop and current only, with the reason", async ({
+test("the Live page offers a fresh servo open loop only, with the belt's reason", async ({
   page,
 }) => {
   await gotoFleet(page);
   await openServo(page, 2);
   await openLive(page);
-  await expect(page.getByLabel("Mode gate")).toHaveText(new RegExp(`^${FRESH}`));
+  await expect(page.getByLabel("Mode gate")).toHaveText(new RegExp(`^${LIMITS}`));
   const mode = page.getByRole("combobox", { name: "Mode" });
   // The app's Position preference is not pushed onto a servo that would refuse it.
   await expect(mode).toHaveText("Open loop");
   await mode.click();
-  await expect(page.getByRole("option", { name: "Velocity" })).toHaveAttribute("data-disabled", "");
-  await expect(page.getByRole("option", { name: "Position" })).toHaveAttribute("data-disabled", "");
-  await page.getByRole("option", { name: "Current" }).click();
-  await expect(mode).toHaveText("Current");
-  await expect(page.getByLabel("Goal readout")).toHaveText(/ mA$/);
+  for (const name of ["Current", "Velocity", "Position"]) {
+    await expect(page.getByRole("option", { name })).toHaveAttribute("data-disabled", "");
+  }
 });
 
-test("a stamped servo's Live page is not gated", async ({ page }) => {
+test("a seeded servo's Live page is not gated", async ({ page }) => {
   await gotoFleet(page);
   await openServo(page, 1);
   await openLive(page);
@@ -75,23 +65,24 @@ test("a stamped servo's Live page is not gated", async ({ page }) => {
   await expect(page.getByLabel("Mode gate")).toHaveCount(0);
 });
 
-test("a calibration edit on a stamped servo marks the set changed until it is restamped", async ({
+test("a calibration edit runs as written and reads unsaved, with no data-state reason", async ({
   page,
 }) => {
   await gotoFleet(page);
   await openServo(page, 1);
   const card = page.getByRole("region", { name: "Calibration" });
-  await expect(page.getByRole("group", { name: "Plant stamp" })).toContainText(
-    "Stamped: the calibration",
-  );
   await card.getByRole("group", { name: "Sensor highest" }).getByRole("button").click();
   await page.getByRole("textbox").fill("4000");
   await page.getByRole("button", { name: "Apply" }).click();
-  const banner = page.getByRole("status", { name: "Data state" });
-  await expect(banner).toContainText(
-    "the position table and the identified values are not one set",
-  );
-  await expect(page.getByRole("group", { name: "Plant stamp" })).toContainText(
-    "Changed since it was stamped",
-  );
+  await expect(
+    card
+      .getByRole("group", { name: "Sensor highest" })
+      .getByRole("button", { name: "4000 counts" }),
+  ).toBeVisible();
+  await expect(page.getByRole("status", { name: "Data state" })).toHaveCount(0);
+  await expect(
+    page
+      .getByRole("region", { name: "Health" })
+      .getByText("Changes not saved: a reboot loses them."),
+  ).toBeVisible();
 });

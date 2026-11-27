@@ -29,7 +29,7 @@ test("the live span is one read from pos through vmotor_bias_counts", () => {
 });
 
 test("the constants span is one read from raw_min through gear_class", () => {
-  expect(span(fields, CONSTANT_REGISTERS)).toEqual({ addr: 164, count: 49 });
+  expect(span(fields, CONSTANT_REGISTERS)).toEqual({ addr: 164, count: 47 });
 });
 
 test("plan fails loudly on a descriptor missing a register", () => {
@@ -221,7 +221,7 @@ test("the live, health and constants layouts decode from a whole-table image", (
   });
   expect(healthFrom(read(HEALTH_REGISTERS))).toEqual({
     faultFlags: 0x04,
-    configDirty: true,
+    unsaved: true,
     trimSteps: 3,
     crcFailCount: 9,
     framingDropCount: 4,

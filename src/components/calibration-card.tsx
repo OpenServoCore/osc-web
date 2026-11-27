@@ -1,7 +1,6 @@
 import type { Field } from "@openservocore/client";
 import { Check, CircleQuestionMark, Ruler } from "lucide-react";
 import { useId } from "react";
-import { StampNotice, useStampNotice } from "@/components/stamp-notice";
 import { ValueEditor } from "@/components/value-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,12 +8,10 @@ import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/componen
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useBus, useClientOnce } from "@/lib/bus/hooks";
+import { useBus } from "@/lib/bus/hooks";
 import { CALIBRATION_REGISTERS, editReason, type CalibrationRegister } from "@/lib/calibration";
-import { STAMP_MISMATCH } from "@/lib/data-state";
-import { hex16, hexAddr } from "@/lib/format";
+import { hexAddr } from "@/lib/format";
 import { useSession } from "@/lib/session";
-import { stampWords } from "@/lib/stamp";
 import { calibrationStatus, type Calibration, type GearClass } from "@/lib/units";
 
 const GEAR_CLASS_TEXT: Record<GearClass, string> = {
@@ -29,21 +26,12 @@ export function CalibrationCard({ id, uid }: { id: number; uid: string }) {
   const card = values.get(uid);
   const cal = card?.constants.calibration;
   const fields = descriptor?.fields();
-  const stampField = fields?.find((f) => f.name === "plant_stamp");
-  // Re-read after every calibration write (the constants change) and at every
-  // checkpoint the servo reports (the data flags change).
-  const stamp = useClientOnce(
-    (c) => (descriptor === undefined ? Promise.resolve(undefined) : c.plantStamp(id, descriptor)),
-    [id, descriptor, cal, card?.data.flags],
-  );
-  const notice = useStampNotice(((card?.data.flags ?? 0) & STAMP_MISMATCH) !== 0);
 
   async function apply(field: Field, raw: number) {
     await bus.write(id, field.name, { kind: field.kind === "int" ? "int" : "uint", value: raw });
     // The write dirties the CALIB span; the session re-reads the constants
     // every card on the page shows.
     refreshConstants(uid);
-    notice.onEdit();
   }
 
   return (
@@ -71,7 +59,6 @@ export function CalibrationCard({ id, uid }: { id: number; uid: string }) {
         )}
       </CardHeader>
       <CardContent>
-        {notice.shown && <StampNotice id={id} onStamped={notice.onStamped} />}
         {descriptorError !== undefined && <p className="text-danger">{descriptorError}</p>}
         {cal === undefined || fields === undefined ? (
           <div className="grid grid-cols-2 gap-x-6 gap-y-3">
@@ -99,22 +86,6 @@ export function CalibrationCard({ id, uid }: { id: number; uid: string }) {
                 </span>
               </div>
             )}
-            <div role="group" aria-label="Plant stamp" className="flex flex-col gap-0.5">
-              <span className="text-xs text-text-3">Plant stamp</span>
-              {stamp.error !== undefined ? (
-                <span className="text-danger">{stamp.error}</span>
-              ) : stamp.value === undefined ? (
-                <Skeleton className="h-6 w-56" />
-              ) : (
-                <span className="text-base">{stampWords(stamp.value)}</span>
-              )}
-              <span className="font-mono text-xs text-text-3">
-                plant_stamp {stampField === undefined ? "" : hexAddr(stampField.addr)}
-                {stamp.value === undefined
-                  ? ""
-                  : ` = ${hex16(stamp.value.stored)}, computed ${hex16(stamp.value.computed)}`}
-              </span>
-            </div>
           </div>
         )}
       </CardContent>

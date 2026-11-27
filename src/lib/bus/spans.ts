@@ -3,7 +3,7 @@
 
 import type { Descriptor, Field, Health, Value } from "@openservocore/client";
 import { dutyPercent } from "../control";
-import type { DataState } from "../data-state";
+import { BELT_REGISTERS, beltFrom, type DataState } from "../data-state";
 import {
   biasesFromTable,
   calibrationFromTable,
@@ -21,8 +21,8 @@ import {
 /** A READ payload is at most 252 bytes (protocol sec 5.1). */
 export const READ_MAX = 252;
 
-/** `status_flags` bit 0: modified since the last save (protocol sec 9.4). */
-const STATUS_FLAG_CONFIG_DIRTY = 1 << 0;
+/** `status_flags` bit 0: changed since boot or the last save (protocol sec 5.7, 9.4). */
+const STATUS_FLAG_UNSAVED = 1 << 0;
 
 export interface Span {
   addr: number;
@@ -172,8 +172,8 @@ export const HEALTH_REGISTERS: readonly string[] = [
   "framing_drop_count",
 ];
 
-/** TELEMETRY-MODE: the latched fault kind and the data state beside it. */
-export const DATA_REGISTERS: readonly string[] = ["fault_code", "data_flags"];
+/** TELEMETRY-MODE: the latched fault kind and the data state beside it, and the constants the belt reads. */
+export const DATA_REGISTERS: readonly string[] = ["fault_code", "data_flags", ...BELT_REGISTERS];
 
 export interface Plan {
   fields: Field[];
@@ -227,7 +227,7 @@ export function liveFrom(read: ReadRegister): Live {
 export function healthFrom(read: ReadRegister): Health {
   return {
     faultFlags: read("fault_flags"),
-    configDirty: (read("status_flags") & STATUS_FLAG_CONFIG_DIRTY) !== 0,
+    unsaved: (read("status_flags") & STATUS_FLAG_UNSAVED) !== 0,
     trimSteps: read("trim_steps"),
     crcFailCount: read("crc_fail_count"),
     framingDropCount: read("framing_drop_count"),
@@ -235,7 +235,7 @@ export function healthFrom(read: ReadRegister): Health {
 }
 
 export function dataStateFrom(read: ReadRegister): DataState {
-  return { flags: read("data_flags"), faultCode: read("fault_code") };
+  return { flags: read("data_flags"), faultCode: read("fault_code"), belt: beltFrom(read) };
 }
 
 export interface CardValues {

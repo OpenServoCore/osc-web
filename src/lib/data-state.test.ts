@@ -1,16 +1,17 @@
 import { expect, test } from "vitest";
-import { closedLoopAllowed, headline, openLoopAllowed, reasons } from "./data-state";
+import { DEFAULTS, REFUSED, headline, reasons, refusal, type Belt } from "./data-state";
+import { MODES } from "./control";
 
 const CONFIG_VIRGIN = 1 << 0;
 const CONFIG_CORRUPT = 1 << 1;
 const CALIB_VIRGIN = 1 << 2;
 const CALIB_CORRUPT = 1 << 3;
-const STAMP_MISMATCH = 1 << 4;
-const PLANT_UNSET = 1 << 5;
 const CONFIG_STALE = 1 << 6;
 const CALIB_STALE = 1 << 7;
 
-test("every bit is one reason and they come most urgent first", () => {
+const SET: Belt = { recipKeQ: 3700, keVpcQ: 1150, currentLimitCounts: 1043, speedCeilingCps: 8050 };
+
+test("every image bit is one reason and they come most urgent first", () => {
   expect(reasons(0)).toEqual([]);
   expect(reasons(0xff).map((r) => r.name)).toEqual([
     "CONFIG_CORRUPT",
@@ -19,50 +20,46 @@ test("every bit is one reason and they come most urgent first", () => {
     "CALIB_STALE",
     "CONFIG_VIRGIN",
     "CALIB_VIRGIN",
-    "STAMP_MISMATCH",
-    "PLANT_UNSET",
   ]);
-  expect(reasons(PLANT_UNSET | CALIB_STALE | STAMP_MISMATCH).map((r) => r.name)).toEqual([
+  expect(reasons(0x30)).toEqual([]);
+  expect(reasons(CALIB_VIRGIN | CALIB_STALE).map((r) => r.name)).toEqual([
     "CALIB_STALE",
-    "STAMP_MISMATCH",
-    "PLANT_UNSET",
+    "CALIB_VIRGIN",
   ]);
 });
 
-test("a factory-fresh servo reads as never set up, with the next step", () => {
-  const [first] = reasons(CONFIG_VIRGIN | CALIB_VIRGIN | STAMP_MISMATCH | PLANT_UNSET);
-  expect(first?.text).toBe(
-    "Closed loop is off: this servo has never been set up. Run osc-ident run, then osc-ident save.",
-  );
-});
-
-test("every reason leads with the consequence", () => {
-  for (const r of reasons(0xff)) {
-    expect(r.text, r.name).toMatch(/^(Closed loop is off|Torque is refused): /);
+test("every image reason gives the one warning: defaults run until an identification", () => {
+  for (const r of reasons(CONFIG_VIRGIN | CONFIG_CORRUPT | CALIB_CORRUPT | CONFIG_STALE)) {
+    expect(r.text, r.name).toBe(DEFAULTS);
   }
-  expect(reasons(CALIB_STALE)[0]?.text).toContain("from another firmware");
-  expect(reasons(CALIB_CORRUPT)[0]?.text).toContain("unreadable");
-  expect(reasons(CONFIG_CORRUPT)[0]?.text).toContain("Factory reset");
+  expect(DEFAULTS).toMatch(/^Settings not identified \(defaults\): run an identification/);
 });
 
-test("the entry verdict mirrors the kernel: corrupt config refuses all, anything else the closed loops", () => {
-  expect(closedLoopAllowed(0)).toBe(true);
-  expect(openLoopAllowed(0)).toBe(true);
-  for (let bit = 0; bit < 8; bit++) {
-    expect(closedLoopAllowed(1 << bit), `bit ${bit}`).toBe(false);
-    expect(openLoopAllowed(1 << bit), `bit ${bit}`).toBe(bit !== 1);
+test("the belt refuses on a zero only: the limits refuse every closed mode, Ke the speed loops", () => {
+  for (const { name } of MODES) {
+    expect(refusal(name, SET), name).toBeUndefined();
   }
-  expect(openLoopAllowed(CONFIG_STALE | PLANT_UNSET)).toBe(true);
-  expect(openLoopAllowed(CONFIG_CORRUPT | PLANT_UNSET)).toBe(false);
+  for (const zero of [{ currentLimitCounts: 0 }, { speedCeilingCps: 0 }]) {
+    const belt = { ...SET, ...zero };
+    expect(refusal("OpenLoop", belt)).toBeUndefined();
+    for (const mode of ["Current", "Velocity", "Position"] as const) {
+      expect(refusal(mode, belt), mode).toMatch(/current cap or the speed ceiling is unset/);
+    }
+  }
+  for (const zero of [{ recipKeQ: 0 }, { keVpcQ: 0 }]) {
+    const belt = { ...SET, ...zero };
+    expect(refusal("OpenLoop", belt)).toBeUndefined();
+    expect(refusal("Current", belt)).toBeUndefined();
+    expect(refusal("Velocity", belt)).toMatch(/Ke is unset/);
+    expect(refusal("Position", belt)).toMatch(/Ke is unset/);
+  }
+  expect(refusal("Position", { ...SET, recipKeQ: 1, speedCeilingCps: 1 })).toBeUndefined();
 });
 
-test("the headline is the urgent reason, marked when the kernel refused an enable", () => {
-  expect(headline({ flags: 0, faultCode: 0 })).toBeUndefined();
-  expect(headline({ flags: 0, faultCode: 7 })).toBeUndefined();
-  expect(headline({ flags: PLANT_UNSET, faultCode: 0 })).toBe(
-    "Closed loop is off: the motor has not been identified. Run osc-ident run, then osc-ident save.",
-  );
-  expect(headline({ flags: PLANT_UNSET, faultCode: 7 })).toBe(
-    "Closed loop refused. Closed loop is off: the motor has not been identified. Run osc-ident run, then osc-ident save.",
-  );
+test("the headline is the refusal when the kernel latched one, else the defaults warning", () => {
+  const belt = SET;
+  expect(headline({ flags: 0, faultCode: 0, belt })).toBeUndefined();
+  expect(headline({ flags: CONFIG_VIRGIN, faultCode: 0, belt })).toBe(DEFAULTS);
+  expect(headline({ flags: 0, faultCode: 7, belt })).toBe(REFUSED);
+  expect(headline({ flags: CALIB_CORRUPT, faultCode: 7, belt })).toBe(REFUSED);
 });

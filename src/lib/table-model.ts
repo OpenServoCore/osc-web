@@ -83,10 +83,9 @@ const CALIB_THERMAL = 0x094;
 const MOTOR_EXT = 0x0a0;
 const CALIB_POT = 0x0a4;
 const KINEMATICS = 0x0a8;
-const STAMP = 0x0ae;
-const SENSE = 0x0b0;
-const SENSE_EXT = 0x0c0;
-const PWM = 0x0d2;
+const SENSE = 0x0ae;
+const SENSE_EXT = 0x0be;
+const PWM = 0x0d0;
 const LIFECYCLE = 0x180;
 const SYSTEM = 0x194;
 const BURST_REQUEST = 0x196;
@@ -124,7 +123,7 @@ const TABS: readonly TabSpec[] = [
   },
   {
     name: "Calibration",
-    groups: [{ label: "Calibration", link: "servo", blocks: [CALIB_POT, KINEMATICS, STAMP] }],
+    groups: [{ label: "Calibration", link: "servo", blocks: [CALIB_POT, KINEMATICS] }],
   },
   {
     name: "Board",

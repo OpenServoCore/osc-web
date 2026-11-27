@@ -264,7 +264,7 @@ function StatusLine({ values, fault }: { values: CardValues; fault: string | und
       </p>
     );
   }
-  if (values.health.configDirty) {
+  if (values.health.unsaved) {
     return (
       <p className="flex items-center gap-1.5 text-warning">
         <Pencil className="size-4" />

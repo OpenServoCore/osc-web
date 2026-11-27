@@ -80,7 +80,7 @@ test("the rule forms go to the run, and the rest previews the record's 400, 200 
 
   const record = previewOf(RECORD_POLICY, PROFILE, R_OHM);
   expect(record.byRun.size).toBe(0);
-  expect(record.preview?.values.yield_current_ma).toBe(350);
+  expect(record.preview?.values.yield).toEqual({ ma: 350 });
 });
 
 test("move speed 0.75 of the ceiling previews 300 deg/s, and the two forms convert", () => {

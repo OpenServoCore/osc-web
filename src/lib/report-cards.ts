@@ -1,7 +1,7 @@
 // What each card of the run report shows, from the run's files. A card whose
 // entries the run did not accept says why instead, in the run's own terms.
 
-import { counts, errorSeries, type ErrorSeries } from "./pos-lut";
+import { errorSeries, type ErrorSeries } from "./pos-lut";
 import { NO_HEAT_MODEL } from "./profile-form";
 import {
   angleMap,
@@ -22,7 +22,7 @@ import {
   type Term,
 } from "./report";
 import type { RunStep } from "./run-folder";
-import { degPerCount, positionDeg, type Calibration } from "./units";
+import { degPerCount, type Calibration } from "./units";
 
 export type Card<T> = { data: T } | { why: string };
 
@@ -204,78 +204,6 @@ export function headlineTiles(docs: RunDocs, steps: readonly RunStep[]): Card<Ti
       };
     }),
   ];
-}
-
-export type StretchKind = "pot" | "adc" | "not judged";
-
-/** A stretch of the travel the strip marks, in horn degrees from the CW stop. */
-export interface Stretch {
-  kind: StretchKind;
-  fromDeg: number;
-  toDeg: number;
-  fromRaw: number;
-  toRaw: number;
-  counts: number;
-}
-
-export interface Travel {
-  travelDeg: number;
-  stretches: Stretch[];
-  potSource: string | undefined;
-  adcSource: string | undefined;
-}
-
-/** Horn degrees of a raw code through the run's table and the set's angle map. */
-export function thetaOf(raw: number, points: readonly number[], cal: Calibration): number {
-  return positionDeg(counts(points, Math.round(raw)), cal);
-}
-
-export function travelMap(docs: RunDocs, steps: readonly RunStep[]): Card<Travel> {
-  return card(steps, ["table", "final"], () => {
-    const cal = angleMap(docs.get("final/set.json"));
-    const points = tablePoints(docs.get("final/inputs/pos_lut.json"));
-    const holes = at(docs.get("results/table.json"), "holes");
-    if (cal === undefined) return lacks("final/set.json angle map");
-    if (holes === undefined) return lacks("results/table.json holes");
-    const theta = (raw: number) => thetaOf(raw, points, cal);
-    const stretch = (kind: StretchKind, from: number, to: number, counts: number): Stretch => {
-      const [a, b] = [theta(from), theta(to)];
-      return {
-        kind,
-        fromDeg: Math.min(a, b),
-        toDeg: Math.max(a, b),
-        fromRaw: from,
-        toRaw: to,
-        counts,
-      };
-    };
-    const stretches: Stretch[] = [];
-    const crossedFrom = num(holes, "adc.crossed.from_counts");
-    const crossedTo = num(holes, "adc.crossed.to_counts");
-    if (crossedFrom !== undefined && crossedTo !== undefined) {
-      stretches.push(stretch("not judged", cal.rawMin, crossedFrom, crossedFrom - cal.rawMin));
-      stretches.push(stretch("not judged", crossedTo, cal.rawMax, cal.rawMax - crossedTo));
-    }
-    for (const h of list(holes, "pot.holes")) {
-      const [from, to] = [num(h, "from_counts"), num(h, "to_counts")];
-      if (from !== undefined && to !== undefined) {
-        stretches.push(stretch("pot", from, to, num(h, "counts") ?? to - from));
-      }
-    }
-    for (const h of list(holes, "adc.runs")) {
-      const [from, to] = [num(h, "from_counts"), num(h, "to_counts")];
-      if (from !== undefined && to !== undefined) {
-        stretches.push(stretch("adc", from, to, num(h, "counts") ?? to - from + 1));
-      }
-    }
-    stretches.sort((a, b) => a.fromDeg - b.fromDeg);
-    return {
-      travelDeg: Math.abs(cal.angleMaxCdeg - cal.angleMinCdeg) / 100,
-      stretches,
-      potSource: str(holes, "source.pot"),
-      adcSource: str(holes, "source.adc"),
-    };
-  });
 }
 
 export interface Accuracy {

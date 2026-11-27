@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as LiveRouteImport } from './routes/live'
 import { Route as PoliciesRouteImport } from './routes/policies'
 import { Route as ProfilesRouteImport } from './routes/profiles'
+import { Route as RunsRouteImport } from './routes/runs'
 import { Route as ServoRouteImport } from './routes/servo'
 import { Route as TableRouteImport } from './routes/table'
 
@@ -36,6 +37,11 @@ const ProfilesRoute = ProfilesRouteImport.update({
   path: '/profiles',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RunsRoute = RunsRouteImport.update({
+  id: '/runs',
+  path: '/runs',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ServoRoute = ServoRouteImport.update({
   id: '/servo',
   path: '/servo',
@@ -52,6 +58,7 @@ export interface FileRoutesByFullPath {
   '/live': typeof LiveRoute
   '/policies': typeof PoliciesRoute
   '/profiles': typeof ProfilesRoute
+  '/runs': typeof RunsRoute
   '/servo': typeof ServoRoute
   '/table': typeof TableRoute
 }
@@ -60,6 +67,7 @@ export interface FileRoutesByTo {
   '/live': typeof LiveRoute
   '/policies': typeof PoliciesRoute
   '/profiles': typeof ProfilesRoute
+  '/runs': typeof RunsRoute
   '/servo': typeof ServoRoute
   '/table': typeof TableRoute
 }
@@ -69,16 +77,25 @@ export interface FileRoutesById {
   '/live': typeof LiveRoute
   '/policies': typeof PoliciesRoute
   '/profiles': typeof ProfilesRoute
+  '/runs': typeof RunsRoute
   '/servo': typeof ServoRoute
   '/table': typeof TableRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/live' | '/policies' | '/profiles' | '/servo' | '/table'
+  fullPaths:
+    '/' | '/live' | '/policies' | '/profiles' | '/runs' | '/servo' | '/table'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/live' | '/policies' | '/profiles' | '/servo' | '/table'
+  to: '/' | '/live' | '/policies' | '/profiles' | '/runs' | '/servo' | '/table'
   id:
-    '__root__' | '/' | '/live' | '/policies' | '/profiles' | '/servo' | '/table'
+    | '__root__'
+    | '/'
+    | '/live'
+    | '/policies'
+    | '/profiles'
+    | '/runs'
+    | '/servo'
+    | '/table'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -86,6 +103,7 @@ export interface RootRouteChildren {
   LiveRoute: typeof LiveRoute
   PoliciesRoute: typeof PoliciesRoute
   ProfilesRoute: typeof ProfilesRoute
+  RunsRoute: typeof RunsRoute
   ServoRoute: typeof ServoRoute
   TableRoute: typeof TableRoute
 }
@@ -120,6 +138,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProfilesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/runs': {
+      id: '/runs'
+      path: '/runs'
+      fullPath: '/runs'
+      preLoaderRoute: typeof RunsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/servo': {
       id: '/servo'
       path: '/servo'
@@ -142,6 +167,7 @@ const rootRouteChildren: RootRouteChildren = {
   LiveRoute: LiveRoute,
   PoliciesRoute: PoliciesRoute,
   ProfilesRoute: ProfilesRoute,
+  RunsRoute: RunsRoute,
   ServoRoute: ServoRoute,
   TableRoute: TableRoute,
 }

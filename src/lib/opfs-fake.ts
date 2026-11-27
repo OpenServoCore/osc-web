@@ -68,6 +68,18 @@ class MemoryDir implements OpfsDir {
     return { [Symbol.asyncIterator]: () => ({ next: () => Promise.resolve(items.next()) }) };
   }
 
+  removeEntry(name: string, options?: { recursive?: boolean }): Promise<void> {
+    return new Promise((resolve) => {
+      const found = this.entries.get(name);
+      if (found === undefined) throw new DOMException(name, "NotFoundError");
+      if (found instanceof MemoryDir && found.entries.size > 0 && options?.recursive !== true) {
+        throw new DOMException(name, "InvalidModificationError");
+      }
+      this.entries.delete(name);
+      resolve();
+    });
+  }
+
   private child<T extends MemoryDir | MemoryFile>(
     name: string,
     create: boolean,

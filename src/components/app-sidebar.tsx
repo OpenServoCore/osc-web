@@ -7,6 +7,7 @@ import {
   ChevronRight,
   CircleAlert,
   Cog,
+  History,
   LayoutDashboard,
   Layers,
   Monitor,
@@ -62,6 +63,7 @@ const nav = [
 const library = [
   { to: "/profiles", label: "Profiles", icon: BookOpen },
   { to: "/policies", label: "Policies", icon: SlidersHorizontal },
+  { to: "/runs", label: "Runs", icon: History },
 ] as const;
 
 const never = () => () => undefined;

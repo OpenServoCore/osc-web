@@ -62,8 +62,12 @@ export function useLibrary<T extends InputFile>(open: (root: OpfsDir) => Shelf<T
 }
 
 /** Hands the user a file with exactly these bytes. */
-export function download(bytes: Uint8Array<ArrayBuffer>, name: string): void {
-  const url = URL.createObjectURL(new Blob([bytes], { type: "application/json" }));
+export function download(
+  bytes: Uint8Array<ArrayBuffer>,
+  name: string,
+  type = "application/json",
+): void {
+  const url = URL.createObjectURL(new Blob([bytes], { type }));
   const a = document.createElement("a");
   a.href = url;
   a.download = name;

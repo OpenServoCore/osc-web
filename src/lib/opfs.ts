@@ -18,6 +18,7 @@ export interface OpfsDir {
   getDirectoryHandle(name: string, options?: { create?: boolean }): Promise<OpfsDir>;
   getFileHandle(name: string, options?: { create?: boolean }): Promise<OpfsFile>;
   values(): AsyncIterable<OpfsDir | OpfsFile>;
+  removeEntry(name: string, options?: { recursive?: boolean }): Promise<void>;
 }
 
 export function opfsRoot(): Promise<OpfsDir> {
@@ -103,11 +104,48 @@ export async function listFiles(root: OpfsDir, path: string): Promise<string[]> 
   return names.sort();
 }
 
-/** The names of the folders in the root, sorted. */
-export async function listDirs(root: OpfsDir): Promise<string[]> {
+/** The names of the folders in a folder (the root when no path is given), sorted. */
+export async function listDirs(root: OpfsDir, path?: string): Promise<string[]> {
+  const dir = path === undefined ? root : await openDir(root, segments(path));
+  if (dir === null) return [];
   const names: string[] = [];
-  for await (const entry of root.values()) {
+  for await (const entry of dir.values()) {
     if (entry.kind === "directory") names.push(entry.name);
   }
   return names.sort();
+}
+
+/** A file somewhere under a folder: its path from that folder and its size in bytes. */
+export interface TreeFile {
+  path: string;
+  size: number;
+}
+
+/** Every file under a folder at any depth, sorted by path; empty when the folder does not exist. */
+export async function listTree(root: OpfsDir, path: string): Promise<TreeFile[]> {
+  const top = await openDir(root, segments(path));
+  if (top === null) return [];
+  const found: TreeFile[] = [];
+  const walk = async (dir: OpfsDir, prefix: string): Promise<void> => {
+    for await (const entry of dir.values()) {
+      const at = `${prefix}${entry.name}`;
+      if (entry.kind === "directory") await walk(entry, `${at}/`);
+      else found.push({ path: at, size: (await entry.getFile()).size });
+    }
+  };
+  await walk(top, "");
+  return found.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
+/** Removes a folder and everything in it; a folder that does not exist is no error. */
+export async function removeDir(root: OpfsDir, path: string): Promise<void> {
+  const parts = segments(path);
+  const name = parts.pop() ?? "";
+  const parent = await openDir(root, parts);
+  if (parent === null) return;
+  try {
+    await parent.removeEntry(name, { recursive: true });
+  } catch (e) {
+    if (!notFound(e)) throw e;
+  }
 }

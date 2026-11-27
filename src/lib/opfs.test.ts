@@ -1,5 +1,14 @@
 import { expect, test } from "vitest";
-import { listFiles, readFile, writeFile, type OpfsDir, type OpfsFile } from "./opfs";
+import {
+  listDirs,
+  listFiles,
+  listTree,
+  readFile,
+  removeDir,
+  writeFile,
+  type OpfsDir,
+  type OpfsFile,
+} from "./opfs";
 import { memoryOpfs } from "./opfs-fake";
 
 const text = (s: string): Uint8Array<ArrayBuffer> => new TextEncoder().encode(s);
@@ -34,6 +43,31 @@ test("a folder lists its files sorted and skips subfolders", async () => {
   await writeFile(root, "profiles/nested/c.json", text("c"));
   expect(await listFiles(root, "profiles")).toEqual(["a.json", "b.json"]);
   expect(await listFiles(root, "policies")).toEqual([]);
+});
+
+test("a tree lists every file below a folder with its size, and a folder its subfolders", async () => {
+  const root = memoryOpfs();
+  await writeFile(root, "u/20261127T040624Z/run.json", text("{}"));
+  await writeFile(root, "u/20261127T040624Z/captures/rest/02-raw.csv.gz", new Uint8Array(9));
+  await writeFile(root, "u/setup.json", text("{}"));
+  expect(await listTree(root, "u/20261127T040624Z")).toEqual([
+    { path: "captures/rest/02-raw.csv.gz", size: 9 },
+    { path: "run.json", size: 2 },
+  ]);
+  expect(await listTree(root, "v")).toEqual([]);
+  expect(await listDirs(root)).toEqual(["u"]);
+  expect(await listDirs(root, "u")).toEqual(["20261127T040624Z"]);
+  expect(await listDirs(root, "v")).toEqual([]);
+});
+
+test("a removed folder takes everything in it; a missing one is no error", async () => {
+  const root = memoryOpfs();
+  await writeFile(root, "u/20261127T040624Z/captures/rest/02-raw.csv.gz", new Uint8Array(9));
+  await writeFile(root, "u/setup.json", text("{}"));
+  await removeDir(root, "u/20261127T040624Z");
+  await removeDir(root, "u/20261127T040624Z");
+  await removeDir(root, "v/w");
+  expect(await listTree(root, "u")).toEqual([{ path: "setup.json", size: 2 }]);
 });
 
 test("a path with an empty, . or .. part is refused", async () => {
@@ -74,6 +108,7 @@ function failingWrites(dir: OpfsDir): OpfsDir {
       failingWrites(await dir.getDirectoryHandle(name, options)),
     getFileHandle: async (name, options) => file(await dir.getFileHandle(name, options)),
     values: () => dir.values(),
+    removeEntry: (name, options) => dir.removeEntry(name, options),
   };
 }
 

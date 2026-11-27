@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 const FRESH = "Settings not identified (defaults): run an identification.";
 const LIMITS = "Closed loop refused: the current cap or the speed ceiling is unset.";
+const NOT_SAVED = "Changes not saved: a reboot loses them.";
 
 /** ID 1 seeded, ID 2 factory-fresh. */
 async function gotoFleet(page: Page): Promise<void> {
@@ -20,25 +21,28 @@ async function openLive(page: Page): Promise<void> {
   await expect(page.getByRole("combobox", { name: "Mode" })).toBeEnabled();
 }
 
-test("a factory-fresh servo carries the banner on its card and page; a seeded one does not", async ({
+test("a factory-fresh servo warns of its refusal on its card and of each case on its page; a seeded one does not", async ({
   page,
 }) => {
   await gotoFleet(page);
   const fresh = page.getByRole("link", { name: /^ID 2\b/ });
-  await expect(fresh.getByText(FRESH)).toBeVisible();
+  await expect(fresh.getByText(LIMITS)).toBeVisible();
   const seeded = page.getByRole("link", { name: /^ID 1\b/ });
   await expect(seeded.getByText("No faults")).toBeVisible();
 
   await openServo(page, 2);
-  const banner = page.getByRole("status", { name: "Data state" });
+  const banner = page.getByRole("status", { name: "Stored state" });
+  await expect(banner).toContainText(LIMITS);
   await expect(banner).toContainText(FRESH);
-  await expect(banner).toContainText("data_flags 0x05: CONFIG_VIRGIN | CALIB_VIRGIN");
+  await expect(banner).toContainText(
+    "status_flags 0x06: CONFIG_DEFAULTS | CALIB_DEFAULTS, refused_modes 0x0e",
+  );
   await expect(
     page.getByRole("region", { name: "Calibration" }).getByText("Not calibrated"),
   ).toBeVisible();
 
   await openServo(page, 1);
-  await expect(page.getByRole("status", { name: "Data state" })).toHaveCount(0);
+  await expect(page.getByRole("status", { name: "Stored state" })).toHaveCount(0);
 });
 
 test("the Live page offers a fresh servo open loop only, with the belt's reason", async ({
@@ -65,9 +69,7 @@ test("a seeded servo's Live page is not gated", async ({ page }) => {
   await expect(page.getByLabel("Mode gate")).toHaveCount(0);
 });
 
-test("a calibration edit runs as written and reads unsaved, with no data-state reason", async ({
-  page,
-}) => {
+test("a calibration edit runs as written and warns only that it is not saved", async ({ page }) => {
   await gotoFleet(page);
   await openServo(page, 1);
   const card = page.getByRole("region", { name: "Calibration" });
@@ -79,10 +81,9 @@ test("a calibration edit runs as written and reads unsaved, with no data-state r
       .getByRole("group", { name: "Sensor highest" })
       .getByRole("button", { name: "4000 counts" }),
   ).toBeVisible();
-  await expect(page.getByRole("status", { name: "Data state" })).toHaveCount(0);
-  await expect(
-    page
-      .getByRole("region", { name: "Health" })
-      .getByText("Changes not saved: a reboot loses them."),
-  ).toBeVisible();
+  const banner = page.getByRole("status", { name: "Stored state" });
+  await expect(banner).toContainText(NOT_SAVED);
+  await expect(banner).not.toContainText(FRESH);
+  await expect(banner).not.toContainText("Closed loop refused");
+  await expect(banner).toContainText("status_flags 0x01, refused_modes 0x00");
 });

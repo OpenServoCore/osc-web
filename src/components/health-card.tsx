@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, HeartPulse, TriangleAlert } from "lucide-react";
+import { CircleAlert, CircleCheck, HeartPulse } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,10 +14,9 @@ import { useSession } from "@/lib/session";
 import { celsius, sensorFault, THERMAL_REGISTERS, thermalFrom, thermOff } from "@/lib/thermal";
 import { DISPLAY } from "@/lib/units";
 
-const icons = { fault: CircleAlert, warn: TriangleAlert, ok: CircleCheck };
+const icons = { fault: CircleAlert, ok: CircleCheck };
 const tone: Record<Level, string> = {
   fault: "text-danger",
-  warn: "text-warning",
   ok: "text-success",
 };
 
@@ -37,7 +36,7 @@ export function HealthCard({ id }: { id: number }) {
   const servo = servos.find((s) => s.id === id);
   const descriptor = servo === undefined ? undefined : descriptorFor(servo);
   const card = servo === undefined ? undefined : values.get(servo.uid);
-  const data = card?.data;
+  const store = card?.store;
   const faulted = health !== undefined && health.faultFlags !== 0;
 
   /** One turn, so nothing interleaves with the ack. */
@@ -84,7 +83,7 @@ export function HealthCard({ id }: { id: number }) {
           </>
         ) : (
           <>
-            {statements(health, data).map(({ level, text }) => {
+            {statements(health, store).map(({ level, text }) => {
               const Icon = icons[level];
               return (
                 <div key={text} className="flex items-start gap-2">

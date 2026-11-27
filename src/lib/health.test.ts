@@ -33,19 +33,17 @@ test("an undefined flag still states its bit", () => {
   expect(statements({ ...clean, faultFlags: 1 << 7 })[0]?.text).toContain("Unknown fault, bit 7.");
 });
 
-const SET = { recipKeQ: 3700, keVpcQ: 1150, currentLimitCounts: 1043, speedCeilingCps: 8050 };
-
-test("the data fault names the constant the belt refused the enable on", () => {
+test("the config fault names the constant the belt refuses, read from the refused modes", () => {
   const ke = statements(
     { ...clean, faultFlags: 1 << 6 },
-    { flags: 0, faultCode: 7, belt: { ...SET, recipKeQ: 0 } },
+    { status: 0, refused: 0b1100, faultCode: 7 },
   );
   expect(ke[0]?.text).toBe(
     "Closed loop refused: the motor's Ke is unset. Run an identification: osc-ident run. The motor stays off until torque is switched off and on again.",
   );
   const cap = statements(
     { ...clean, faultFlags: 1 << 6 },
-    { flags: 1 << 0, faultCode: 7, belt: { ...SET, currentLimitCounts: 0 } },
+    { status: 1 << 1, refused: 0b1110, faultCode: 7 },
   );
   expect(cap[0]?.text).toContain("the current cap or the speed ceiling is unset");
   expect(statements({ ...clean, faultFlags: 1 << 6 })[0]?.text).toContain(
@@ -63,15 +61,8 @@ test("every fault statement says how to clear it: torque off and on", () => {
   );
 });
 
-test("unsaved changes rank under the faults and above the all-clear", () => {
-  expect(statements({ ...clean, unsaved: true })).toEqual([
-    { level: "warn", text: "Changes not saved: a reboot loses them." },
-    { level: "ok", text: "No faults." },
-  ]);
-  expect(statements({ ...clean, faultFlags: 1, unsaved: true }).map((s) => s.level)).toEqual([
-    "fault",
-    "warn",
-  ]);
+test("unsaved changes are no health statement: the stored-state banner says them", () => {
+  expect(statements({ ...clean, unsaved: true })).toEqual([{ level: "ok", text: "No faults." }]);
 });
 
 test("the counter lines carry sign and plurals", () => {
@@ -96,7 +87,7 @@ test("a motion fault with the goal at a stop says to move the goal before the ac
   expect(latchedLine((1 << 3) | (1 << 6), true)).toBe(MOVE_GOAL);
 });
 
-test("a goal clear of the stops, or the data fault alone, says only to toggle torque", () => {
+test("a goal clear of the stops, or the config fault alone, says only to toggle torque", () => {
   expect(latchedLine(1 << 2, false)).toBe(TOGGLE);
   expect(latchedLine(1 << 6, true)).toBe(TOGGLE);
 });

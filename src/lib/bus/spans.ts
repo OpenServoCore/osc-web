@@ -3,7 +3,7 @@
 
 import type { Descriptor, Field, Health, Value } from "@openservocore/client";
 import { dutyPercent } from "../control";
-import { BELT_REGISTERS, beltFrom, type DataState } from "../data-state";
+import { STATUS_UNSAVED, type StoreState } from "../store-state";
 import {
   biasesFromTable,
   calibrationFromTable,
@@ -20,9 +20,6 @@ import {
 
 /** A READ payload is at most 252 bytes (protocol sec 5.1). */
 export const READ_MAX = 252;
-
-/** `status_flags` bit 0: changed since boot or the last save (protocol sec 5.7, 9.4). */
-const STATUS_FLAG_UNSAVED = 1 << 0;
 
 export interface Span {
   addr: number;
@@ -172,8 +169,8 @@ export const HEALTH_REGISTERS: readonly string[] = [
   "framing_drop_count",
 ];
 
-/** TELEMETRY-MODE: the latched fault kind and the data state beside it, and the constants the belt reads. */
-export const DATA_REGISTERS: readonly string[] = ["fault_code", "data_flags", ...BELT_REGISTERS];
+/** The stored-state bits, and in TELEMETRY-MODE the latched fault kind and the modes the belt refuses. */
+export const STORE_REGISTERS: readonly string[] = ["status_flags", "fault_code", "refused_modes"];
 
 export interface Plan {
   fields: Field[];
@@ -227,22 +224,26 @@ export function liveFrom(read: ReadRegister): Live {
 export function healthFrom(read: ReadRegister): Health {
   return {
     faultFlags: read("fault_flags"),
-    unsaved: (read("status_flags") & STATUS_FLAG_UNSAVED) !== 0,
+    unsaved: (read("status_flags") & STATUS_UNSAVED) !== 0,
     trimSteps: read("trim_steps"),
     crcFailCount: read("crc_fail_count"),
     framingDropCount: read("framing_drop_count"),
   };
 }
 
-export function dataStateFrom(read: ReadRegister): DataState {
-  return { flags: read("data_flags"), faultCode: read("fault_code"), belt: beltFrom(read) };
+export function storeStateFrom(read: ReadRegister): StoreState {
+  return {
+    status: read("status_flags"),
+    refused: read("refused_modes"),
+    faultCode: read("fault_code"),
+  };
 }
 
 export interface CardValues {
   constants: Constants;
   live: Live;
   health: Health;
-  data: DataState;
+  store: StoreState;
 }
 
 /** Kernel fault latch bits (firmware kernel/faults.rs), lowest bit first. */

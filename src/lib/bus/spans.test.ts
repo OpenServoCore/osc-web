@@ -17,6 +17,8 @@ import {
   readerOver,
   READ_MAX,
   span,
+  STORE_REGISTERS,
+  storeStateFrom,
   windowFloorText,
   within,
   type Layout,
@@ -193,7 +195,9 @@ test("the live, health and constants layouts decode from a whole-table image", (
   put("current_bias_counts", 2048);
   put("vmotor_bias_counts", 700);
   put("fault_flags", 0x04);
-  put("status_flags", 0x01);
+  put("status_flags", 0x07);
+  put("fault_code", 7);
+  put("refused_modes", 0x0e);
   put("trim_steps", 3);
   put("crc_fail_count", 9);
   put("framing_drop_count", 4);
@@ -226,10 +230,15 @@ test("the live, health and constants layouts decode from a whole-table image", (
     crcFailCount: 9,
     framingDropCount: 4,
   });
+  expect(storeStateFrom(read(STORE_REGISTERS))).toEqual({
+    status: 0x07,
+    refused: 0x0e,
+    faultCode: 7,
+  });
 });
 
-test("the fleet card reads the live sensors and the health block as one span", () => {
-  expect(planSpans(fields, [...LIVE_REGISTERS, ...HEALTH_REGISTERS])).toEqual([
+test("the fleet card reads the live sensors, the health block and the stored state as one span", () => {
+  expect(planSpans(fields, [...LIVE_REGISTERS, ...HEALTH_REGISTERS, ...STORE_REGISTERS])).toEqual([
     { addr: 512, count: 112 },
   ]);
 });

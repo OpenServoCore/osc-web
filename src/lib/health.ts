@@ -1,7 +1,7 @@
 import type { Health } from "@openservocore/client";
-import { FAULT_DATA_BIT, refusal, type DataState } from "./data-state";
+import { FAULT_CONFIG_BIT, refusal, type StoreState } from "./store-state";
 
-export type Level = "fault" | "warn" | "ok";
+export type Level = "fault" | "ok";
 
 export interface Statement {
   level: Level;
@@ -27,11 +27,11 @@ const CLEAR = "The motor stays off until torque is switched off and on again.";
 
 /**
  * The Live page's line under the torque switch. A motion fault re-latches the
- * moment torque returns if the goal still drives into the stop; the data
- * fault is about the servo's data, not where it is.
+ * moment torque returns if the goal still drives into the stop; the config
+ * fault is about the servo's constants, not where it is.
  */
 export function latchedLine(faultFlags: number, goalAtStop: boolean): string {
-  const motion = (faultFlags & ~(1 << FAULT_DATA_BIT)) !== 0;
+  const motion = (faultFlags & ~(1 << FAULT_CONFIG_BIT)) !== 0;
   return motion && goalAtStop
     ? "Motor is off: a fault is latched. Move the goal away from the stop, then switch torque off and on."
     : "Motor is off: a fault is latched. Switch torque off and on to clear it.";
@@ -41,22 +41,19 @@ function plural(n: number, word: string): string {
   return `${n} ${word}${n === 1 ? "" : "s"}`;
 }
 
-/** The data fault names the constant the belt refused on, not just that it did. */
-function faultLine(bit: number, data: DataState | undefined): string {
-  const reason = data === undefined ? undefined : refusal("Position", data.belt);
-  if (bit === FAULT_DATA_BIT && reason !== undefined) return reason;
+/** The config fault names the constant the belt refused on, not just that it did. */
+function faultLine(bit: number, store: StoreState | undefined): string {
+  const reason = store === undefined ? undefined : refusal("Position", store);
+  if (bit === FAULT_CONFIG_BIT && reason !== undefined) return reason;
   return FAULTS[bit] ?? `Unknown fault, bit ${bit}.`;
 }
 
-/** Worst first: faults, then unsaved changes, then the all-clear. */
-export function statements(h: Health, data?: DataState): Statement[] {
+/** The latched faults, lowest bit first, else the all-clear; unsaved changes are the stored-state banner's. */
+export function statements(h: Health, store?: StoreState): Statement[] {
   const out: Statement[] = [];
   for (let bit = 0; bit < 8; bit++) {
     if ((h.faultFlags & (1 << bit)) === 0) continue;
-    out.push({ level: "fault", text: `${faultLine(bit, data)} ${CLEAR}` });
-  }
-  if (h.unsaved) {
-    out.push({ level: "warn", text: "Changes not saved: a reboot loses them." });
+    out.push({ level: "fault", text: `${faultLine(bit, store)} ${CLEAR}` });
   }
   if (h.faultFlags === 0) out.push({ level: "ok", text: "No faults." });
   return out;

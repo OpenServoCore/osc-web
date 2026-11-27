@@ -51,12 +51,12 @@ import {
   type ModeName,
   type WindowS,
 } from "@/lib/control";
-import { FAULT_DATA, REFUSED, refusal } from "@/lib/data-state";
 import { enableHolding } from "@/lib/fault-ack";
 import { latchedLine } from "@/lib/health";
 import { counts as linearized, STATE as LUT } from "@/lib/pos-lut";
 import { isUnits, type Units } from "@/lib/prefs";
 import { useSession } from "@/lib/session";
+import { refusedLine, refuses } from "@/lib/store-state";
 import {
   BIAS_REGISTERS,
   CONFIG_REGISTERS,
@@ -587,17 +587,12 @@ function Controls({
 
   const state = snapshot === undefined || snapshot.stale ? undefined : decodeControl(snapshot.read);
   const servo = servos.find((s) => s.id === id);
-  // The kernel's belt (protocol sec 5.7): a zero Ke, cap or ceiling refuses the
-  // modes that run on it, and an enable into one latches the data fault, so
-  // those modes are not offered. Unread = no gate.
+  // The modes the kernel's belt refuses (protocol sec 5.7) are not offered: an
+  // enable into one latches the config fault. Unread = no gate.
   const card = servo === undefined ? undefined : values.get(servo.uid);
-  const belt = card?.data.belt;
-  const allowed = (name: ModeName): boolean =>
-    belt === undefined || refusal(name, belt) === undefined;
-  const gate =
-    belt === undefined
-      ? undefined
-      : (refusal("Position", belt) ?? (card?.data.faultCode === FAULT_DATA ? REFUSED : undefined));
+  const store = card?.store;
+  const allowed = (name: ModeName): boolean => store === undefined || !refuses(name, store);
+  const gate = store === undefined ? undefined : refusedLine(store);
   /** The preference as the servo's `mode` enum writes it. */
   const wanted = allowed(modePref)
     ? modeField?.variants.find((v) => v.name === modePref)?.value

@@ -1,31 +1,33 @@
+import type { ServoProfile, TuningPolicy } from "@openservocore/client";
 import { listFiles, readFile, writeFile, type OpfsDir } from "./opfs";
 
-interface InputFile {
+export type { ServoProfile, TuningPolicy };
+
+/** What the library reads of any input file; the rest of it is the file type's. */
+export interface InputFile {
   schema: string;
   key: string;
-  revision: number;
-  [field: string]: unknown;
+  revision?: number;
 }
 
-// Stand-ins until client/web exports the osc-ident-inputs types; swap these two for the generated ones.
-export type ServoProfile = InputFile;
-export type TuningPolicy = InputFile;
+/** A stored file always carries the revision the library gave it. */
+type Saved<T extends InputFile> = T & { revision: number };
 
 /** A file as stored: its parsed value, its exact bytes and their SHA-256 in hex. */
-export interface Stored<T> {
-  value: T;
+export interface Stored<T extends InputFile> {
+  value: Saved<T>;
   bytes: Uint8Array<ArrayBuffer>;
   sha256: string;
 }
 
-export interface Source<T> {
+export interface Source<T extends InputFile> {
   list(): Promise<Stored<T>[]>;
   get(key: string): Promise<Stored<T> | null>;
 }
 
 export type ProfileSource = Source<ServoProfile>;
 
-export interface Shelf<T> extends Source<T> {
+export interface Shelf<T extends InputFile> extends Source<T> {
   /** The library owns `revision`: 1 on the first save, one more on each save that changes the file. */
   save(file: T): Promise<Stored<T>>;
   /** Exactly the stored bytes, so an exported file hashes to its setup reference. */
@@ -60,7 +62,9 @@ function parseJson(bytes: Uint8Array, path: string): unknown {
   }
 }
 
-function decode(bytes: Uint8Array, path: string, key: string): InputFile {
+// The file's own fields are the type's to check (validateProfile, validatePolicy);
+// the library reads only what names and orders it.
+function decode<T extends InputFile>(bytes: Uint8Array, path: string, key: string): Saved<T> {
   const parsed = parseJson(bytes, path);
   if (
     !isRecord(parsed) ||
@@ -73,7 +77,7 @@ function decode(bytes: Uint8Array, path: string, key: string): InputFile {
     throw new Error(`${path} has no schema, key and revision`);
   }
   if (parsed.key !== key) throw new Error(`${path} holds the key "${parsed.key}"`);
-  return { ...parsed, schema: parsed.schema, key: parsed.key, revision: parsed.revision };
+  return parsed as unknown as Saved<T>;
 }
 
 async function sha256(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
@@ -85,20 +89,17 @@ function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   return a.length === b.length && a.every((v, i) => v === b[i]);
 }
 
-function shelf(root: OpfsDir, folder: "profiles" | "policies"): Shelf<InputFile> {
+function shelf<T extends InputFile>(root: OpfsDir, folder: "profiles" | "policies"): Shelf<T> {
   const pathOf = (key: string): string => {
     checkKey(key);
     return `${folder}/${key}.json`;
   };
-  const stored = async (
-    bytes: Uint8Array<ArrayBuffer>,
-    key: string,
-  ): Promise<Stored<InputFile>> => ({
-    value: decode(bytes, pathOf(key), key),
+  const stored = async (bytes: Uint8Array<ArrayBuffer>, key: string): Promise<Stored<T>> => ({
+    value: decode<T>(bytes, pathOf(key), key),
     bytes,
     sha256: await sha256(bytes),
   });
-  const get = async (key: string): Promise<Stored<InputFile> | null> => {
+  const get = async (key: string): Promise<Stored<T> | null> => {
     const bytes = await readFile(root, pathOf(key));
     return bytes === null ? null : stored(bytes, key);
   };
@@ -117,7 +118,7 @@ function shelf(root: OpfsDir, folder: "profiles" | "policies"): Shelf<InputFile>
       const old = await readFile(root, path);
       let revision = 1;
       if (old !== null) {
-        const previous = decode(old, path, file.key).revision;
+        const previous = decode<T>(old, path, file.key).revision;
         if (sameBytes(encode(file, previous), old)) return stored(old, file.key);
         revision = previous + 1;
       }
@@ -132,11 +133,11 @@ function shelf(root: OpfsDir, folder: "profiles" | "policies"): Shelf<InputFile>
 }
 
 export function profiles(root: OpfsDir): Shelf<ServoProfile> {
-  return shelf(root, "profiles");
+  return shelf<ServoProfile>(root, "profiles");
 }
 
 export function policies(root: OpfsDir): Shelf<TuningPolicy> {
-  return shelf(root, "policies");
+  return shelf<TuningPolicy>(root, "policies");
 }
 
 /** Which file a servo uses, pinned to the bytes chosen. */

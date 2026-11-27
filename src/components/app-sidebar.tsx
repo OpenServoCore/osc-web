@@ -3,6 +3,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useSyncExternalStore, type ReactNode } from "react";
 import {
   Activity,
+  BookOpen,
   ChevronRight,
   CircleAlert,
   Cog,
@@ -30,6 +31,7 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -54,6 +56,9 @@ const nav = [
   { to: "/table", label: "Control table", icon: Table, exact: false, gated: true },
   { to: "/live", label: "Live", icon: Activity, exact: false, gated: true },
 ] as const;
+
+// Files in the browser, so they stay open with no adapter.
+const library = [{ to: "/profiles", label: "Profiles", icon: BookOpen }] as const;
 
 const never = () => () => undefined;
 
@@ -81,6 +86,12 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarMenu>
             <NavItems />
+          </SidebarMenu>
+        </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Library</SidebarGroupLabel>
+          <SidebarMenu>
+            <LibraryItems />
           </SidebarMenu>
         </SidebarGroup>
         <SidebarGroup>
@@ -145,6 +156,19 @@ function NavItems() {
       </SidebarMenuItem>
     );
   });
+}
+
+function LibraryItems() {
+  return library.map(({ to, label, icon: Icon }) => (
+    <SidebarMenuItem key={to}>
+      <SidebarMenuButton asChild tooltip={label}>
+        <Link to={to} search={true} activeProps={{ "data-active": true }}>
+          <Icon />
+          <span>{label}</span>
+        </Link>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  ));
 }
 
 function servosEmpty(status: Status, onConnect: () => void): ReactNode {

@@ -35,7 +35,7 @@ const armJoints: TuningPolicy = {
   key: "arm-joints",
   revision: 0,
   label: "Arm joints",
-  motion: { move_speed: { share_of_ceiling: 0.5 }, speed_up_s: 0.05 },
+  motion: { move_speed: { share_of_ceiling: 0.5 }, speed_up: { s: 0.05 } },
 };
 
 const hex = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");

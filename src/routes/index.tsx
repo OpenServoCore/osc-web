@@ -23,9 +23,9 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { faultText, type CardValues } from "@/lib/bus/spans";
-import { reasons } from "@/lib/data-state";
 import { formatQuantity, formatVersion, hex16 } from "@/lib/format";
 import { useSession, type Servo } from "@/lib/session";
+import { warnings } from "@/lib/store-state";
 import { busV, currentMa, DISPLAY, positionDeg, temperatureC } from "@/lib/units";
 import { useConnectionPopover } from "@/lib/use-connection-popover";
 
@@ -244,8 +244,8 @@ function ServoCard({
   );
 }
 
-// The pane's priority rule: fault, then the data state, then unsaved changes,
-// then calibration.
+// The pane's priority rule: fault, then a refused mode or the defaults, then
+// unsaved changes, then calibration.
 function StatusLine({ values, fault }: { values: CardValues; fault: string | undefined }) {
   if (fault !== undefined) {
     return (
@@ -255,7 +255,7 @@ function StatusLine({ values, fault }: { values: CardValues; fault: string | und
       </p>
     );
   }
-  const [reason] = reasons(values.data.flags);
+  const reason = warnings(values.store).find((w) => w.kind !== "unsaved");
   if (reason !== undefined) {
     return (
       <p className="flex items-start gap-1.5 text-warning">

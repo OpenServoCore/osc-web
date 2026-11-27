@@ -70,14 +70,10 @@ test("the mg90-a table reads live, graded A, its error in degrees and percent of
   const candidates = [-2, -1, 0, 1, 2].map((d) => hoverWords(s, raw + d - SIM.rawMin));
   expect(candidates).toContain(text);
   expect(text).toMatch(/reads (high|low)/);
-  // A table written is not saved: the servo reads unsaved, and names no
-  // data-state reason.
-  await expect(page.getByRole("status", { name: "Data state" })).toHaveCount(0);
-  await expect(
-    page
-      .getByRole("region", { name: "Health" })
-      .getByText("Changes not saved: a reboot loses them."),
-  ).toBeVisible();
+  // A table written is not saved: the servo warns of that alone.
+  const stored = page.getByRole("status", { name: "Stored state" });
+  await expect(stored).toContainText("Changes not saved: a reboot loses them.");
+  await expect(stored).toContainText("status_flags 0x01, refused_modes 0x00");
   // The other servo keeps its own state.
   await openServo(page, 2);
   await expect(

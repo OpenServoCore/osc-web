@@ -69,7 +69,8 @@ export function stepTitle(name: string): string {
   return TITLES[name] ?? name;
 }
 
-function phrase(name: string): string {
+/** A step as a sentence names it: "the probe", "the rest step". */
+export function phrase(name: string): string {
   if (name === "rest") return "the rest step";
   const title = TITLES[name];
   return title === undefined ? `the ${name} step` : `the ${title.toLowerCase()}`;
@@ -139,7 +140,7 @@ interface RunJson {
   earliest: number | undefined;
 }
 
-function readRunJson(bytes: Uint8Array): RunJson {
+export function readRunJson(bytes: Uint8Array): RunJson {
   const doc = parse(bytes, "run.json");
   if (!isRecord(doc)) throw new RunRefused("its run.json is not a run's record");
   const uid = doc.servo_uid;
@@ -168,7 +169,7 @@ function namedOf(value: unknown): Named | null {
   return { key: value.key, revision: typeof value.revision === "number" ? value.revision : null };
 }
 
-function identityOf(run: RunJson, utc: string, resolved: Uint8Array | null): RunIdentity {
+export function identityOf(run: RunJson, utc: string, resolved: Uint8Array | null): RunIdentity {
   let report: unknown;
   try {
     report = resolved === null ? null : JSON.parse(new TextDecoder().decode(resolved));

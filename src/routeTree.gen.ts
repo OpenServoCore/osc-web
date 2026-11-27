@@ -16,6 +16,7 @@ import { Route as ProfilesRouteImport } from './routes/profiles'
 import { Route as RunsRouteImport } from './routes/runs'
 import { Route as ServoRouteImport } from './routes/servo'
 import { Route as TableRouteImport } from './routes/table'
+import { Route as RunsUidUtcRouteImport } from './routes/runs_.$uid.$utc'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -52,6 +53,11 @@ const TableRoute = TableRouteImport.update({
   path: '/table',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RunsUidUtcRoute = RunsUidUtcRouteImport.update({
+  id: '/runs_/$uid/$utc',
+  path: '/runs/$uid/$utc',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -61,6 +67,7 @@ export interface FileRoutesByFullPath {
   '/runs': typeof RunsRoute
   '/servo': typeof ServoRoute
   '/table': typeof TableRoute
+  '/runs/$uid/$utc': typeof RunsUidUtcRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -70,6 +77,7 @@ export interface FileRoutesByTo {
   '/runs': typeof RunsRoute
   '/servo': typeof ServoRoute
   '/table': typeof TableRoute
+  '/runs/$uid/$utc': typeof RunsUidUtcRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,13 +88,29 @@ export interface FileRoutesById {
   '/runs': typeof RunsRoute
   '/servo': typeof ServoRoute
   '/table': typeof TableRoute
+  '/runs_/$uid/$utc': typeof RunsUidUtcRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/live' | '/policies' | '/profiles' | '/runs' | '/servo' | '/table'
+    | '/'
+    | '/live'
+    | '/policies'
+    | '/profiles'
+    | '/runs'
+    | '/servo'
+    | '/table'
+    | '/runs/$uid/$utc'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/live' | '/policies' | '/profiles' | '/runs' | '/servo' | '/table'
+  to:
+    | '/'
+    | '/live'
+    | '/policies'
+    | '/profiles'
+    | '/runs'
+    | '/servo'
+    | '/table'
+    | '/runs/$uid/$utc'
   id:
     | '__root__'
     | '/'
@@ -96,6 +120,7 @@ export interface FileRouteTypes {
     | '/runs'
     | '/servo'
     | '/table'
+    | '/runs_/$uid/$utc'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -106,6 +131,7 @@ export interface RootRouteChildren {
   RunsRoute: typeof RunsRoute
   ServoRoute: typeof ServoRoute
   TableRoute: typeof TableRoute
+  RunsUidUtcRoute: typeof RunsUidUtcRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -159,6 +185,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TableRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/runs_/$uid/$utc': {
+      id: '/runs_/$uid/$utc'
+      path: '/runs/$uid/$utc'
+      fullPath: '/runs/$uid/$utc'
+      preLoaderRoute: typeof RunsUidUtcRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -170,6 +203,7 @@ const rootRouteChildren: RootRouteChildren = {
   RunsRoute: RunsRoute,
   ServoRoute: ServoRoute,
   TableRoute: TableRoute,
+  RunsUidUtcRoute: RunsUidUtcRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -8,6 +8,7 @@ export interface ChartTokens {
   grid: string;
   axis: string;
   label: string;
+  surface: string;
 }
 
 const TOKENS: Record<keyof ChartTokens, string> = {
@@ -18,6 +19,7 @@ const TOKENS: Record<keyof ChartTokens, string> = {
   grid: "--color-grid",
   axis: "--color-axis",
   label: "--color-text-3",
+  surface: "--color-surface",
 };
 
 export function readChartTokens(style: { getPropertyValue(name: string): string }): ChartTokens {

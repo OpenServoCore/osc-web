@@ -2,25 +2,21 @@ import { ChartSpline } from "lucide-react";
 import { useMemo, useState } from "react";
 import uPlot from "uplot";
 import { Chart, type ChartOptions } from "@/components/uplot";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useClientOnce, useRegisters } from "@/lib/bus/hooks";
 import { useChartTokens, type ChartTokens } from "@/lib/chart-theme";
 import { diverging, type Diverging } from "@/lib/diverging";
 import { hexAddr } from "@/lib/format";
 import {
   errorSeries,
-  gradeRule,
-  gradeText,
   headline,
   hoverWords,
   pointsWords,
   report,
   stateWords,
+  windowsWords,
   type ErrorSeries,
-  type Report,
 } from "@/lib/pos-lut";
 import { useSession } from "@/lib/session";
 import { calibrationStatus } from "@/lib/units";
@@ -188,6 +184,7 @@ export function PosLutCard({ id, uid }: { id: number; uid: string }) {
     () => (series === undefined ? undefined : [series.x, series.y]),
     [series],
   );
+  const gains = r === undefined ? undefined : windowsWords(r, map);
   const problem = lut.error ?? descriptorError;
 
   return (
@@ -197,11 +194,6 @@ export function PosLutCard({ id, uid }: { id: number; uid: string }) {
           <ChartSpline className="size-4" />
           Position calibration
         </CardTitle>
-        {r?.grade !== undefined && (
-          <CardAction>
-            <GradeChip report={r} />
-          </CardAction>
-        )}
       </CardHeader>
       <CardContent>
         {problem !== undefined && <p className="text-danger">{problem}</p>}
@@ -212,6 +204,7 @@ export function PosLutCard({ id, uid }: { id: number; uid: string }) {
             <p aria-label="Table state">{stateWords(table.state)}</p>
             <ul aria-label="Table facts" className="text-text-2">
               <li>{pointsWords(r, map)}</li>
+              {gains !== undefined && <li>{gains}</li>}
               {stops !== undefined && (
                 <li>
                   Stops at raw {stops.rawMin} and {stops.rawMax}; the table is the identity outside
@@ -241,25 +234,5 @@ export function PosLutCard({ id, uid }: { id: number; uid: string }) {
         )}
       </CardContent>
     </Card>
-  );
-}
-
-function GradeChip({ report: r }: { report: Report }) {
-  if (r.grade === undefined) return null;
-  const tone =
-    r.grade === "A"
-      ? "bg-success-soft text-success"
-      : r.grade === "B"
-        ? "bg-warning-soft text-warning"
-        : "bg-danger-soft text-danger";
-  return (
-    <Tooltip>
-      <TooltipTrigger>
-        <Badge className={tone} aria-label="Grade">
-          Grade {r.grade} - {gradeText(r.grade)}
-        </Badge>
-      </TooltipTrigger>
-      <TooltipContent className="max-w-sm">{gradeRule()}</TooltipContent>
-    </Tooltip>
   );
 }

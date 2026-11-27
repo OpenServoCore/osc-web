@@ -3,8 +3,6 @@ import image from "../../../open-servo-core/client/testdata/lut/pos-lut-mg90-a-g
 import {
   counts,
   errorSeries,
-  gradeOf,
-  gradeRule,
   headline,
   hoverWords,
   interpQ4,
@@ -15,6 +13,7 @@ import {
   STATE,
   stateWords,
   WINDOW,
+  windowsWords,
 } from "./pos-lut";
 import type { Calibration } from "./units";
 
@@ -43,7 +42,7 @@ test("the identity is raw << 4 exactly, and a point lands at raw + c[k]", () => 
   expect(isIdentity(mg90a)).toBe(false);
 });
 
-test("the mg90-a table grades A with the notebook's numbers", () => {
+test("the mg90-a table reads the notebook's numbers", () => {
   const r = report(mg90a);
   expect([r.nonzero, r.span]).toEqual([185, [560, 3504]]);
   expect(r.maxAbs).toBe(71);
@@ -51,10 +50,16 @@ test("the mg90-a table grades A with the notebook's numbers", () => {
   expect(r.windows?.counts).toBe(WINDOW);
   expect(r.windows?.min).toBeCloseTo(0.6125, 9);
   expect(r.windows?.max).toBeCloseTo(1.8825, 9);
-  expect(r.grade).toBe("A");
+  expect(r).not.toHaveProperty("grade");
   expect(pointsWords(r, MG90)).toBe("185 calibration points between 16.6 deg and 165.6 deg.");
   expect(pointsWords(r, undefined)).toBe(
     "185 calibration points between raw 560 counts and raw 3504 counts.",
+  );
+  expect(windowsWords(r, MG90)).toBe(
+    "Local gain over every 25-count window between 15.8 deg and 166.4 deg: 0.61x to 1.88x nominal.",
+  );
+  expect(windowsWords(r, undefined)).toBe(
+    "Local gain over every 25-count window between raw 544 counts and raw 3520 counts: 0.61x to 1.88x nominal.",
   );
 });
 
@@ -125,34 +130,28 @@ test("a falling angle map keeps x ascending and flips the error with it", () => 
   expect(hoverWords(s, i)).toBe("166.5 deg: reads high by 0.2 deg (0.1% of travel)");
 });
 
-test("the identity has nothing to grade", () => {
+test("the identity has no gains to read", () => {
   const r = report(IDENTITY);
-  expect([r.nonzero, r.span, r.grade, r.windows]).toEqual([0, undefined, undefined, undefined]);
+  expect([r.nonzero, r.span, r.band, r.windows]).toEqual([0, undefined, undefined, undefined]);
   expect(pointsWords(r, MG90)).toBe("No calibration points: the table is all zeros.");
+  expect(windowsWords(r, MG90)).toBeUndefined();
   const s = errorSeries(IDENTITY, MG90);
   expect([s.maxAbs, s.band]).toEqual([0, undefined]);
   expect(s.y.every((e) => e === 0)).toBe(true);
 });
 
-test("grade thresholds", () => {
-  expect(gradeOf(0.5, 2.0)).toBe("A");
-  expect(gradeOf(0.49, 2.0)).toBe("B");
-  expect(gradeOf(0.5, 4.0)).toBe("B");
-  expect(gradeOf(0.24, 1.0)).toBe("C");
-  expect(gradeOf(1.0, 4.01)).toBe("C");
-  expect(gradeRule()).toContain("0.5x..2x");
-  expect(gradeRule()).toContain("0.25x..4x");
-});
-
-test("a coarse SG90-class step, one 6x interval, is suspect", () => {
+test("a coarse SG90-class step, one 6x interval, reads its window gains as they are", () => {
   const points = [...IDENTITY];
   points[100] = 80;
   [75, 60, 45, 30, 15].forEach((c, i) => {
     points[101 + i] = c;
   });
   const r = report(points);
-  expect(r.windows?.max).toBeGreaterThan(4);
-  expect(r.grade).toBe("C");
+  expect(r.windows?.min).toBeCloseTo(0.0625, 9);
+  expect(r.windows?.max).toBeCloseTo(4.0875, 9);
+  expect(windowsWords(r, undefined)).toBe(
+    "Local gain over every 25-count window between raw 1584 counts and raw 1696 counts: 0.06x to 4.09x nominal.",
+  );
 });
 
 test("every state reads in words and says what the kernel applies", () => {

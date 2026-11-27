@@ -20,8 +20,16 @@ import { policies, profiles } from "@/lib/library";
 import { copyKey, DEFAULT_KEY, DEFAULT_POLICY, importPolicy, portability } from "@/lib/policy-form";
 import { parseNumber } from "@/lib/profile-form";
 import { download, useLibrary } from "@/lib/use-library";
+import { loadWasm } from "@/lib/wasm";
 
-export const Route = createFileRoute("/policies")({ component: PoliciesPage });
+export const Route = createFileRoute("/policies")({
+  component: PoliciesPage,
+  // The rest of the query (`?sim`) passes through untouched.
+  validateSearch: (search: Record<string, unknown>): { policy?: string } => ({
+    ...search,
+    policy: typeof search.policy === "string" ? search.policy : undefined,
+  }),
+});
 
 interface Note {
   text: string;
@@ -35,7 +43,7 @@ function message(e: unknown): string {
 function PoliciesPage() {
   const library = useLibrary(policies);
   const shelf = useLibrary(profiles);
-  const [chosen, setChosen] = useState(DEFAULT_KEY);
+  const [chosen, setChosen] = useState(Route.useSearch().policy ?? DEFAULT_KEY);
   const [profileKey, setProfileKey] = useState<string>();
   const [ohms, setOhms] = useState("");
   const [note, setNote] = useState<Note>();
@@ -60,6 +68,8 @@ function PoliciesPage() {
 
   async function importFile(file: File) {
     try {
+      // The file input is live before the library's first read has loaded the checks.
+      await loadWasm();
       let parsed: unknown;
       try {
         parsed = JSON.parse(await file.text());

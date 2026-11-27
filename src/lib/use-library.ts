@@ -5,7 +5,8 @@ import { loadWasm } from "./wasm";
 
 let root: Promise<OpfsDir> | undefined;
 
-function storage(): Promise<OpfsDir> {
+/** The browser's OPFS root, opened once. */
+export function storage(): Promise<OpfsDir> {
   root ??= opfsRoot();
   return root;
 }

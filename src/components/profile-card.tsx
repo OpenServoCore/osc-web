@@ -1,6 +1,7 @@
 import type { ServoProfile } from "@openservocore/client";
 import { CircleAlert, CircleQuestionMark, Download, Plus, Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
+import { HandTurn } from "@/components/hand-turn";
 import { InputEditor, ValueButton, type Values, type Verdict } from "@/components/input-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -218,6 +219,11 @@ export function ProfileCard({
                 { value: "", label: "Not set" },
               ]}
               onSave={(v) => save(withField(p, "count_rises_ccw", v === "" ? null : v === "true"))}
+            />
+            <HandTurn
+              onSave={(risesCcw) =>
+                save(withField(p, "count_rises_ccw", risesCcw, "measured by hand"))
+              }
             />
           </Row>
         </Section>

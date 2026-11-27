@@ -3,6 +3,7 @@ import { Cog } from "lucide-react";
 import { AboutCard } from "@/components/about-card";
 import { CalibrationCard } from "@/components/calibration-card";
 import { HealthCard } from "@/components/health-card";
+import { IdentCard } from "@/components/ident-card";
 import { ManageCard } from "@/components/manage-card";
 import { PosLutCard } from "@/components/pos-lut-card";
 import { StoreStateBanner } from "@/components/store-state-banner";
@@ -31,6 +32,7 @@ function ServoPage() {
         <AboutCard key={`about-${servo.id}`} id={servo.id} uid={servo.uid} />
         <HealthCard key={`health-${servo.id}`} id={servo.id} />
         <CalibrationCard key={`calibration-${servo.id}`} id={servo.id} uid={servo.uid} />
+        <IdentCard key={`ident-${servo.uid}`} id={servo.id} uid={servo.uid} />
         <PosLutCard key={`pos-lut-${servo.id}`} id={servo.id} uid={servo.uid} />
         <ManageCard key={`manage-${servo.uid}`} id={servo.id} uid={servo.uid} />
       </div>

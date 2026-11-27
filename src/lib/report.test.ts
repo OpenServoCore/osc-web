@@ -1,5 +1,7 @@
+import { initSync, migrate, resolvePreview } from "@openservocore/client";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { NO_HEAT_MODEL } from "./profile-form";
 import {
   freeSpeed,
   moveTrace,
@@ -13,6 +15,7 @@ import {
   termAt,
   type Term,
 } from "./report";
+import { heatSaid } from "./report-cards";
 import type { RunStep } from "./run-folder";
 
 const RUN = new URL(
@@ -145,5 +148,35 @@ describe("a move's rows", () => {
     expect(trace.deg).toEqual([10, 20]);
     expect(trace.goal).toEqual([10, 30]);
     expect(trace.ma).toEqual([0, null]);
+  });
+});
+
+describe("the heat line", () => {
+  initSync({
+    module: readFileSync(
+      new URL("../../../open-servo-core/client/web/pkg/osc_client_web_bg.wasm", import.meta.url),
+    ),
+  });
+  const record = (name: string): unknown =>
+    JSON.parse(
+      readFileSync(
+        new URL(`../../../open-servo-core/measure/testdata/mg90-d/${name}`, import.meta.url),
+        "utf8",
+      ),
+    );
+
+  it("reads the profile's four lines where the resolve wrote them", () => {
+    const m = migrate(record("profile.json"), record("policy-of-record.json"));
+    const resolved = resolvePreview(m.profile, m.policy, 4.18).report;
+    expect(heatSaid(resolved, undefined)).toBe(
+      `Heat model from the profile vorpal-mg90 rev ${String(m.profile.revision)}, not identified: fast 2.38 s 20.4 C/W, slow 128.9 s 76.8 C/W`,
+    );
+  });
+
+  it("reads a version 0 run's thermal.json, and says the run's refusal with neither", () => {
+    expect(heatSaid(json("inputs/resolved.json"), json("inputs/thermal.json"))).toBe(
+      "Heat model from inputs/thermal.json beside the version 0 nameplate, not identified: fast 2.38 s 20.4 C/W, slow 128.9 s 76.8 C/W",
+    );
+    expect(heatSaid(json("inputs/resolved.json"), undefined)).toBe(NO_HEAT_MODEL);
   });
 });

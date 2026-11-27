@@ -1,9 +1,18 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 
-const NAMEPLATE = readFileSync(
-  new URL("../../../open-servo-core/measure/testdata/mg90-d/nameplate.json", import.meta.url),
-);
+const testdata = (name: string): Buffer =>
+  readFileSync(
+    new URL(`../../../open-servo-core/measure/testdata/mg90-d/${name}`, import.meta.url),
+  );
+
+const NAMEPLATE = testdata("nameplate.json");
+const THERMAL = testdata("thermal.json");
+
+const NO_HEAT_MODEL =
+  "The run prices the heat of every drive and writes the winding temperature estimate from the motor's heat model";
+
+const MG90_HEAT = "fast 2.37522 s, 20.4457 C/W; slow 128.92 s, 76.7616 C/W";
 
 async function openPage(page: Page): Promise<Locator> {
   await page.goto("/profiles?sim=1");
@@ -71,6 +80,12 @@ async function enterMg90(card: Locator): Promise<void> {
   await expect(rating).toContainText("= 600 deg/s, 30,800 motor rpm");
   await rating.getByRole("button", { name: "Save" }).click();
   await expect(rating).toBeHidden();
+  await edit(card, "Heat model", "not set", {
+    "Fast time constant": "2.37522",
+    "Fast gain": "20.4457",
+    "Slow time constant": "128.92",
+    "Slow gain": "76.7616",
+  });
 }
 
 async function expectMg90Values(card: Locator): Promise<void> {
@@ -84,6 +99,9 @@ async function expectMg90Values(card: Locator): Promise<void> {
   await expect(rating).toContainText("0.10 s/60 deg");
   await expect(rating).toContainText("= 600 deg/s");
   await expect(rating).toContainText("30,800 motor rpm");
+  await expect(
+    card.getByRole("group", { name: "Heat model" }).getByRole("button", { name: MG90_HEAT }),
+  ).toBeVisible();
 }
 
 test("a blank profile with the MG90's values shows the ratio from the teeth, 6 pulses a turn and 600 deg/s at 4.8 V", async ({
@@ -94,16 +112,17 @@ test("a blank profile with the MG90's values shows the ratio from the teeth, 6 p
   await newProfile(page, "Vorpal", "MG90");
   await expect(card.getByText("Vorpal MG90", { exact: true })).toBeVisible();
   await expect(card).toContainText("vorpal-mg90 . revision 1");
-  await expect(card.getByText("7 missing")).toBeVisible();
+  await expect(card.getByText("8 missing")).toBeVisible();
   await expect(card.getByRole("group", { name: "Gear ratio" })).toContainText(
     "Without the gear ratio the run cannot turn motor turns into horn degrees",
   );
+  await expect(card.getByRole("group", { name: "Heat model" })).toContainText(NO_HEAT_MODEL);
 
   await enterMg90(card);
   await expectMg90Values(card);
   await expect(card.getByText("ready", { exact: true })).toBeVisible();
   await expect(card.getByRole("group", { name: "Gear ratio" })).not.toContainText("Without");
-  await expect(card).toContainText("Without this motor's heat values");
+  await expect(card).not.toContainText(NO_HEAT_MODEL);
 
   await card.getByRole("button", { name: "Show all" }).click();
   await expect(card.getByRole("group", { name: "Gear ratio" })).toContainText(
@@ -138,7 +157,7 @@ test("clearing the gear ratio shows the run's gear-ratio sentence", async ({ pag
     "Without the gear ratio the run cannot turn motor turns into horn degrees",
   );
   await expect(card.getByText("1 missing")).toBeVisible();
-  await expect(card).toContainText("vorpal-mg90 . revision 10");
+  await expect(card).toContainText("vorpal-mg90 . revision 11");
 });
 
 test("a ratio the run refuses is not saved", async ({ page }) => {
@@ -158,15 +177,23 @@ test("a ratio the run refuses is not saved", async ({ page }) => {
   await expect(card).toContainText("revision 1");
 });
 
-test("importing the version 0 nameplate gives the same values", async ({ page }) => {
+test("importing the version 0 nameplate with its thermal.json gives the same values", async ({
+  page,
+}) => {
   const card = await openPage(page);
-  await page.getByLabel("Profile file").setInputFiles({
-    name: "nameplate.json",
-    mimeType: "application/json",
-    buffer: NAMEPLATE,
-  });
-  await expect(page.getByRole("status")).toContainText("Imported mg90-d from nameplate.json.");
-  await expect(page.getByRole("status")).toContainText("version 0");
+  const file = (name: string, buffer: Buffer) => ({ name, mimeType: "application/json", buffer });
+  await page.getByLabel("Profile file").setInputFiles(file("thermal.json", THERMAL));
+  await expect(page.getByRole("status")).toHaveText(
+    "thermal.json was not imported: thermal.json is the heat model beside a version 0 nameplate: import the nameplate with it",
+  );
+
+  await page
+    .getByLabel("Profile file")
+    .setInputFiles([file("nameplate.json", NAMEPLATE), file("thermal.json", THERMAL)]);
+  await expect(page.getByRole("status")).toContainText(
+    "Imported mg90-d from nameplate.json and thermal.json.",
+  );
+  await expect(page.getByRole("status")).toContainText("the thermal.json beside it as its thermal");
   await expect(card).toContainText("mg90-d . revision 1");
   await expectMg90Values(card);
   await expect(card.getByText("ready", { exact: true })).toBeVisible();

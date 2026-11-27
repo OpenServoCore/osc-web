@@ -390,7 +390,7 @@ export function InputsView({ inputs }: { inputs: Inputs }) {
           </ul>
         )}
       </section>
-      {inputs.heat !== undefined && <p aria-label="Heat model">{inputs.heat}</p>}
+      <p aria-label="Heat model">{inputs.heat}</p>
       <table aria-label="Cross-checks" className="w-full text-sm tabular-nums">
         <caption className="mb-1 text-left font-medium">
           The profile beside the run (reported, not judged)

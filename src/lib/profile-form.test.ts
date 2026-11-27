@@ -1,4 +1,10 @@
-import { initSync, migrate, type ServoProfile } from "@openservocore/client";
+import {
+  initSync,
+  migrate,
+  noHeatModel,
+  type HeatModel,
+  type ServoProfile,
+} from "@openservocore/client";
 import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 import {
@@ -9,6 +15,7 @@ import {
   formatRpm,
   missing,
   motorRpm,
+  NO_HEAT_MODEL,
   NO_RATING,
   parseNumber,
   parseStages,
@@ -114,15 +121,48 @@ test("a blank profile lacks every required fact, each with the CLI's own sentenc
     /^A horn cannot turn more than one turn/,
   );
   expect(fieldIssue(blank, "no_load")).toBe(NO_RATING);
+  expect(fieldIssue(blank, "thermal")).toBe(NO_HEAT_MODEL);
   expect(pulsesPerTurn(blank)).toBeUndefined();
+});
+
+test("a blank heat model is refused in the run's words, and each value out of range in the check's", () => {
+  expect(NO_HEAT_MODEL).toBe(noHeatModel());
+  expect(missing({ ...RECORD, thermal: null })).toEqual(["thermal"]);
+  const heat = RECORD.thermal;
+  if (heat == null) throw new Error("the record's profile states a heat model");
+  const at = (change: Partial<HeatModel>) =>
+    fieldIssue({ ...RECORD, thermal: { ...heat, ...change } }, "thermal");
+  expect(at({})).toBeUndefined();
+  expect(at({ fast_gain_c_per_w: 0 })).toMatch(
+    /^The winding temperature estimate needs each node's gain over 0/,
+  );
+  expect(at({ slow_tau_s: 0.3 })).toMatch(
+    /^A time constant is stored in whole seconds.*thermal\.slow_tau_s is 0\.3 s; state it at least 0\.5 s and at most 65535 s$/,
+  );
+  expect(at({ fast_tau_s: 70000 })).toMatch(/thermal\.fast_tau_s is 70000 s/);
 });
 
 test("the record's profile and its version 0 nameplate need nothing more", () => {
   expect(missing(RECORD)).toEqual([]);
   expect(pulsesPerTurn(RECORD)).toBe(6);
-  const v0 = migrate(testdata("nameplate.json"), undefined);
+  const alone = migrate(testdata("nameplate.json"), undefined);
+  expect(missing(alone.profile)).toEqual(["thermal"]);
+  const v0 = migrate(
+    testdata("nameplate.json"),
+    undefined,
+    undefined,
+    testdata("thermal.json"),
+    "thermal.json",
+    "0".repeat(40),
+  );
   expect(v0.profile.key).toBe("mg90-d");
   expect(missing(v0.profile)).toEqual([]);
+  expect(v0.profile.thermal).toEqual(RECORD.thermal);
+  expect(v0.profile.provenance?.fields?.thermal).toEqual({
+    how: "file",
+    file: "thermal.json",
+    sha1: "0".repeat(40),
+  });
   expect(v0.profile.gear_ratio).toBe(RECORD.gear_ratio);
   expect(v0.profile.no_load).toEqual(RECORD.no_load);
 });

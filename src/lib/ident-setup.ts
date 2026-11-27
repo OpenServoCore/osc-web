@@ -17,6 +17,7 @@ export const FIELD_NAME: Record<Required, string> = {
   counts: "brush and segment counts",
   operating_v: "operating range",
   no_load: "rating inside its operating range",
+  thermal: "heat model",
 };
 
 export type Blocker =

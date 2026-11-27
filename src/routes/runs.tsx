@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { Download, FileArchive, FolderOpen, History } from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { Download, FileArchive, FileChartColumn, FolderOpen, History } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -239,7 +239,13 @@ function RunCard({ run, onExport }: { run: StoredRun; onExport: () => void }) {
     <Card role="region" aria-label="Run">
       <CardHeader>
         <CardTitle>{utcText(r.utc)}</CardTitle>
-        <CardAction>
+        <CardAction className="flex gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/runs/$uid/$utc" params={{ uid: r.uid, utc: r.utc }} search={true}>
+              <FileChartColumn />
+              Open the report
+            </Link>
+          </Button>
           <Button variant="outline" size="sm" onClick={onExport}>
             <Download />
             Download as zip

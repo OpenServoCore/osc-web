@@ -8,6 +8,7 @@ import {
   feedReduce,
   markOf,
   RESUME_STEP,
+  rowText,
   RUN_STEPS,
   stateText,
   unitText,
@@ -91,15 +92,22 @@ test("every line is kept in the order told", () => {
   ]);
 });
 
-test("the tune's try shows as at of, and stays on the step once it ends", () => {
+test("the tune's try shows in its tooltip, and stays on the step once it ends", () => {
   const tuning = feed([
     { event: "started", step: "tune" },
-    { event: "try", step: "tune", at: 1, of: 6 },
-    { event: "try", step: "tune", at: 3, of: 6 },
+    { event: "try", step: "tune", at: 1, of: 6, percent: 100 },
+    { event: "try", step: "tune", at: 3, of: 6, percent: 64 },
   ]);
-  expect(stateText(named(tuning, "tune"), false)).toBe("running, try 3 of at most 6");
+  expect(stateText(named(tuning, "tune"), false)).toBe("running");
+  expect(unitText(named(tuning, "tune"), false)).toBe(
+    "try 3 of at most 6 at 64% of the starting gain",
+  );
   const done = feedReduce(tuning, { event: "ended", step: "tune", state: "accepted", why: null });
-  expect(stateText(named(done, "tune"), true)).toBe("accepted, try 3 of at most 6");
+  expect(stateText(named(done, "tune"), true)).toBe("accepted");
+  expect(unitText(named(done, "tune"), true)).toBe(
+    "try 3 of at most 6 at 64% of the starting gain",
+  );
+  expect(rowText(named(done, "tune"))).toBe("try 3");
 });
 
 test("a step still running when the run ends says no end was recorded", () => {
@@ -115,7 +123,7 @@ test("the share done counts ended steps and the tune's tries begun before this o
       feed([
         { event: "ended", step: "rest", state: "accepted", why: null },
         { event: "started", step: "tune" },
-        { event: "try", step: "tune", at: 4, of: 6 },
+        { event: "try", step: "tune", at: 4, of: 6, percent: 51 },
       ]),
     ),
   ).toBeCloseTo((1 + 3 / 6) / n);
@@ -141,7 +149,8 @@ test("a step's ring is the largest share its units told, never going back, full 
   ];
   const at4 = feed(events);
   expect(ring(at4, "stops")).toBeCloseTo(3 / 6);
-  expect(unitText(named(at4, "stops"))).toBe("seat 4 of 6");
+  expect(unitText(named(at4, "stops"), false)).toBe("seat 4 of 6");
+  expect(rowText(named(at4, "stops"))).toBeUndefined();
   // A lost-row retake tells its unit again; a count that grows never pulls the ring back.
   const table = feed([
     { event: "started", step: "table" },
@@ -149,7 +158,7 @@ test("a step's ring is the largest share its units told, never going back, full 
     { event: "unit", step: "table", at: 5, of: 11, what: "slow pass" },
   ]);
   expect(ring(table, "table")).toBeCloseTo(4 / 9);
-  expect(unitText(named(table, "table"))).toBe("slow pass 5 of 11");
+  expect(unitText(named(table, "table"), false)).toBe("slow pass 5 of 11");
   const accepted = feedReduce(at4, { event: "ended", step: "stops", state: "accepted", why: null });
   expect(ring(accepted, "stops")).toBe(1);
   expect(markOf(named(accepted, "stops"), false)).toBe("accepted");
@@ -174,18 +183,57 @@ test("a unit for a step not running is not taken", () => {
   expect(named(f, "rest")).toEqual({ name: "rest", phase: "waiting", fraction: 0 });
 });
 
-test("the tune's ring is the current try's check, from empty again at each try", () => {
+test("the tune's ring spans every try it allows: try k of N fills its 1/N share, full on accept", () => {
   const f = feed([
     { event: "started", step: "tune" },
-    { event: "try", step: "tune", at: 1, of: 6 },
+    { event: "try", step: "tune", at: 1, of: 6, percent: 100 },
     { event: "unit", step: "tune", at: 11, of: 20, what: "move" },
   ]);
-  expect(ring(f, "tune")).toBeCloseTo(10 / 20);
-  expect(unitText(named(f, "tune"))).toBe("try 1 of at most 6, move 11 of 20");
-  const next = feedReduce(f, { event: "try", step: "tune", at: 2, of: 6 });
-  expect(ring(next, "tune")).toBe(0);
-  expect(unitText(named(next, "tune"))).toBe("try 2 of at most 6");
-  expect(doneShare(next)).toBeCloseTo(1 / 6 / RUN_STEPS.length);
+  expect(ring(f, "tune")).toBeCloseTo(10 / 20 / 6);
+  expect(rowText(named(f, "tune"))).toBeUndefined();
+  expect(unitText(named(f, "tune"), false)).toBe(
+    "try 1 of at most 6 at 100% of the starting gain, move 11 of 20",
+  );
+  const next = feedReduce(f, { event: "try", step: "tune", at: 2, of: 6, percent: 80 });
+  expect(ring(next, "tune")).toBeCloseTo(1 / 6);
+  expect(rowText(named(next, "tune"))).toBe("try 2");
+  expect(unitText(named(next, "tune"), false)).toBe(
+    "try 2 of at most 6 at 80% of the starting gain",
+  );
+  const moving = feedReduce(next, { event: "unit", step: "tune", at: 5, of: 20, what: "move" });
+  expect(ring(moving, "tune")).toBeCloseTo((1 + 4 / 20) / 6);
+  expect(doneShare(moving)).toBeCloseTo((1 + 4 / 20) / 6 / RUN_STEPS.length);
+  // The move count stays in the tooltip while the step runs, never beside its name.
+  expect(rowText(named(moving, "tune"))).toBe("try 2");
+  expect(unitText(named(moving, "tune"), true)).toBe(
+    "try 2 of at most 6 at 80% of the starting gain",
+  );
+  const accepted = feedReduce(moving, {
+    event: "ended",
+    step: "tune",
+    state: "accepted",
+    why: null,
+  });
+  expect(ring(accepted, "tune")).toBe(1);
+  // A ring never fills before an accept, whatever the units say.
+  const last = feed([
+    { event: "started", step: "final" },
+    { event: "try", step: "final", at: 6, of: 6, percent: 33 },
+    { event: "unit", step: "final", at: 20, of: 20, what: "move" },
+  ]);
+  expect(ring(last, "final")).toBeLessThan(1);
+});
+
+test("the final check counts its own tries from 1, whatever the folder numbers them", () => {
+  const f = feed([
+    { event: "started", step: "final" },
+    { event: "try", step: "final", at: 1, of: 6, percent: 100 },
+    { event: "try", step: "final", at: 2, of: 6, percent: 80 },
+    { event: "try", step: "final", at: 3, of: 6, percent: 64 },
+  ]);
+  expect(rowText(named(f, "final"))).toBe("try 3");
+  expect(unitText(named(f, "final"), false)).toBe("try 3 of at most 6 at 64% of the starting gain");
+  expect(ring(f, "final")).toBeCloseTo(2 / 6);
 });
 
 test("each mark: waiting, running, accepted, a cross, interrupted, not run, and a step cut off", () => {

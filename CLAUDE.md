@@ -14,7 +14,7 @@
 ## Code
 
 - Comments default to none. Add only when the WHY is non-obvious (hidden constraint, subtle invariant, workaround).
-- ASCII only in source, comments and string literals alike: `us` not `µs`, `->` not `→`.
+- Code, comments and identifiers stay ASCII. UI text renders units with their symbols (° Ω °C µs ± ×); the run's line log, CLI commands and file contents stay as the tool writes them.
 - Dashes are plain `-` everywhere: never `--`, never an em-dash. Applies to all writing (comments, docs, commit/PR text).
 - No tracker/task numbers, plan references, or dates: state the substantive fact instead.
 - No unrequested UX affordances: hints, guardrails and convenience controls only when asked for.

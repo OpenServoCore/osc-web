@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useChartTokens, type ChartTokens } from "@/lib/chart-theme";
+import { withUnit } from "@/lib/format";
 import { readFile } from "@/lib/opfs";
 import { moveCaptures, moveTrace, readRows, short, type MoveTrace } from "@/lib/report";
 import type {
@@ -123,7 +124,7 @@ export function AccuracyChart({ accuracy }: { accuracy: Accuracy }) {
       legend: { show: false },
       cursor: { drag: { x: false, y: false } },
       scales: { x: { time: false } },
-      axes: [axis(tokens, "horn angle, deg"), axis(tokens, "deg", { size: 60 })],
+      axes: [axis(tokens, "horn angle, °"), axis(tokens, "°", { size: 60 })],
       series: [{}, ...series.map((s) => seriesOf(s, tokens.surface))],
       hooks: {
         setCursor: [
@@ -149,7 +150,7 @@ export function AccuracyChart({ accuracy }: { accuracy: Accuracy }) {
           {held
             .map(
               (h) =>
-                `${h.counts.toFixed(2)} counts rms (${h.deg.toFixed(3)} deg, rung ${String(h.rung)})`,
+                `${h.counts.toFixed(2)} counts rms (${h.deg.toFixed(3)}°, rung ${String(h.rung)})`,
             )
             .join("; ")}
           .
@@ -160,7 +161,7 @@ export function AccuracyChart({ accuracy }: { accuracy: Accuracy }) {
 }
 
 function scoreText(v: number | undefined, unit: string, digits: number): string {
-  return v === undefined ? "not recorded" : `${v.toFixed(digits)} ${unit}`;
+  return v === undefined ? "not recorded" : withUnit(v.toFixed(digits), unit);
 }
 
 const DEFAULT_MOVE = "10% + out";
@@ -231,7 +232,7 @@ export function MoveResponse({ moves, uid, utc }: { moves: Moves; uid: string; u
       legend: { show: false },
       cursor: { drag: { x: false, y: false }, sync },
       scales: { x: { time: false } },
-      axes: [axis(tokens, "time, s"), axis(tokens, "position, deg", { size: 60 })],
+      axes: [axis(tokens, "time, s"), axis(tokens, "position, °", { size: 60 })],
       series: [{}, ...pos.map((s) => seriesOf(s, tokens.surface))],
     }),
     [tokens, sync, pos],
@@ -320,7 +321,7 @@ export function SpeedChart({ speed }: { speed: Speed }) {
       series={series}
       sets={sets}
       x={{ label: "volts, V", unit: "V" }}
-      y={{ label: "speed at the horn, deg/s", unit: "deg/s" }}
+      y={{ label: "speed at the horn, °/s", unit: "deg/s" }}
     />
   );
 }
@@ -343,11 +344,11 @@ export function EffortChart({ effort }: { effort: Effort }) {
         tokens={tokens}
         series={series}
         sets={sets}
-        x={{ label: "speed at the horn, deg/s", unit: "deg/s" }}
+        x={{ label: "speed at the horn, °/s", unit: "deg/s" }}
         y={{ label: "current, mA", unit: "mA" }}
       />
       <p aria-label="Friction line">
-        Line {short(effort.coulombMa)} mA + {short(effort.viscousMaPerDegS)} mA per deg/s
+        Line {short(effort.coulombMa)} mA + {short(effort.viscousMaPerDegS)} mA per °/s
         {effort.rmsMa === undefined ? "" : `, rms ${short(effort.rmsMa)} mA`}
         {effort.legs === undefined ? "" : ` over ${String(effort.legs)} legs`}.
       </p>

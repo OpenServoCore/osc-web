@@ -272,7 +272,7 @@ export function ProbeView({ doc }: { doc: unknown }) {
           ]}
           sets={[inFit, out, pooledR === undefined ? [] : level(pooledR, [inFit, out])]}
           x={{ label: "burst k", unit: "" }}
-          y={{ label: "R, ohm", unit: "ohm" }}
+          y={{ label: "R, Ω", unit: "ohm" }}
         />
         <KeyTable label="Pooled fit" lines={scalars(at(doc, "part_a.pooled"))} />
       </DrillCard>
@@ -399,7 +399,7 @@ export function StopsView({ doc }: { doc: unknown }) {
           series={[...KEPT_ASIDE, { label: "median", mark: "line", tone: "ctx" }]}
           sets={[keptR, asideR, median === undefined ? [] : level(median, [keptR, asideR])]}
           x={{ label: "burst", unit: "" }}
-          y={{ label: "R, ohm", unit: "ohm" }}
+          y={{ label: "R, Ω", unit: "ohm" }}
         />
       </DrillCard>
       <DrillCard
@@ -426,13 +426,13 @@ export function StopsView({ doc }: { doc: unknown }) {
           rows={groupRows(at(doc, "seated"))}
           cols={[
             "group",
-            { key: "r_ohm.median", label: "R median, ohm" },
+            { key: "r_ohm.median", label: "R median, Ω" },
             { key: "r_ohm.n", label: "n" },
             { key: "r_ohm.sd_share", label: "R sd share" },
             { key: "r_ohm.lo", label: "R lo" },
             { key: "r_ohm.hi", label: "R hi" },
             { key: "l_h.median", label: "L median, H" },
-            { key: "r_25c_ohm.median", label: "R at 25 C median, ohm" },
+            { key: "r_25c_ohm.median", label: "R at 25 °C median, Ω" },
           ]}
         />
         <KeyTable
@@ -833,7 +833,7 @@ export function SpinsView({ doc }: { doc: unknown }) {
             series={[{ label: "run-up", mark: "dots", tone: "series1" }, ...band("mean")]}
             sets={[runs, j.mean, j.lo, j.hi]}
             x={{ label: "run-up", unit: "" }}
-            y={{ label: "J, g mm^2", unit: "g mm^2" }}
+            y={{ label: "J, g mm²", unit: "g mm^2" }}
           />
           <ListTable
             label="Run-ups"
@@ -1030,7 +1030,7 @@ function SmallMove({
       legend: { show: false },
       cursor: { drag: { x: false, y: false } },
       scales: { x: { time: false } },
-      axes: [axis(tokens, "s"), axis(tokens, "deg", { size: 48 })],
+      axes: [axis(tokens, "s"), axis(tokens, "°", { size: 48 })],
       series: [
         {},
         seriesOf({ label: "position", mark: "line", color: tokens.series1 }, tokens.surface),
@@ -1056,8 +1056,8 @@ function SmallMove({
       )}
       {score !== undefined && (
         <p className="text-xs text-text-2 tabular-nums">
-          overshoot {score.overshootDeg?.toFixed(2) ?? "-"} deg, rest error{" "}
-          {score.restErrorDeg?.toFixed(2) ?? "-"} deg, settle {score.settleS?.toFixed(3) ?? "-"} s
+          overshoot {score.overshootDeg?.toFixed(2) ?? "-"}°, rest error{" "}
+          {score.restErrorDeg?.toFixed(2) ?? "-"}°, settle {score.settleS?.toFixed(3) ?? "-"} s
         </p>
       )}
     </figure>
@@ -1285,7 +1285,7 @@ export function TuneView({ uid, utc, files }: { uid: string; utc: string; files:
             { key: "shareOfStart", label: "share of start" },
             { key: "verdict", label: "the tool's word" },
             { key: "failedOn", label: "failed on" },
-            { key: "restErrorDeg", label: "worst rest error, deg" },
+            { key: "restErrorDeg", label: "worst rest error, °" },
             { key: "overshootShare", label: "worst overshoot, share of bound" },
             { key: "followPeakCounts", label: "worst follow peak, counts" },
             { key: "next", label: "next" },
@@ -1327,7 +1327,7 @@ export function TuneView({ uid, utc, files }: { uid: string; utc: string; files:
             series={[...marks, { label: "bound", mark: "dashed", tone: "ctx" }]}
             sets={[...rest, restBound === undefined ? [] : level(restBound, rest)]}
             x={{ label: "try", unit: "" }}
-            y={{ label: "rest error, deg", unit: "deg" }}
+            y={{ label: "rest error, °", unit: "deg" }}
           />
         </DrillCard>
         <DrillCard

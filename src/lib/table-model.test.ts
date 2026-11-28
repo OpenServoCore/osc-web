@@ -234,20 +234,20 @@ describe("labelParts", () => {
     expect(labelParts("i_kp_q88")).toEqual({ label: "I kp", hint: "Q8.8" });
     expect(labelParts("l1_q016")).toEqual({ label: "L1", hint: "Q0.16" });
     expect(labelParts("duty_max_q15")).toEqual({ label: "Duty max", hint: "Q15" });
-    expect(labelParts("cutoff_cc")).toEqual({ label: "Cutoff", hint: "0.01 C" });
-    expect(labelParts("angle_min_cdeg")).toEqual({ label: "Angle min", hint: "0.01 deg" });
+    expect(labelParts("cutoff_cc")).toEqual({ label: "Cutoff", hint: "0.01 °C" });
+    expect(labelParts("angle_min_cdeg")).toEqual({ label: "Angle min", hint: "0.01°" });
     expect(labelParts("vdd_mv")).toEqual({ label: "Vdd", hint: "mV" });
     expect(labelParts("response_deadline_us")).toEqual({
       label: "Response deadline",
-      hint: "us",
+      hint: "µs",
     });
-    expect(labelParts("ke_uvs_per_rad")).toEqual({ label: "Ke", hint: "uV.s/rad" });
+    expect(labelParts("ke_uvs_per_rad")).toEqual({ label: "Ke", hint: "µV.s/rad" });
     expect(labelParts("pot_steady_counts_per_a")).toEqual({
       label: "Pot steady",
       hint: "counts/A",
     });
     expect(labelParts("vbus_raw")).toEqual({ label: "Vbus", hint: "raw counts" });
-    expect(labelParts("shunt_r_mohm")).toEqual({ label: "Shunt r", hint: "mOhm" });
+    expect(labelParts("shunt_r_mohm")).toEqual({ label: "Shunt r", hint: "mΩ" });
   });
 
   test("leaves names without a unit suffix whole", () => {
@@ -365,16 +365,16 @@ describe("real units", () => {
   };
 
   test("the trajectory limits read in deg/s and deg/s^2 through the calibration", () => {
-    expect(realValue(rowOf("speed_ceiling_cps"), 1500, cal)).toBe("75 deg/s");
-    expect(realValue(rowOf("velocity_limit_cps"), 1500, cal)).toBe("75 deg/s");
-    expect(realValue(rowOf("accel_limit_q88"), 3840, cal)).toBe("1500 deg/s^2");
+    expect(realValue(rowOf("speed_ceiling_cps"), 1500, cal)).toBe("75°/s");
+    expect(realValue(rowOf("velocity_limit_cps"), 1500, cal)).toBe("75°/s");
+    expect(realValue(rowOf("accel_limit_q88"), 3840, cal)).toBe("1500°/s²");
   });
 
   test("a descending angle map leaves the trajectory limits unsigned", () => {
     const ccwLow = { ...cal, angleMinCdeg: 18000, angleMaxCdeg: 0 };
-    expect(realValue(rowOf("speed_ceiling_cps"), 1500, ccwLow)).toBe("75 deg/s");
-    expect(realValue(rowOf("velocity_limit_cps"), 1500, ccwLow)).toBe("75 deg/s");
-    expect(realValue(rowOf("accel_limit_q88"), 3840, ccwLow)).toBe("1500 deg/s^2");
+    expect(realValue(rowOf("speed_ceiling_cps"), 1500, ccwLow)).toBe("75°/s");
+    expect(realValue(rowOf("velocity_limit_cps"), 1500, ccwLow)).toBe("75°/s");
+    expect(realValue(rowOf("accel_limit_q88"), 3840, ccwLow)).toBe("1500°/s²");
   });
 
   test("without a usable calibration, or for any other register, the raw value stands alone", () => {

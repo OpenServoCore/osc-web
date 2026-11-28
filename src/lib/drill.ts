@@ -2,7 +2,8 @@
 // Every value is one the file holds or a unit conversion of one; the drill-in
 // fits nothing and judges nothing, and the tool's checks show word for word.
 
-import { at, list, num, short, spreadSaid, str, termAt, type Term } from "./report";
+import { unitSymbol } from "./format";
+import { at, list, num, short, spreadSaid, str, termAt, valueSaid, type Term } from "./report";
 import type { Point } from "./report-cards";
 
 /** The steps with a drill-in, in the order the run takes them. */
@@ -78,9 +79,9 @@ export function estimateRows(doc: unknown): EstimateRow[] {
     return {
       name,
       value: short(t.value),
-      sd: t.sd === null ? "" : `+/- ${short(t.sd)}`,
+      sd: t.sd === null ? "" : `± ${short(t.sd)}`,
       n: t.n === null ? "" : String(t.n),
-      unit: t.unit,
+      unit: unitSymbol(t.unit),
       source: str(e, "source") ?? "",
     };
   });
@@ -343,11 +344,10 @@ export function acceptedTry(tune: unknown, backOff: unknown): number | undefined
   return num(backOff, "accepted.try") ?? num(tune, "accepted.try");
 }
 
-/** A term with its spread as one phrase: "4.0988 ohm +/- 0.0446, n 36". */
+/** A term with its spread as one phrase: 4.0988 ohm +/- 0.0446, n 36, with the symbols. */
 export function termText(t: Term | undefined): string {
   if (t === undefined) return "none written";
-  const unit = t.unit === "" ? "" : ` ${t.unit}`;
-  return `${short(t.value)}${unit} ${spreadSaid(t)}`;
+  return `${valueSaid(t)} ${spreadSaid(t)}`;
 }
 
 /**

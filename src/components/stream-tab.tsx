@@ -18,7 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { telColumns, type TelChunk, type TelColumn } from "@openservocore/client";
 import { useBus, useReadOnce } from "@/lib/bus/hooks";
 import { useChartTokens, type ChartTokens } from "@/lib/chart-theme";
-import { hex16 } from "@/lib/format";
+import { hex16, unitSymbol } from "@/lib/format";
 import { useSession } from "@/lib/session";
 import {
   coverFields,
@@ -226,8 +226,10 @@ export function StreamTab({ id }: { id: number }) {
 
   const problem = error ?? (descriptor === undefined ? undefined : stream.error) ?? descriptorError;
   const heading = `${fieldsId}-chart`;
-  const title = (family: "position" | "electrical") =>
-    [...new Set(units.filter((u) => familyOf(u.key) === family).map((u) => u.unit))].join(", ");
+  const title = (family: "position" | "electrical") => {
+    const shown = units.filter((u) => familyOf(u.key) === family).map((u) => unitSymbol(u.unit));
+    return [...new Set(shown)].join(", ");
+  };
 
   return (
     <div className="flex items-start gap-4">

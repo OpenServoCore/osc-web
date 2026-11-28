@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import uPlot from "uplot";
 import { Chart, type ChartOptions } from "@/components/uplot";
 import type { ChartTokens } from "@/lib/chart-theme";
+import { withUnit } from "@/lib/format";
 import type { Point } from "@/lib/report-cards";
 
 export type Mark = "dots" | "hollow" | "line" | "steps" | "dashed";
@@ -124,9 +125,9 @@ export function readoutOf(
   if (x === undefined) return "";
   const parts = series.flatMap((s, i) => {
     const y = data[i + 1]?.[idx];
-    return y === null || y === undefined ? [] : [`${s.label} ${fmt(y)} ${yUnit}`];
+    return y === null || y === undefined ? [] : [`${s.label} ${withUnit(fmt(y), yUnit)}`];
   });
-  return parts.length === 0 ? "" : `${fmt(x)} ${xUnit}: ${parts.join(", ")}`;
+  return parts.length === 0 ? "" : `${withUnit(fmt(x), xUnit)}: ${parts.join(", ")}`;
 }
 
 /** Points and lines on one x and one y axis, with a legend and the values under the cursor. */

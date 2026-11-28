@@ -56,7 +56,7 @@ test("each step's drill-in opens from the report and shows its numbers", async (
   await expect(page.getByRole("region", { name: "Step" })).toContainText("run.json: accepted, 2 s");
   await expectEstimate(page, "current_zero_asleep_counts", [
     "1206.3857",
-    "+/- 1.0418",
+    "± 1.0418",
     "20000",
     "counts",
   ]);
@@ -66,13 +66,13 @@ test("each step's drill-in opens from the report and shows its numbers", async (
   await back();
 
   await drillFromReport(page, "Probe");
-  await expectEstimate(page, "r_plan_free_ohm", ["4.5001", "", "112", "ohm"]);
+  await expectEstimate(page, "r_plan_free_ohm", ["4.5001", "", "112", "Ω"]);
   await expect(page.getByRole("table", { name: "Bursts" }).getByRole("row")).toHaveCount(17);
   await back();
 
   await drillFromReport(page, "Stops");
-  await expectEstimate(page, "r_seated_ohm", ["4.0988", "+/- 0.0446", "36", "ohm"]);
-  await expectEstimate(page, "r_seated_25c_ohm", ["4.1599", "+/- 0.0453", "36", "ohm"]);
+  await expectEstimate(page, "r_seated_ohm", ["4.0988", "± 0.0446", "36", "Ω"]);
+  await expectEstimate(page, "r_seated_25c_ohm", ["4.1599", "± 0.0453", "36", "Ω"]);
   await expect(page.getByLabel("Bursts kept")).toHaveText("36 of 48 bursts kept.");
   const seatChecks = page.getByRole("table", { name: "Checks" });
   await expect(row(seatChecks, "each stop's seats agree").getByRole("cell")).toHaveText([
@@ -96,15 +96,15 @@ test("each step's drill-in opens from the report and shows its numbers", async (
   await back();
 
   await drillFromReport(page, "Window");
-  await expectEstimate(page, "g_window_ms", ["3.9795", "+/- 0.0653", "22", "mS"]);
+  await expectEstimate(page, "g_window_ms", ["3.9795", "± 0.0653", "22", "mS"]);
   await expect(page.getByLabel("Residual count")).toHaveText(
     "12 residuals over 12 window lengths.",
   );
   await back();
 
   await drillFromReport(page, "Spins");
-  await expectEstimate(page, "ke_v_s_per_rad", ["1.1577e-3", "+/- 7.5884e-6", "11", "V s/rad"]);
-  await expectEstimate(page, "j_kg_m2", ["6.5849e-9", "+/- 2.6168e-10", "6", "kg m^2"]);
+  await expectEstimate(page, "ke_v_s_per_rad", ["1.1577e-3", "± 7.5884e-6", "11", "V s/rad"]);
+  await expectEstimate(page, "j_kg_m2", ["6.5849e-9", "± 2.6168e-10", "6", "kg m²"]);
   await expect(page.getByRole("table", { name: "Coasts" }).getByRole("row")).toHaveCount(15);
   await back();
 
@@ -137,7 +137,7 @@ test("each step's drill-in opens from the report and shows its numbers", async (
   await back();
 
   await drillFromReport(page, "Cruise");
-  await expectEstimate(page, "friction_coulomb_ma", ["37.5980", "+/- 0.4511", "14", "mA"]);
+  await expectEstimate(page, "friction_coulomb_ma", ["37.5980", "± 0.4511", "14", "mA"]);
   await expect(page.getByRole("table", { name: "Legs" }).getByRole("row")).toHaveCount(17);
   await back();
 
@@ -156,14 +156,14 @@ test("each step's drill-in opens from the report and shows its numbers", async (
 test("a headline tile opens the step whose data is behind it", async ({ page }) => {
   await openReport(page);
   const tiles = page.getByRole("region", { name: "Headline numbers" });
-  await tiles.getByRole("group", { name: "Winding resistance at 25 C" }).getByRole("link").click();
+  await tiles.getByRole("group", { name: "Winding resistance at 25 °C" }).getByRole("link").click();
   await expect(page.getByRole("heading", { name: "Stops data" })).toBeVisible({ timeout: 15_000 });
-  await expectEstimate(page, "r_seated_25c_ohm", ["4.1599", "+/- 0.0453", "36", "ohm"]);
+  await expectEstimate(page, "r_seated_25c_ohm", ["4.1599", "± 0.0453", "36", "Ω"]);
 
   await page.getByRole("link", { name: "Back to the report" }).click();
   await tiles.getByRole("group", { name: "Motor constant Ke" }).getByRole("link").click();
   await expect(page.getByRole("heading", { name: "Spins data" })).toBeVisible({ timeout: 15_000 });
-  await expectEstimate(page, "ke_v_s_per_rad", ["1.1577e-3", "+/- 7.5884e-6", "11", "V s/rad"]);
+  await expectEstimate(page, "ke_v_s_per_rad", ["1.1577e-3", "± 7.5884e-6", "11", "V s/rad"]);
 });
 
 test("a capture trimmed out of the folder says so, and a kept one opens its rows", async ({

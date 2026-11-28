@@ -1,4 +1,5 @@
 import type { Field, Value } from "@openservocore/client";
+import { withUnit } from "./format";
 
 /** `min`/`max` are the descriptor's bounds in counts; `scale` is display units per count. */
 export interface NumberKind {
@@ -104,15 +105,15 @@ function formatNumber(kind: NumberKind, display: number): string {
   return kind.scale === undefined ? String(display) : display.toFixed(decimals(kind.scale));
 }
 
-function withUnit(kind: NumberKind, text: string): string {
-  return kind.unit === undefined ? text : `${text} ${kind.unit}`;
+function withKindUnit(kind: NumberKind, text: string): string {
+  return kind.unit === undefined ? text : withUnit(text, kind.unit);
 }
 
 export function formatValue(kind: FieldKind, value: EditValue): string {
   switch (kind.kind) {
     case "number":
       return typeof value === "number"
-        ? withUnit(kind, formatNumber(kind, fromRaw(kind, value)))
+        ? withKindUnit(kind, formatNumber(kind, fromRaw(kind, value)))
         : String(value);
     case "enum":
       return kind.options.find((o) => o.value === value)?.label ?? String(value);
@@ -140,11 +141,11 @@ export function rangeHint(kind: NumberKind): string | undefined {
   const lo =
     kind.min === undefined
       ? undefined
-      : withUnit(kind, formatNumber(kind, fromRaw(kind, kind.min)));
+      : withKindUnit(kind, formatNumber(kind, fromRaw(kind, kind.min)));
   const hi =
     kind.max === undefined
       ? undefined
-      : withUnit(kind, formatNumber(kind, fromRaw(kind, kind.max)));
+      : withKindUnit(kind, formatNumber(kind, fromRaw(kind, kind.max)));
   if (lo !== undefined && hi !== undefined) return `${lo} to ${hi}`;
   if (lo !== undefined) return `at least ${lo}`;
   if (hi !== undefined) return `at most ${hi}`;
@@ -174,7 +175,7 @@ function parseNumber(kind: NumberKind, text: string): ParseResult<number> {
   if (Math.abs(raw - Math.round(raw)) > 1e-6) {
     return kind.scale === undefined
       ? { ok: false, reason: "whole numbers only" }
-      : { ok: false, reason: `steps of ${withUnit(kind, formatNumber(kind, kind.scale))}` };
+      : { ok: false, reason: `steps of ${withKindUnit(kind, formatNumber(kind, kind.scale))}` };
   }
   const [wlo, whi] = widthRange(kind);
   const lo = kind.min ?? wlo;
@@ -182,7 +183,7 @@ function parseNumber(kind: NumberKind, text: string): ParseResult<number> {
   const rounded = Math.round(raw);
   if (rounded < lo || rounded > hi) {
     const fmt = (n: number) => formatNumber(kind, fromRaw(kind, n));
-    return { ok: false, reason: withUnit(kind, `between ${fmt(lo)} and ${fmt(hi)}`) };
+    return { ok: false, reason: withKindUnit(kind, `between ${fmt(lo)} and ${fmt(hi)}`) };
   }
   return { ok: true, value: display };
 }

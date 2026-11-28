@@ -15,5 +15,5 @@ test("connect rewrites a servo holding another response deadline and leaves a ma
   await page.getByRole("link", { name: "Control table" }).click();
   await expect(page.getByRole("tab", { name: "Settings" })).toBeVisible({ timeout: 15_000 });
   await page.getByRole("button", { name: /^Identity and bus/ }).click();
-  await expect(tableRow(page, "response_deadline_us").getByRole("cell")).toHaveText("1000 us");
+  await expect(tableRow(page, "response_deadline_us").getByRole("cell")).toHaveText("1000 µs");
 });

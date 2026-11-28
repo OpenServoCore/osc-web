@@ -134,7 +134,7 @@ function PoliciesPage() {
           setOhms(e.target.value);
         }}
       />
-      <span className="text-sm text-text-3">ohm</span>
+      <span className="text-sm text-text-3">Ω</span>
     </div>
   );
 

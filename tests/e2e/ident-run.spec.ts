@@ -459,3 +459,211 @@ test("a page reloaded mid-run leaves its folder in the browser, the step it was 
   const manifest = await readRunJson(page, `${UID_1}/${runs[0] ?? ""}`);
   expect((manifest.segments as { from: string }[]).map((s) => s.from)).toEqual(["rest", "probe"]);
 });
+
+const TESTDATA = new URL("../../../open-servo-core/measure/testdata/", import.meta.url);
+const RECORDED = "run/00000000ffffffff76e5bc220ef6abcd/20261127T130203Z/run.json";
+const text = (rel: string): string => readFileSync(new URL(rel, TESTDATA), "utf8");
+const SHOTS = process.env.SHOTS_DIR;
+
+/**
+ * The recorded run's run.json moved onto ID 1 of the simulated fleet, its final set the set of
+ * record with its table: a folder whose final check accepted a set this servo can take.
+ */
+function acceptedFolder(uid = UID_1): { at: string; files: { path: string; text: string }[] } {
+  const set = text("mg90-d/constants.json");
+  const run = JSON.parse(text(RECORDED)) as Record<string, unknown> & {
+    final: Record<string, unknown>;
+  };
+  run.servo_uid = uid;
+  run.final = {
+    ...run.final,
+    set: (JSON.parse(set) as { hash: { set: string } }).hash.set,
+    set_file: "final/set.json",
+  };
+  const at = `${uid}/20261127T130203Z`;
+  return {
+    at,
+    files: [
+      { path: `${at}/run.json`, text: `${JSON.stringify(run, null, 2)}\n` },
+      { path: `${at}/final/set.json`, text: set },
+      { path: `${at}/final/inputs/pos_lut.json`, text: text("mg90-d/pos_lut.json") },
+    ],
+  };
+}
+
+type Told = Record<string, unknown>;
+
+/**
+ * The next `count` run workers the page makes are a script: it tells `events`, writes `files`
+ * through the page's mirror, and ends with an accepted outcome when `ends`, else holds the run
+ * open. The sim runs no motor, so only a script reaches the tune; workers after it are the real
+ * module's.
+ */
+async function scriptedWorker(
+  page: Page,
+  script: { events: Told[]; files?: { path: string; text: string }[]; ends: boolean },
+  count = 1,
+): Promise<void> {
+  let left = count;
+  const body = `
+const S = ${JSON.stringify({ files: [], ...script })};
+const enc = new TextEncoder();
+const files = () => S.files.map((f) => ({ path: f.path, bytes: enc.encode(f.text) }));
+self.postMessage({ kind: "ready" });
+self.onmessage = async (e) => {
+  if (e.data.kind !== "runFake") return;
+  for (const f of files()) self.postMessage({ kind: "store", stored: { op: "write", ...f } });
+  for (const p of S.events) {
+    self.postMessage({ kind: "progress", progress: p });
+    await new Promise((go) => setTimeout(go, 5));
+  }
+  if (!S.ends) return;
+  const root = S.files[0]?.path.split("/").slice(0, 2).join("/");
+  self.postMessage({
+    kind: "outcome",
+    outcome: { root, files: files(), lines: ["the scripted run"], accepted: true },
+  });
+};`;
+  await page.route(/ident\.worker\.ts/, async (route) => {
+    if (left <= 0) return route.fallback();
+    left -= 1;
+    await route.fulfill({ contentType: "text/javascript", body });
+  });
+}
+
+const ACCEPTED_BEFORE_TUNE: Told[] = [
+  "rest",
+  "probe",
+  "stops",
+  "table",
+  "window",
+  "spins",
+  "gather",
+].flatMap((step) => [
+  { event: "started", step },
+  { event: "ended", step, state: "accepted", why: null },
+]);
+
+const TUNE_AT_TRY_2: Told[] = [
+  ...ACCEPTED_BEFORE_TUNE,
+  { event: "started", step: "tune" },
+  { event: "try", step: "tune", at: 1, of: 6, percent: 100 },
+  { event: "unit", step: "tune", at: 1, of: 20, what: "move" },
+  { event: "unit", step: "tune", at: 20, of: 20, what: "move" },
+  { event: "try", step: "tune", at: 2, of: 6, percent: 80 },
+  { event: "unit", step: "tune", at: 1, of: 20, what: "move" },
+  { event: "unit", step: "tune", at: 5, of: 20, what: "move" },
+];
+
+test("the tune's ring spans its six tries, and its row says only which try past the first", async ({
+  page,
+}) => {
+  await openRun(page);
+  await scriptedWorker(page, { events: TUNE_AT_TRY_2, ends: false });
+  await page.getByRole("button", { name: "Start" }).click();
+  const tune = mark(page, "Tune");
+  await expect(tune).toHaveAttribute("data-mark", "running", { timeout: 30_000 });
+  await expect(tune).toHaveAccessibleName(
+    "Tune: running, try 2 of at most 6 at 80% of the starting gain, move 5 of 20",
+  );
+  // Try 2 of 6 at move 5 of 20: one try's sixth and four twentieths of the next.
+  await expect(tune).toHaveAttribute("aria-valuenow", String(Math.round((100 * (1 + 4 / 20)) / 6)));
+  // Beside the name: "try 2" alone, no unit words; the moves and the gain are in the tooltip.
+  await expect(step(page, "Tune")).toContainText("try 2");
+  await expect(step(page, "Tune")).not.toContainText("move");
+  await expect(step(page, "Tune")).not.toContainText("of at most");
+  await shoot(page, page.getByRole("list", { name: "Steps" }), "steps-tune-try-2");
+});
+
+/** Screenshots of `what` in both themes into SHOTS_DIR, when it is set. */
+async function shoot(page: Page, what: Locator, name: string): Promise<void> {
+  if (SHOTS === undefined) return;
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await what.screenshot({ path: `${SHOTS}/${name}-${colorScheme}.png` });
+  }
+  await page.emulateMedia({ colorScheme: null });
+}
+
+test("an accepted run saves its final set from the folder and reads it back clean", async ({
+  page,
+}) => {
+  const folder = acceptedFolder();
+  await openRun(page);
+  await scriptedWorker(page, {
+    events: [
+      ...ACCEPTED_BEFORE_TUNE,
+      { event: "started", step: "tune" },
+      { event: "try", step: "tune", at: 1, of: 6, percent: 100 },
+      { event: "ended", step: "tune", state: "accepted", why: null },
+      { event: "started", step: "cruise" },
+      { event: "ended", step: "cruise", state: "accepted", why: null },
+      { event: "started", step: "final" },
+      { event: "try", step: "final", at: 1, of: 6, percent: 100 },
+      { event: "try", step: "final", at: 2, of: 6, percent: 80 },
+      { event: "ended", step: "final", state: "accepted", why: null },
+    ],
+    files: folder.files,
+    ends: true,
+  });
+  await page.getByRole("button", { name: "Start" }).click();
+  const outcome = page.getByRole("region", { name: "Run outcome" });
+  await expect(outcome).toBeVisible({ timeout: 30_000 });
+  await expectMark(
+    page,
+    "Tune",
+    "accepted",
+    "accepted, try 1 of at most 6 at 100% of the starting gain",
+  );
+  await expect(step(page, "Tune")).not.toContainText("try");
+  // The final check counts its own tries: its second, though the folder numbers it try 3.
+  await expect(step(page, "Final check")).toContainText("try 2");
+  await shoot(page, page.getByRole("list", { name: "Steps" }), "steps-accepted");
+
+  const save = outcome.getByRole("region", { name: "Save this set" });
+  await expect(save).toContainText("stores the bus speed the servo runs at now, 3 M");
+  await save.getByRole("button", { name: "Save this set" }).click();
+  await expect(save.getByLabel("Save result")).toHaveText(
+    /^Saved\. The servo reads back as the run's final set: 0 differences\. It starts at 3 M\. The backup is in this browser at c94b8419d1092aec87de5fd151ce290f\/\d{8}T\d{6}Z\/\.$/,
+    { timeout: 30_000 },
+  );
+  await save.getByText("The tool's lines").click();
+  await expect(save.getByLabel("Save lines")).toContainText("SAVE: CONFIG and CALIB are in flash");
+  await expect(save.getByLabel("Save lines")).toContainText(
+    "0 differences; settings loaded; unsaved no",
+  );
+  await shoot(page, outcome, "save-this-set");
+  // The backup sits in a folder of its own beside the run's, as osc-ident save keeps it.
+  const runs = await storedRuns(page, UID_1);
+  expect(runs).toHaveLength(2);
+  // The main client has the bus again.
+  await expect(page.getByRole("button", { name: "Connected at 3 M" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "ID 1" })).toBeVisible();
+});
+
+test("the report of another servo's accepted run refuses Save this set plainly", async ({
+  page,
+}) => {
+  const other = "0123456789abcdef0123456789abcdef";
+  const folder = acceptedFolder(other);
+  await gotoSim(page, [1]);
+  await page.evaluate(async (files) => {
+    const root = await navigator.storage.getDirectory();
+    for (const f of files) {
+      const parts = f.path.split("/");
+      const name = parts.pop() ?? "";
+      let dir = root;
+      for (const p of parts) dir = await dir.getDirectoryHandle(p, { create: true });
+      const w = await (await dir.getFileHandle(name, { create: true })).createWritable();
+      await w.write(f.text);
+      await w.close();
+    }
+  }, folder.files);
+  await page.goto(`/runs/${folder.at}?sim=1`);
+  const save = page.getByRole("region", { name: "Save this set" });
+  await expect(save.getByRole("status")).toHaveText(
+    `Servo ${other} is not on the bus: connect it to save this set.`,
+    { timeout: 15_000 },
+  );
+  await expect(save.getByRole("button", { name: "Save this set" })).toBeDisabled();
+});

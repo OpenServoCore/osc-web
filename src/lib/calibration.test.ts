@@ -45,7 +45,7 @@ test("each register's value survives the trip through its display scale", () => 
 });
 
 test("angles read in degrees, sensor ends in counts, the gear ratio as a plain ratio", () => {
-  expect(formatValue(kindOf("angle_min_cdeg"), -9500)).toBe("-95.00 deg");
+  expect(formatValue(kindOf("angle_min_cdeg"), -9500)).toBe("-95.00°");
   expect(formatValue(kindOf("raw_max"), 3990)).toBe("3990 counts");
   expect(formatValue(kindOf("gear_ratio_centi"), 29000)).toBe("290.00");
 });

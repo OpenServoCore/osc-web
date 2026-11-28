@@ -52,6 +52,7 @@ import {
   type WindowS,
 } from "@/lib/control";
 import { enableHolding } from "@/lib/fault-ack";
+import { unitGap, unitSymbol, withUnit } from "@/lib/format";
 import { latchedLine } from "@/lib/health";
 import { counts as linearized, STATE as LUT } from "@/lib/pos-lut";
 import { isUnits, type Units } from "@/lib/prefs";
@@ -228,13 +229,13 @@ function display(key: SeriesKey, raw: boolean, goal: GoalUnits | undefined, lin 
 function format(value: number | undefined, d: Display): string {
   return value === undefined || !Number.isFinite(value)
     ? "-"
-    : `${value.toFixed(d.digits)} ${d.unit}`;
+    : withUnit(value.toFixed(d.digits), d.unit);
 }
 
 function panelTitle(panel: PanelDef, raw: boolean, goal: GoalUnits | undefined): string {
   const unitOf = (right: boolean) => {
     const s = panel.series.find((x) => (x.right ?? false) === right);
-    return s === undefined ? undefined : display(s.key, raw, goal).unit;
+    return s === undefined ? undefined : unitSymbol(display(s.key, raw, goal).unit);
   };
   const right = unitOf(true);
   return `${panel.title} ${unitOf(false) ?? ""}${right === undefined ? "" : ` | ${right}`}`;
@@ -672,6 +673,7 @@ function Controls({
   };
 
   const fmt = (c: number) => (spec === undefined ? "" : spec.toDisplay(c).toFixed(spec.digits));
+  const goalUnit = spec === undefined ? "" : unitSymbol(spec.unit);
   const ends = spec === undefined ? { low: 0, high: 0, inverted: false } : displayEnds(spec);
   // A latched fault holds the motor off whatever torque_enable says
   // (firmware kernel/faults.rs); the switch alone does not say so.
@@ -750,7 +752,9 @@ function Controls({
       {spec !== undefined && counts !== undefined && (
         <div className="flex flex-col gap-2">
           <p className="font-mono text-2xl tabular-nums" aria-label="Goal readout">
-            {fmt(counts)} <span className="text-base text-text-3">{spec.unit}</span>
+            {fmt(counts)}
+            {unitGap(goalUnit)}
+            <span className="text-base text-text-3">{goalUnit}</span>
           </p>
           <Slider
             aria-label="Goal"
@@ -777,7 +781,7 @@ function Controls({
               min={fmt(ends.low)}
               max={fmt(ends.high)}
               step={10 ** -spec.digits}
-              unit={spec.unit}
+              unit={goalUnit}
               onCommit={(v) => {
                 setGoal(spec.fromDisplay(v));
               }}

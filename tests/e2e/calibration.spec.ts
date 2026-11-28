@@ -6,8 +6,8 @@ import { gotoSim } from "./helpers";
 const SEEDED: readonly (readonly [string, string])[] = [
   ["Sensor lowest", "5 counts"],
   ["Sensor highest", "4095 counts"],
-  ["Angle lowest", "0.00 deg"],
-  ["Angle highest", "202.00 deg"],
+  ["Angle lowest", "0.00°"],
+  ["Angle highest", "202.00°"],
   ["Gear ratio", "254.64"],
 ];
 
@@ -50,9 +50,9 @@ test("edits write through, the row shows the new value and the status stays Cali
   ).toBeVisible();
   await expect(card.getByText("Calibrated", { exact: true })).toBeVisible();
 
-  await edit(card, "Angle highest", "202.00 deg", "180");
+  await edit(card, "Angle highest", "202.00°", "180");
   await expect(
-    card.getByRole("group", { name: "Angle highest" }).getByRole("button", { name: "180.00 deg" }),
+    card.getByRole("group", { name: "Angle highest" }).getByRole("button", { name: "180.00°" }),
   ).toBeVisible();
   await expect(card.getByText("Calibrated", { exact: true })).toBeVisible();
 });
@@ -82,16 +82,16 @@ test("an edit that inverts the sensor range is refused until cancelled", async (
 // negative degrees, which the seeded 0 to 202 deg map could never show.
 test("an edit reaches the dashboard card without a reload", async ({ page }) => {
   const card = await openCalibration(page, 1);
-  await edit(card, "Angle lowest", "0.00 deg", "-150");
-  await edit(card, "Angle highest", "202.00 deg", "-100");
+  await edit(card, "Angle lowest", "0.00°", "-150");
+  await edit(card, "Angle highest", "202.00°", "-100");
   await expect(
-    card.getByRole("group", { name: "Angle lowest" }).getByRole("button", { name: "-150.00 deg" }),
+    card.getByRole("group", { name: "Angle lowest" }).getByRole("button", { name: "-150.00°" }),
   ).toBeVisible();
   await expect(
-    card.getByRole("group", { name: "Angle highest" }).getByRole("button", { name: "-100.00 deg" }),
+    card.getByRole("group", { name: "Angle highest" }).getByRole("button", { name: "-100.00°" }),
   ).toBeVisible();
 
   await page.getByRole("link", { name: "Dashboard" }).click();
   const dashboard = page.getByRole("link", { name: /^ID 1\b/ });
-  await expect(dashboard.getByText(/^-1\d\d(\.\d)? deg$/)).toBeVisible();
+  await expect(dashboard.getByText(/^-1\d\d(\.\d)?°$/)).toBeVisible();
 });

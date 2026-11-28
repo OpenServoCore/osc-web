@@ -41,16 +41,16 @@ test("the mg90-a table reads live, its gains and error in degrees and percent of
     "Live: the servo corrects every sensor sample through this table.",
   );
   const facts = card.getByLabel("Table facts");
-  await expect(facts).toContainText("185 calibration points between 27.4 deg and 172.8 deg.");
+  await expect(facts).toContainText("185 calibration points between 27.4° and 172.8°.");
   await expect(facts).toContainText(
-    "Local gain over every 25-count window between 26.6 deg and 173.6 deg: 0.61x to 1.88x nominal.",
+    "Local gain over every 25-count window between 26.6° and 173.6°: 0.61× to 1.88× nominal.",
   );
   await expect(card).not.toContainText(/grade|smooth|suspect/i);
   await expect(facts).not.toContainText(/knot|correction/);
   const graph = card.getByRole("region", { name: "Error vs position" });
   await expect(graph).toHaveCount(1);
   await expect(graph.getByLabel("Error headline")).toHaveText(
-    "The sensor reads up to 3.5 deg (1.7% of travel) off; this table corrects it.",
+    "The sensor reads up to 3.5° (1.7% of travel) off; this table corrects it.",
   );
   await expect(card.getByRole("region", { name: "Local gain" })).toHaveCount(0);
   await expect(card.getByRole("region", { name: "Correction curve" })).toHaveCount(0);
@@ -62,10 +62,10 @@ test("the mg90-a table reads live, its gains and error in degrees and percent of
   await expect(readout).toHaveText("");
   await graph.locator(".u-over").hover();
   await expect(readout).toHaveText(
-    / deg: (reads (high|low) by \d+\.\d deg \(\d+\.\d% of travel\)|on target)$/,
+    /\d°: (reads (high|low) by \d+\.\d° \(\d+\.\d% of travel\)|on target)$/,
   );
   const text = (await readout.textContent()) ?? "";
-  const deg = Number(/^(-?\d+\.\d) deg:/.exec(text)?.[1]);
+  const deg = Number(/^(-?\d+\.\d)°:/.exec(text)?.[1]);
   const s = errorSeries(MG90A.points, SIM);
   const raw = Math.round(SIM.rawMin + deg / (202 / 4090));
   const candidates = [-2, -1, 0, 1, 2].map((d) => hoverWords(s, raw + d - SIM.rawMin));

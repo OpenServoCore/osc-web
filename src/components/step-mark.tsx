@@ -24,9 +24,9 @@ const ICON: Readonly<Record<Mark, string>> = {
   "not run": "text-text-3",
 };
 
-/** A step's state in words, as its mark's name and tooltip carry it. */
+/** A step's state in words, as its mark's name and tooltip carry it: its tries and moves too. */
 export function markLabel(step: FeedStep, over: boolean): string {
-  const unit = step.phase === "running" && !over ? unitText(step) : undefined;
+  const unit = unitText(step, over);
   return `${stepTitle(step.name)}: ${stateText(step, over)}${unit === undefined ? "" : `, ${unit}`}`;
 }
 

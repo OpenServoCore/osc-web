@@ -257,7 +257,7 @@ export const WARN = {
     "A blocked horn whose reading still flickers is not seen as blocked: it keeps pushing at full current.",
   stallSpeedHigh: "A slow move under load can be taken for a block.",
   cutoff:
-    "Above 90 C the winding insulation and the case plastic start to fail. The motor can burn out.",
+    "Above 90 °C the winding insulation and the case plastic start to fail. The motor can burn out.",
   positionError:
     "A motor wired backwards or a slipping gear drives longer before torque cuts, and can slam into a stop.",
   runV: "The servo would run above the maker's range: the motor heats more and its brushes wear fast.",

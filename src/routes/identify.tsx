@@ -3,12 +3,14 @@ import type { ResumeArgs, RunArgs } from "@openservocore/client-ident";
 import { createFileRoute, Link, useBlocker, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, RotateCcw, ScanSearch } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { SaveSet } from "@/components/save-set";
 import { StepMark } from "@/components/step-mark";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FIELD_NAME, readiness, type Blocker } from "@/lib/ident-setup";
 import { resumeArgs, runArgs, stopped } from "@/lib/ident-run";
+import { hasFinalSet } from "@/lib/save-set";
 import { policies, profiles } from "@/lib/library";
 import { DEFAULT_KEY, DEFAULT_POLICY } from "@/lib/policy-form";
 import { stoppedAt } from "@/lib/report";
@@ -16,8 +18,8 @@ import {
   current,
   doneShare,
   feedOfSteps,
+  rowText,
   STEP_TEXT,
-  unitText,
   type Feed,
   type FeedStep,
 } from "@/lib/run-feed";
@@ -288,6 +290,8 @@ function ProgressBlock({ view, onCancel }: { view: RunView; onCancel: () => void
 
 function Outcome({ view, onResume }: { view: RunView; onResume: (at: string) => void }) {
   const { outcome, stored, failure } = view;
+  const { servos } = useSession();
+  const onId = servos.find((s) => s.id === view.target?.id);
   const steps = stored?.identity.steps;
   const stop = steps === undefined ? undefined : stoppedAt(steps);
   const at = stored === undefined ? undefined : `${stored.identity.uid}/${stored.identity.utc}`;
@@ -337,6 +341,9 @@ function Outcome({ view, onResume }: { view: RunView; onResume: (at: string) => 
           </Link>
         </div>
       )}
+      {stored !== undefined && hasFinalSet(stored.identity) && (
+        <SaveSet identity={stored.identity} servo={onId} />
+      )}
     </section>
   );
 }
@@ -353,7 +360,7 @@ function StepList({ feed, over }: { feed: Feed; over: boolean }) {
 
 function StepRow({ step: s, over }: { step: FeedStep; over: boolean }) {
   const running = s.phase === "running" && !over;
-  const label = running ? unitText(s) : s.phase === "ended" ? tryText(s) : undefined;
+  const label = rowText(s);
   return (
     <li
       aria-current={running ? "step" : undefined}
@@ -369,12 +376,6 @@ function StepRow({ step: s, over }: { step: FeedStep; over: boolean }) {
       )}
     </li>
   );
-}
-
-function tryText(s: FeedStep): string | undefined {
-  return s.phase === "ended" && s.try !== undefined
-    ? `try ${String(s.try.at)} of at most ${String(s.try.of)}`
-    : undefined;
 }
 
 /** The servo's setup as a new run would take it: what a resume names where its folder records none. */

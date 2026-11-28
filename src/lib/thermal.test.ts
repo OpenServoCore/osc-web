@@ -22,13 +22,13 @@ const c = (cc: number) => formatQuantity(celsius(cc), DISPLAY.temperature);
 
 describe("centi-C to C", () => {
   test.each([
-    [3141, "31.4 C"],
-    [3149, "31.5 C"],
-    [2500, "25.0 C"],
-    [0, "0.0 C"],
-    [-4, "0.0 C"],
-    [-1250, "-12.5 C"],
-    [32767, "327.7 C"],
+    [3141, "31.4 °C"],
+    [3149, "31.5 °C"],
+    [2500, "25.0 °C"],
+    [0, "0.0 °C"],
+    [-4, "0.0 °C"],
+    [-1250, "-12.5 °C"],
+    [32767, "327.7 °C"],
   ])("%i cc reads %s", (cc, text) => {
     expect(c(cc)).toBe(text);
   });

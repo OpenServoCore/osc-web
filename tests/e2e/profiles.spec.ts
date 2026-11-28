@@ -12,7 +12,7 @@ const THERMAL = testdata("thermal.json");
 const NO_HEAT_MODEL =
   "The run prices the heat of every drive and writes the winding temperature estimate from the motor's heat model";
 
-const MG90_HEAT = "fast 2.37522 s, 20.4457 C/W; slow 128.92 s, 76.7616 C/W";
+const MG90_HEAT = "fast 2.37522 s, 20.4457 °C/W; slow 128.92 s, 76.7616 °C/W";
 
 async function openPage(page: Page): Promise<Locator> {
   await page.goto("/profiles?sim=1");
@@ -77,7 +77,7 @@ async function enterMg90(card: Locator): Promise<void> {
   await rating.getByLabel("At").fill("4.8");
   await rating.getByLabel("No-load speed").fill("0.10");
   await rating.getByLabel("Stall torque (optional)").fill("1.8");
-  await expect(rating).toContainText("= 600 deg/s, 30,800 motor rpm");
+  await expect(rating).toContainText("= 600°/s, 30,800 motor rpm");
   await rating.getByRole("button", { name: "Save" }).click();
   await expect(rating).toBeHidden();
   await edit(card, "Heat model", "not set", {
@@ -96,8 +96,8 @@ async function expectMg90Values(card: Locator): Promise<void> {
     "6 ripple pulses a motor turn",
   );
   const rating = card.getByRole("group", { name: "Rating at 4.8 V" });
-  await expect(rating).toContainText("0.10 s/60 deg");
-  await expect(rating).toContainText("= 600 deg/s");
+  await expect(rating).toContainText("0.10 s/60°");
+  await expect(rating).toContainText("= 600°/s");
   await expect(rating).toContainText("30,800 motor rpm");
   await expect(
     card.getByRole("group", { name: "Heat model" }).getByRole("button", { name: MG90_HEAT }),

@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { unitSymbol } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export interface EditorField {
@@ -154,7 +155,9 @@ export function InputEditor({
                 }}
               />
               {f.unit !== undefined && (
-                <span className="shrink-0 text-sm whitespace-nowrap text-text-3">{f.unit}</span>
+                <span className="shrink-0 text-sm whitespace-nowrap text-text-3">
+                  {unitSymbol(f.unit)}
+                </span>
               )}
             </div>
           </div>

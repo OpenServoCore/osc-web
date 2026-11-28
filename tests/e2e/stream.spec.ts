@@ -56,7 +56,7 @@ test("at 3 M the default six fill the summary and download matching CSV rows", a
   const { frames, samples } = await capture(page);
   expect(frames).toBeGreaterThan(0);
   expect(samples).toBeGreaterThan(0);
-  await expect(page.getByRole("region", { name: "deg | mA, V, %" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "° | mA, V, %" })).toBeVisible();
   const lines = await downloadCsv(page);
   expect(lines[0]).toBe(
     "sample,valid,pos (deg),current_raw (mA),vmotor_a (V),vmotor_b (V),duty_ticks (%),current_trough (mA)",

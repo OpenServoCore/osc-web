@@ -44,11 +44,18 @@ export interface StepUnit {
   what: string;
 }
 
+/** Try `at` of at most `of` of the tune or the final check, each counted from its own first, at `percent` of the starting gain. */
+export interface StepTry {
+  at: number;
+  of: number;
+  percent: number;
+}
+
 /**
  * A step as the feed has told it: not begun, begun, or ended in the state `run.json` records.
  * `fraction` is the step's ring, 0 to 1: the largest `(at - 1) / of` its units told, never going
- * back, full on accept, frozen at the end otherwise. The tune's and the final check's ring is the
- * current try's, from 0 again at each try.
+ * back, full on accept, frozen at the end otherwise. The tune's and the final check's ring spans
+ * every try they allow: try k of N fills its 1/N share by its check's units.
  */
 export type FeedStep =
   | { name: string; phase: "waiting"; fraction: number }
@@ -56,7 +63,7 @@ export type FeedStep =
       name: string;
       phase: "running";
       fraction: number;
-      try?: { at: number; of: number };
+      try?: StepTry;
       unit?: StepUnit;
     }
   | {
@@ -65,7 +72,7 @@ export type FeedStep =
       state: string;
       why: string | null;
       fraction: number;
-      try?: { at: number; of: number };
+      try?: StepTry;
       unit?: StepUnit;
     };
 
@@ -105,8 +112,19 @@ function put(steps: readonly FeedStep[], next: FeedStep): FeedStep[] {
   return next.name === RESUME_STEP ? [next, ...steps] : [...steps, next];
 }
 
-function tryOf(step: FeedStep | undefined): { at: number; of: number } | undefined {
+function tryOf(step: FeedStep | undefined): StepTry | undefined {
   return step === undefined || step.phase === "waiting" ? undefined : step.try;
+}
+
+/** `x` in 0..1, short of full: only an accept fills a ring. */
+function share(x: number): number {
+  return Math.min(0.999, Math.max(0, x));
+}
+
+/** The ring's share at unit `at` of `of` inside try `t`, or inside the step where it has no tries. */
+function shareAt(t: StepTry | undefined, at: number, of: number): number {
+  const inner = of > 0 ? (at - 1) / of : 0;
+  return t === undefined || t.of <= 0 ? share(inner) : share((t.at - 1 + inner) / t.of);
 }
 
 export function feedReduce(feed: Feed, p: Progress): Feed {
@@ -114,25 +132,27 @@ export function feedReduce(feed: Feed, p: Progress): Feed {
   switch (p.event) {
     case "started":
       return { ...feed, steps: put(feed.steps, { name: p.step, phase: "running", fraction: 0 }) };
-    case "try":
+    case "try": {
+      const s = was(p.step);
+      const t = { at: p.at, of: p.of, percent: p.percent };
       return {
         ...feed,
         steps: put(feed.steps, {
           name: p.step,
           phase: "running",
-          fraction: 0,
-          try: { at: p.at, of: p.of },
+          fraction: Math.max(s?.fraction ?? 0, shareAt(t, 1, 1)),
+          try: t,
         }),
       };
+    }
     case "unit": {
       const s = was(p.step);
       if (s?.phase !== "running") return feed;
-      const share = p.of > 0 ? Math.min(1, Math.max(0, (p.at - 1) / p.of)) : 0;
       return {
         ...feed,
         steps: put(feed.steps, {
           ...s,
-          fraction: Math.max(s.fraction, share),
+          fraction: Math.max(s.fraction, shareAt(s.try, p.at, p.of)),
           unit: { at: p.at, of: p.of, what: p.what },
         }),
       };
@@ -162,16 +182,13 @@ export function current(feed: Feed): FeedStep | undefined {
   return feed.steps.find((s) => s.phase === "running");
 }
 
-/** The share of the run done: the steps ended, the one running by its ring, the tune and the final check by their tries. */
+/** The share of the run done: the steps ended, the one running by its ring. */
 export function doneShare(feed: Feed): number {
   const steps = feed.steps.filter((s) => s.name !== RESUME_STEP);
   let done = 0;
   for (const s of steps) {
     if (s.phase === "ended") done += 1;
-    else if (s.phase === "running") {
-      done +=
-        s.try !== undefined && s.try.of > 0 ? (s.try.at - 1 + s.fraction) / s.try.of : s.fraction;
-    }
+    else if (s.phase === "running") done += s.fraction;
   }
   return steps.length === 0 ? 0 : done / steps.length;
 }
@@ -205,14 +222,25 @@ export function markOf(step: FeedStep, over: boolean): StepMark {
   }
 }
 
-/** Where a step has got, beside its ring: "seat 3 of 6", "try 2 of at most 6, move 4 of 20". */
-export function unitText(step: FeedStep): string | undefined {
+/** Beside the step's name: "try 2" once past the first try, else nothing. */
+export function rowText(step: FeedStep): string | undefined {
+  if (step.phase === "waiting" || step.try === undefined || step.try.at <= 1) return undefined;
+  return `try ${String(step.try.at)}`;
+}
+
+/**
+ * Where a step has got, for its tooltip: "try 2 of at most 6 at 80% of the starting gain, move 4
+ * of 20". The unit only while it runs.
+ */
+export function unitText(step: FeedStep, over: boolean): string | undefined {
   if (step.phase === "waiting") return undefined;
   const parts: string[] = [];
   if (step.try !== undefined) {
-    parts.push(`try ${String(step.try.at)} of at most ${String(step.try.of)}`);
+    parts.push(
+      `try ${String(step.try.at)} of at most ${String(step.try.of)} at ${String(step.try.percent)}% of the starting gain`,
+    );
   }
-  if (step.unit !== undefined) {
+  if (step.unit !== undefined && step.phase === "running" && !over) {
     parts.push(`${step.unit.what} ${String(step.unit.at)} of ${String(step.unit.of)}`);
   }
   return parts.length === 0 ? undefined : parts.join(", ");
@@ -220,16 +248,12 @@ export function unitText(step: FeedStep): string | undefined {
 
 /** A step's state in words: the tool's own once it ended. `over` once the run has ended. */
 export function stateText(step: FeedStep, over: boolean): string {
-  const tries = (t: { at: number; of: number } | undefined) =>
-    t === undefined ? "" : `, try ${String(t.at)} of at most ${String(t.of)}`;
   switch (step.phase) {
     case "waiting":
       return over ? "not reached" : "waiting";
     case "running":
-      return over ? `no end recorded${tries(step.try)}` : `running${tries(step.try)}`;
+      return over ? "no end recorded" : "running";
     case "ended":
-      return step.state === "running"
-        ? "no end recorded: the run was cut off"
-        : `${step.state}${tries(step.try)}`;
+      return step.state === "running" ? "no end recorded: the run was cut off" : step.state;
   }
 }

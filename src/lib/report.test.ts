@@ -45,7 +45,7 @@ describe("numbers as osc-ident prints them", () => {
 
   it("says a spread as +/- sd and n, n alone, or nominal", () => {
     const t: Term = { value: 1, sd: 0.04458048587985423, n: 36, unit: "ohm" };
-    expect(spreadSaid(t)).toBe("+/- 0.0446, n 36");
+    expect(spreadSaid(t)).toBe("± 0.0446, n 36");
     expect(spreadSaid({ ...t, sd: null })).toBe("n 36");
     expect(spreadSaid({ ...t, sd: null, n: null })).toBe("nominal");
   });
@@ -169,13 +169,13 @@ describe("the heat line", () => {
     const m = migrate(record("profile.json"), record("policy-of-record.json"));
     const resolved = resolvePreview(m.profile, m.policy, 4.18).report;
     expect(heatSaid(resolved, undefined)).toBe(
-      `Heat model from the profile vorpal-mg90 rev ${String(m.profile.revision)}, not identified: fast 2.38 s 20.4 C/W, slow 128.9 s 76.8 C/W`,
+      `Heat model from the profile vorpal-mg90 rev ${String(m.profile.revision)}, not identified: fast 2.38 s 20.4 °C/W, slow 128.9 s 76.8 °C/W`,
     );
   });
 
   it("reads a version 0 run's thermal.json, and says the run's refusal with neither", () => {
     expect(heatSaid(json("inputs/resolved.json"), json("inputs/thermal.json"))).toBe(
-      "Heat model from inputs/thermal.json beside the version 0 nameplate, not identified: fast 2.38 s 20.4 C/W, slow 128.9 s 76.8 C/W",
+      "Heat model from inputs/thermal.json beside the version 0 nameplate, not identified: fast 2.38 s 20.4 °C/W, slow 128.9 s 76.8 °C/W",
     );
     expect(heatSaid(json("inputs/resolved.json"), undefined)).toBe(NO_HEAT_MODEL);
   });

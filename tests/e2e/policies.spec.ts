@@ -59,15 +59,15 @@ test("Default with vorpal-mg90 at 4.18 ohm previews 400 deg/s, 200 deg/s, 4000 d
   await expect(card.getByRole("combobox")).toHaveText("vorpal-mg90");
   await expect(card.getByText("portable", { exact: true })).toBeVisible();
   await expect(row(card, "Move speed")).toContainText("0.5 of the ceiling");
-  await expect(row(card, "Move speed")).toContainText("= 200 deg/s");
-  await expect(row(card, "Speed-up time")).toContainText("= 4000 deg/s^2");
+  await expect(row(card, "Move speed")).toContainText("= 200°/s");
+  await expect(row(card, "Speed-up time")).toContainText("= 4000°/s²");
   await expect(row(card, "Max yield torque")).toContainText("the cap, no fold");
   await expect(row(card, "Runs on")).toContainText("picks the 4.8 V rating");
   await expect(card.getByRole("group", { name: "Plastic torque limit" })).toHaveCount(0);
 
   await card.getByRole("button", { name: "Show all" }).click();
-  await expect(row(card, "Speed ceiling")).toContainText("= 400 deg/s");
-  await expect(row(card, "Current limit")).toContainText("= 0.92 A at 4.18 ohm, set by the run");
+  await expect(row(card, "Speed ceiling")).toContainText("= 400°/s");
+  await expect(row(card, "Current limit")).toContainText("= 0.92 A at 4.18 Ω, set by the run");
   await expect(row(card, "Stall speed")).toContainText("set by the run");
   await expect(row(card, "Move speed")).toContainText("half the speed ceiling");
 });
@@ -105,10 +105,10 @@ test("Default cannot be edited, and a copy can: move speed 0.75 previews 300 deg
   await row(card, "Move speed").getByRole("button", { name: "0.5 of the ceiling" }).click();
   const editor = page.getByRole("dialog", { name: "Move speed" });
   await editor.getByLabel("Move speed").fill("0.75");
-  await expect(editor).toContainText("= 300 deg/s with vorpal-mg90");
+  await expect(editor).toContainText("= 300°/s with vorpal-mg90");
   await editor.getByRole("button", { name: "Save" }).click();
   await expect(editor).toBeHidden();
-  await expect(row(card, "Move speed")).toContainText("= 300 deg/s");
+  await expect(row(card, "Move speed")).toContainText("= 300°/s");
   await expect(card).toContainText("arm-joints . revision 2");
   await expect(card.getByText("portable", { exact: true })).toBeVisible();
 
@@ -117,7 +117,7 @@ test("Default cannot be edited, and a copy can: move speed 0.75 previews 300 deg
   await editor.getByRole("tab", { name: "Fixed" }).click();
   await expect(editor.getByLabel("Move speed")).toHaveValue("300");
   await editor.getByRole("button", { name: "Save" }).click();
-  await expect(row(card, "Move speed").getByRole("button", { name: "300 deg/s" })).toBeVisible();
+  await expect(row(card, "Move speed").getByRole("button", { name: "300°/s" })).toBeVisible();
   await expect(card.getByText("1 fixed", { exact: true })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Policies" })).toContainText("1 fixed");
 });
@@ -136,5 +136,5 @@ test("a current share of 0.9 warns that a jammed horn can strip the gears", asyn
   );
   await editor.getByRole("button", { name: "Save" }).click();
   await expect(editor).toBeHidden();
-  await expect(row(card, "Current limit")).toContainText("= 1.03 A at 4.18 ohm, set by the run");
+  await expect(row(card, "Current limit")).toContainText("= 1.03 A at 4.18 Ω, set by the run");
 });

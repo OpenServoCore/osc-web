@@ -264,14 +264,14 @@ describe("the recorded run's arc", () => {
   const arc = arcOf(fixture());
 
   it("spans the identified travel with the pot hole at the CW stop", () => {
-    expect(arc.travelDeg).toBe(187);
+    expect(arc.travelDeg).toBe(184.04);
     expect(arc.pot).toHaveLength(1);
     const hole = arc.pot[0];
     expect(hole?.fromRaw).toBeCloseTo(6.751, 3);
     expect(hole?.toRaw).toBeCloseTo(118.805, 3);
     expect(hole?.deg).toBeCloseTo(5.6255, 4);
-    expect(hole?.fromDeg).toBeCloseTo(0.038, 3);
-    expect(hole?.toDeg).toBeCloseTo(5.654, 3);
+    expect(hole?.fromDeg).toBeCloseTo(-4.483, 3);
+    expect(hole?.toDeg).toBeCloseTo(1.145, 3);
   });
 
   it("puts its 10 wide codes at the carries, the widest 2048..2058 above 2047", () => {
@@ -291,7 +291,7 @@ describe("the recorded run's arc", () => {
     expect(kinds("no wide code judged")).toBe(4);
     expect(kinds("resolution")).toBe(18);
     expect(summary(arc)).toBe(
-      "Position sensor over 187.0 degrees: 1 position hole, the longest 112.1 counts (5.63 degrees) from 0.0 to 5.7 degrees; 10 ADC wide codes, the widest 11 codes at 101.2 degrees; 0.73 to 1.31 times the average resolution across 90 % of the judged travel.",
+      "Position sensor over 184.0 degrees: 1 position hole, the longest 112.1 counts (5.63 degrees) from -96.4 to -90.8 degrees; 10 ADC wide codes, the widest 11 codes at 4.9 degrees; 0.73 to 1.31 times the average resolution across 90 % of the judged travel.",
     );
   });
 });

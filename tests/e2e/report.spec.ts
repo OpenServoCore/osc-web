@@ -76,7 +76,10 @@ test("a recorded run's report shows its measured values with their spread, the m
   await expect(inputs).toContainText("Move speed200 deg/s");
   const checks = inputs.getByRole("table", { name: "Cross-checks" });
   await expect(checks.getByRole("row").filter({ hasText: /^travel/ })).toContainText(
-    "186.9993 deg n 1184.3329 deg+1.45 %",
+    "186.9993 deg n 1180.0000 deg+3.89 %",
+  );
+  await expect(checks.getByRole("row").filter({ hasText: /^pacing/ })).toContainText(
+    "19.9519 counts/deg n 122.7556 counts/deg-12.32 %",
   );
   await expect(
     checks.getByRole("row").filter({ hasText: "free speed at 4.8 V, V / Ke" }),

@@ -1,11 +1,12 @@
 import {
   migrate,
   resolvePreview,
+  validatePolicy,
   type Preview,
   type ServoProfile,
   type TuningPolicy,
 } from "@openservocore/client";
-import { formatNumber, slug } from "./profile-form";
+import { formatNumber, parseNumber, slug } from "./profile-form";
 
 export const POLICY_SCHEMA = "osc.tuning-policy/1";
 export const DEFAULT_KEY = "default";
@@ -34,7 +35,6 @@ export const DEFAULT_POLICY: TuningPolicy = {
   motion: {
     move_speed: { share_of_ceiling: 0.5 },
     speed_up: { s: 0.05 },
-    soft_margin_share: 0,
     angle_cw_stop_deg: 0,
   },
   loops: {
@@ -75,8 +75,8 @@ export const DEFAULT_POLICY: TuningPolicy = {
       "half the speed ceiling: the servo has two speeds, the ceiling it never crosses and a move speed set from 0 to it, and this is the move speed's default; interim until the load arm: the owner's decision",
     "motion.speed_up":
       "the move speed reached in 50 ms, from the same sweep; interim with the speed: the owner's decision",
-    "motion.soft_margin_share":
-      "no soft margin: the end-stop wall sits at the measured stops: the owner's decision",
+    "motion.soft_travel_deg":
+      "none stated: the soft window is the profile's rated travel, centered between the stops the run measures: the owner's decision",
     "loops.current_loop":
       "the current loop at a multiple of the electrical corner it closes on, R over 2 pi L: on the record 1013.6 Hz against the bench sweep's 1 kHz",
     "loops.observer":
@@ -225,6 +225,36 @@ export function shareText([n, d]: readonly [number, number]): string {
 /** A user copy's key from its name; Default's own key is taken. */
 export function copyKey(name: string): string {
   return slug(name);
+}
+
+export const SOFT_TRAVEL = "motion.soft_travel_deg";
+
+export const SOFT_TRAVEL_HINT =
+  "Empty is the profile's rated travel. Less narrows the soft window; more widens it, up to the servo's physical travel, which identification reports. The window is centered between the stops.";
+
+/** The soft margin share a policy stored before the soft travel may still state; the type no longer has it. */
+export function retiredSoftMargin(policy: TuningPolicy): string | undefined {
+  const share = (policy.motion as Readonly<Record<string, unknown>> | undefined)?.soft_margin_share;
+  if (share === undefined) return undefined;
+  return validatePolicy({
+    ...DEFAULT_POLICY,
+    motion: { ...DEFAULT_POLICY.motion, soft_margin_share: share },
+  } as TuningPolicy);
+}
+
+/** The soft travel typed, blank for the rated travel; any stored soft margin share taken out. */
+export function withSoftTravel(
+  policy: TuningPolicy,
+  text: string | undefined,
+): TuningPolicy | { error: string } {
+  const n = parseNumber(text ?? "");
+  if ("error" in n) return n;
+  const own =
+    n.value === null ? undefined : validatePolicy(withValue(DEFAULT_POLICY, SOFT_TRAVEL, n.value));
+  if (own !== undefined) return { error: own };
+  const motion: Record<string, unknown> = { ...policy.motion, soft_travel_deg: n.value };
+  delete motion.soft_margin_share;
+  return { ...policy, motion };
 }
 
 /** A policy file as version 1: version 0 reads with every value fixed and its key from the file's name. */

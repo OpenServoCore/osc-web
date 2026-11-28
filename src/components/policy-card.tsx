@@ -31,10 +31,14 @@ import {
   parseShare,
   portability,
   previewOf,
+  retiredSoftMargin,
   shareText,
+  SOFT_TRAVEL,
+  SOFT_TRAVEL_HINT,
   speedUpOf,
   valueAt,
   WARN,
+  withSoftTravel,
   withValue,
 } from "@/lib/policy-form";
 import { HEAT_FIELDS, parseNumber } from "@/lib/profile-form";
@@ -417,14 +421,13 @@ export function PolicyCard({
             <Section title="Motion">
               {moveRow}
               {speedUpRow}
-              <Row label="Soft margin" why={why("motion.soft_margin_share")}>
-                <NumberValue
-                  ctx={ctx}
-                  title="Soft margin"
-                  path="motion.soft_margin_share"
-                  unit="of the stops' span"
-                  zero="off"
-                />
+              <Row
+                label="Soft travel"
+                note={retiredSoftMargin(policy) ?? SOFT_TRAVEL_HINT}
+                noteTone={retiredSoftMargin(policy) === undefined ? "grey" : "warning"}
+                why={why(SOFT_TRAVEL)}
+              >
+                <SoftTravel ctx={ctx} />
               </Row>
               <Row label="Angle at the CW stop" why={why("motion.angle_cw_stop_deg")}>
                 <NumberValue
@@ -701,29 +704,42 @@ function numberAt(policy: TuningPolicy, path: string, text: string | undefined) 
   return "error" in n ? n : withValue(policy, path, n.value);
 }
 
+function SoftTravel({ ctx }: { ctx: Ctx }) {
+  const v = valueAt(ctx.policy, SOFT_TRAVEL);
+  const rated = ctx.profile?.rated_travel_deg;
+  const shown =
+    typeof v === "number"
+      ? `${num(v)} deg`
+      : rated == null
+        ? "the profile's rated travel"
+        : `the profile's rated travel, ${num(rated)} deg`;
+  return (
+    <Editable
+      ctx={ctx}
+      title="Soft travel"
+      shown={shown}
+      fields={[{ id: "v", label: "Soft travel", unit: "deg" }]}
+      initial={{ v: typeof v === "number" ? String(v) : "" }}
+      apply={(vals) => withSoftTravel(ctx.policy, vals.v)}
+    />
+  );
+}
+
 function NumberValue({
   ctx,
   title,
   path,
   unit,
   warn,
-  zero,
 }: {
   ctx: Ctx;
   title: string;
   path: string;
   unit: string;
   warn?: (n: number) => string | undefined;
-  /** How 0 reads, where 0 turns the value off. */
-  zero?: string;
 }) {
   const v = valueAt(ctx.policy, path);
-  const shown =
-    typeof v !== "number"
-      ? KEPT
-      : v === 0 && zero !== undefined
-        ? zero
-        : `${num(v)}${unit === "" ? "" : ` ${unit}`}`;
+  const shown = typeof v !== "number" ? KEPT : `${num(v)}${unit === "" ? "" : ` ${unit}`}`;
   return (
     <Editable
       ctx={ctx}

@@ -138,6 +138,9 @@ export const HEAT_FIELDS = [
   { id: "slow_gain_c_per_w", label: "Slow gain", unit: "C/W" },
 ] as const;
 
+export const RATED_TRAVEL =
+  "The output's travel as the maker's sheet states it, 180 for a servo sold as 180 deg. Identification measures the stops; the soft window is this wide unless the policy states its own.";
+
 export const NO_RATING =
   "The speed ceiling that protects the brushes cannot be set: no rating states a no-load speed inside the operating range.";
 
@@ -149,7 +152,7 @@ export function identifiable(profile: ServoProfile): boolean {
 export const REQUIRED = [
   "gear_class",
   "gear_ratio",
-  "travel_deg",
+  "rated_travel_deg",
   "count_rises_ccw",
   "counts",
   "operating_v",
@@ -166,7 +169,7 @@ const PASSING: ServoProfile = {
   key: "x",
   gear_class: "metal",
   gear_ratio: 1,
-  travel_deg: 180,
+  rated_travel_deg: 180,
   count_rises_ccw: true,
   brushes: 2,
   rotor_segments: 3,
@@ -182,12 +185,34 @@ function inRange(profile: ServoProfile): NoLoad[] {
 /** Why the run refuses this field, the CLI's words; undefined when it passes. */
 export function fieldIssue(profile: ServoProfile, field: Required): string | undefined {
   if (field === "no_load") return inRange(profile).length === 0 ? NO_RATING : undefined;
+  if (field === "rated_travel_deg") {
+    const { rated_travel_deg } = profile;
+    return validateProfile({ ...PASSING, rated_travel_deg, ...retiredTravel(profile) });
+  }
   if (field === "thermal" && profile.thermal == null) return NO_HEAT_MODEL;
   if (field === "counts") {
     const { brushes, rotor_segments } = profile;
     return validateProfile({ ...PASSING, brushes, rotor_segments });
   }
   return validateProfile({ ...PASSING, [field]: profile[field] });
+}
+
+// A profile stored before the rated travel may still state travel_deg, the stop-to-stop travel
+// the run now measures; the type no longer has it, the stored file does.
+function retiredTravel(profile: ServoProfile): Partial<ServoProfile> {
+  const stated = (profile as unknown as Record<string, unknown>).travel_deg;
+  return stated === undefined ? {} : ({ travel_deg: stated } as Partial<ServoProfile>);
+}
+
+/** The rated travel set, any travel_deg a stored profile still states taken out with its provenance. */
+export function withRatedTravel(profile: ServoProfile, value: number | null): ServoProfile {
+  const next = withField(profile, "rated_travel_deg", value) as ServoProfile &
+    Record<string, unknown>;
+  delete next.travel_deg;
+  const fields = { ...next.provenance?.fields };
+  delete fields.travel_deg;
+  next.provenance = { ...next.provenance, fields };
+  return next;
 }
 
 export function missing(profile: ServoProfile): Required[] {

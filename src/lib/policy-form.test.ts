@@ -12,8 +12,11 @@ import {
   parseShare,
   portability,
   previewOf,
+  retiredSoftMargin,
   RULE_FIELDS,
+  SOFT_TRAVEL,
   speedUpOf,
+  withSoftTravel,
   withValue,
 } from "./policy-form";
 
@@ -136,3 +139,49 @@ test("a value's form is its one key", () => {
   expect(cleared.sensor?.pot_jump).toBeNull();
   expect(cleared.sensor?.bad_samples).toBe(4);
 });
+
+test("the soft travel is the profile's rated travel unless the policy states its own", () => {
+  expect(valueOf(DEFAULT_POLICY)).toBeUndefined();
+  const line = (q: TuningPolicy) =>
+    previewOf(q, PROFILE, R_OHM).preview?.report.fields.find((l) => l.field === SOFT_TRAVEL);
+  expect(line(DEFAULT_POLICY)).toMatchObject({ form: "profile", value: 180 });
+  // none stated stays none in the values, so the rules name the profile's rated travel
+  expect(
+    previewOf(DEFAULT_POLICY, PROFILE, R_OHM).preview?.values.soft_travel_deg ?? null,
+  ).toBeNull();
+  const narrow = withSoftTravel(DEFAULT_POLICY, "120");
+  if ("error" in narrow) throw new Error(narrow.error);
+  expect(line(narrow)).toMatchObject({ form: "stated", value: 120 });
+  const wide = withSoftTravel(DEFAULT_POLICY, "200");
+  expect("error" in wide).toBe(false);
+  for (const bad of ["0", "-5", "361"]) {
+    const e = withSoftTravel(DEFAULT_POLICY, bad);
+    expect("error" in e && e.error, bad).toMatch(/the policy's motion\.soft_travel_deg is/);
+  }
+  const blank = withSoftTravel(narrow, "");
+  if ("error" in blank) throw new Error(blank.error);
+  expect(line(blank)).toMatchObject({ form: "profile", value: 180 });
+});
+
+test("a policy stored with the soft margin share is refused naming the soft travel, and an entry takes it out", () => {
+  const stored = {
+    ...DEFAULT_POLICY,
+    key: "arm-joints",
+    motion: { ...DEFAULT_POLICY.motion, soft_margin_share: 0 },
+  } as TuningPolicy;
+  const retired = retiredSoftMargin(stored);
+  expect(retired).toMatch(
+    /^the policy states motion\.soft_margin_share, which this tool no longer reads/,
+  );
+  expect(retired).toContain("motion.soft_travel_deg");
+  expect(validatePolicy(stored)).toBe(retired);
+  expect(retiredSoftMargin(DEFAULT_POLICY)).toBeUndefined();
+  const fixed = withSoftTravel(stored, "");
+  if ("error" in fixed) throw new Error(fixed.error);
+  expect("soft_margin_share" in (fixed.motion ?? {})).toBe(false);
+  expect(validatePolicy(fixed)).toBeUndefined();
+});
+
+function valueOf(q: TuningPolicy): unknown {
+  return q.motion?.soft_travel_deg;
+}

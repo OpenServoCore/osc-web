@@ -98,10 +98,7 @@ function blockerText(b: Blocker): string {
 function TabNotes() {
   return (
     <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-text-2">
-      <li>
-        Keep this tab in front while the horn moves. A hidden tab slows its timers, and the servo
-        cuts off a drive that runs long, which stops the run.
-      </li>
+      <li>The run goes on with this tab hidden or another window in front.</li>
       <li>
         Closing the tab stops the run. The servo lets the horn coast when the drive in flight ends,
         within about 2 s, as when osc-ident is stopped. What the run wrote to the servo stays

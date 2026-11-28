@@ -1,8 +1,9 @@
-import type { IdentRun, Progress, RunArgs, RunOutcome } from "@openservocore/client-ident";
+import type { Progress, RunArgs, RunOutcome } from "@openservocore/client-ident";
+import type { IdentWorker } from "@openservocore/client-ident/host";
 import { useRef, useState } from "react";
 import { useBus } from "./bus/hooks";
 import { handOver, storeOutcome } from "./ident-run";
-import { loadIdent } from "./ident-wasm";
+import { openIdentWorker } from "./ident-worker";
 import type { PickedRun } from "./run-folder";
 import { FEED_START, feedReduce, type Feed } from "./run-feed";
 import { storage } from "./use-library";
@@ -50,15 +51,16 @@ export interface IdentRunner {
 }
 
 /**
- * One identification run from this page: the bus manager's exclusive turn
- * for the whole run, the main client's device lent to the ident module
- * and always taken back, the screen kept on, the run folder stored as the
- * run wrote it. `ended` is called once the run is over, the bus back.
+ * One identification run from this page, in a worker of its own: the bus
+ * manager's exclusive turn for the whole run, the main client's device lent
+ * to the worker and always taken back, the screen kept on, the run folder
+ * stored as the run wrote it. `ended` is called once the run is over, the
+ * bus back.
  */
 export function useIdentRun(simulated: boolean, ended: () => void): IdentRunner {
   const bus = useBus();
   const [view, setView] = useState<RunView>(READY);
-  const handle = useRef<IdentRun>(undefined);
+  const handle = useRef<IdentWorker>(undefined);
   const cancelled = useRef(false);
   const started = useRef(false);
 
@@ -72,8 +74,7 @@ export function useIdentRun(simulated: boolean, ended: () => void): IdentRunner 
     let stored: PickedRun | undefined;
     let failure: string | undefined;
     try {
-      const ident = await loadIdent();
-      const run = new ident.IdentRun();
+      const run = await openIdentWorker();
       handle.current = run;
       // A Cancel while the module loaded stops the run at its first step, as a stop raised before it.
       if (cancelled.current) run.stop();
@@ -86,12 +87,16 @@ export function useIdentRun(simulated: boolean, ended: () => void): IdentRunner 
           handOver(client, (device) => {
             if (simulated) return run.runFake(args, told);
             if (device === undefined) throw new Error("the adapter lent no device for the run");
-            return run.run(device, args, told);
+            return run.run(device, args, told).catch((e: unknown) => {
+              // A worker that failed may still hold the device; ending it frees the device for the reclaim.
+              run.close();
+              throw e;
+            });
           }),
         );
       } finally {
         handle.current = undefined;
-        run.free();
+        run.close();
       }
       const out = outcome;
       setView((v) => ({ ...v, phase: "saving", outcome: out }));

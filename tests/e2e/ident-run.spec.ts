@@ -73,7 +73,10 @@ test("a run on the simulated servo steps through rest, ends at the probe, and it
   await expect(page.getByLabel("Run inputs")).toHaveText(
     "profile vorpal-mg90 rev 2 . policy Default . board facts read from the servo",
   );
+  const worker = page.waitForEvent("worker");
   await page.getByRole("button", { name: "Start" }).click();
+  // The run lives in a dedicated worker, whose timers a hidden tab does not throttle.
+  expect((await worker).url()).toContain("ident.worker");
   await expect(step(page, "Rest")).toContainText("accepted", { timeout: 30_000 });
   await expect(step(page, "Probe")).toContainText("aborted", { timeout: 30_000 });
   const outcome = page.getByRole("region", { name: "Run outcome" });
@@ -110,9 +113,8 @@ test("a run on the simulated servo steps through rest, ends at the probe, and it
 });
 
 /**
- * Holds the ident module's wasm until the returned release is called. The simulated servo's
- * pauses are sim time, so its run never yields to the page: the module load is the one span of
- * a sim run a click can land in.
+ * Holds the ident worker's wasm until the returned release is called: a span before the run
+ * starts, as long as a spec needs, for a click to land in.
  */
 async function holdIdent(page: Page): Promise<() => void> {
   let release!: () => void;

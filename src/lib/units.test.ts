@@ -7,6 +7,7 @@ import {
   busV,
   calibrationFromTable,
   calibrationStatus,
+  centerCounts,
   currentMa,
   degPerCount,
   degToCounts,
@@ -139,6 +140,43 @@ test("degToCounts round trips through positionDeg", () => {
   for (let counts = CAL.rawMin; counts <= CAL.rawMax; counts += 37) {
     expect(degToCounts(positionDeg(counts, CAL), CAL)).toBe(counts);
   }
+});
+
+// The record's set: contacts 82 / 3792, 0 deg at their midpoint, the ends
+// +/- half the 184.34 deg between them, the soft window +/- 90 deg (126 / 3748).
+const CENTERED: Calibration = {
+  rawMin: 82,
+  rawMax: 3792,
+  angleMinCdeg: -9217,
+  angleMaxCdeg: 9217,
+  gearRatioCenti: 25464,
+};
+
+test("0 deg is the center: the map crosses 0 at the stops' midpoint and reads signed either side", () => {
+  expect(centerCounts(CENTERED)).toBeCloseTo(1937, 9);
+  expect(positionDeg(1937, CENTERED)).toBeCloseTo(0, 9);
+  expect(degToCounts(0, CENTERED)).toBe(1937);
+  expect(positionDeg(126, CENTERED)).toBeCloseTo(-90, 1);
+  expect(positionDeg(3748, CENTERED)).toBeCloseTo(90, 1);
+  expect(degToCounts(-90, CENTERED)).toBe(126);
+  expect(degToCounts(90, CENTERED)).toBe(3748);
+});
+
+test("a tuned center moves 0 deg, and a descending map keeps it", () => {
+  // center_offset_deg +1.0 on the record: map -9317 / 9117, 0 deg at 1957.1.
+  const tuned: Calibration = { ...CENTERED, angleMinCdeg: -9317, angleMaxCdeg: 9117 };
+  expect(centerCounts(tuned)).toBeCloseTo(1957.1, 1);
+  expect(positionDeg(1937, tuned)).toBeCloseTo(-1, 2);
+  // Counts rising clockwise: the map descends, counterclockwise stays positive.
+  const cw: Calibration = { ...CENTERED, angleMinCdeg: 9217, angleMaxCdeg: -9217 };
+  expect(centerCounts(cw)).toBeCloseTo(1937, 9);
+  expect(positionDeg(126, cw)).toBeCloseTo(90, 1);
+});
+
+test("a map with no span has no center, and one with 0 at a stop has it there", () => {
+  expect(centerCounts({ ...CENTERED, angleMaxCdeg: -9217 })).toBeUndefined();
+  expect(centerCounts({ ...CENTERED, rawMax: 82 })).toBeUndefined();
+  expect(centerCounts({ ...CENTERED, angleMinCdeg: 0, angleMaxCdeg: 18433 })).toBe(82);
 });
 
 // omega_hat is counts/second, so deg/s per c/s is deg/count with no tick term.

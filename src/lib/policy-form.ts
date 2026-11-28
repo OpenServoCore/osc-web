@@ -35,7 +35,6 @@ export const DEFAULT_POLICY: TuningPolicy = {
   motion: {
     move_speed: { share_of_ceiling: 0.5 },
     speed_up: { s: 0.05 },
-    angle_cw_stop_deg: 0,
   },
   loops: {
     current_loop: { multiple_of_electrical_corner: 1.25 },
@@ -76,7 +75,9 @@ export const DEFAULT_POLICY: TuningPolicy = {
     "motion.speed_up":
       "the move speed reached in 50 ms, from the same sweep; interim with the speed: the owner's decision",
     "motion.soft_travel_deg":
-      "none stated: the soft window is the profile's rated travel, centered between the stops the run measures: the owner's decision",
+      "none stated: the soft window is the profile's rated travel, centered on 0 deg: the owner's decision",
+    "motion.center_offset_deg":
+      "none stated: 0 deg is the servo's center of travel, midway between the stops the run measures, and the ends read plus and minus half the travel: the owner's decision",
     "loops.current_loop":
       "the current loop at a multiple of the electrical corner it closes on, R over 2 pi L: on the record 1013.6 Hz against the bench sweep's 1 kHz",
     "loops.observer":
@@ -230,7 +231,12 @@ export function copyKey(name: string): string {
 export const SOFT_TRAVEL = "motion.soft_travel_deg";
 
 export const SOFT_TRAVEL_HINT =
-  "Empty is the profile's rated travel. Less narrows the soft window; more widens it, up to the servo's physical travel, which identification reports. The window is centered between the stops.";
+  "Empty is the profile's rated travel. Less narrows the soft window; more widens it, up to the servo's physical travel, which identification reports. The window is centered on 0 deg.";
+
+export const CENTER_OFFSET = "motion.center_offset_deg";
+
+export const CENTER_OFFSET_HINT =
+  "Empty is 0: 0 deg is the servo's center of travel, which identification measures. A positive offset moves 0 deg counterclockwise. The soft window moves with it; where it would not fit inside the stops, the run clamps the offset and says so.";
 
 /** The soft margin share a policy stored before the soft travel may still state; the type no longer has it. */
 export function retiredSoftMargin(policy: TuningPolicy): string | undefined {
@@ -254,6 +260,33 @@ export function withSoftTravel(
   if (own !== undefined) return { error: own };
   const motion: Record<string, unknown> = { ...policy.motion, soft_travel_deg: n.value };
   delete motion.soft_margin_share;
+  return { ...policy, motion };
+}
+
+/** The CW stop's angle a policy stored before the center offset may still state; the type no longer has it. */
+export function retiredCwStop(policy: TuningPolicy): string | undefined {
+  const deg = (policy.motion as Readonly<Record<string, unknown>> | undefined)?.angle_cw_stop_deg;
+  if (deg === undefined) return undefined;
+  return validatePolicy({
+    ...DEFAULT_POLICY,
+    motion: { ...DEFAULT_POLICY.motion, angle_cw_stop_deg: deg },
+  } as TuningPolicy);
+}
+
+/** The center offset typed, blank for the center; any stored CW stop angle taken out. */
+export function withCenterOffset(
+  policy: TuningPolicy,
+  text: string | undefined,
+): TuningPolicy | { error: string } {
+  const n = parseNumber(text ?? "");
+  if ("error" in n) return n;
+  const own =
+    n.value === null
+      ? undefined
+      : validatePolicy(withValue(DEFAULT_POLICY, CENTER_OFFSET, n.value));
+  if (own !== undefined) return { error: own };
+  const motion: Record<string, unknown> = { ...policy.motion, center_offset_deg: n.value };
+  delete motion.angle_cw_stop_deg;
   return { ...policy, motion };
 }
 

@@ -125,8 +125,8 @@ function Marks({ arc, id, focus }: { arc: Arc; id: string; focus: Mark | undefin
             </g>
           );
         })}
-        {scaleTicks(S).map((d) => {
-          const phi = phiOf(d, S);
+        {scaleTicks(S, arc.cwDeg).map((d) => {
+          const phi = phiOf(d - arc.cwDeg, S);
           const p0 = point(RINGS.scale[0] * R, phi);
           const p1 = point(RINGS.scale[1] * R, phi);
           const l = point(LABEL_R * R, phi);
@@ -177,7 +177,7 @@ function Marks({ arc, id, focus }: { arc: Arc; id: string; focus: Mark | undefin
           />
         )}
       </g>
-      <Ends travelDeg={S} />
+      <Ends travelDeg={S} cwDeg={arc.cwDeg} />
       <Readout arc={arc} />
     </>
   );
@@ -191,17 +191,17 @@ function focusPath(m: Mark, travelDeg: number): string {
   return sectorPath(a - grow, b + grow, r0 - pad, r1 + pad, travelDeg);
 }
 
-function Ends({ travelDeg }: { travelDeg: number }) {
+function Ends({ travelDeg, cwDeg }: { travelDeg: number; cwDeg: number }) {
   const cw = endLabelAt("cw", travelDeg);
   const ccw = endLabelAt("ccw", travelDeg);
   const cls = "fill-text-2 text-xs forced-colors:fill-[CanvasText]";
   return (
     <g>
       <text x={cw.x} y={cw.y} textAnchor="middle" dominantBaseline="hanging" className={cls}>
-        CW stop 0 deg
+        CW stop {degText(cwDeg)}
       </text>
       <text x={ccw.x} y={ccw.y} textAnchor="middle" dominantBaseline="hanging" className={cls}>
-        CCW stop {degText(travelDeg)}
+        CCW stop {degText(cwDeg + travelDeg)}
       </text>
     </g>
   );

@@ -92,17 +92,41 @@ function gainText(docs: RunDocs): string {
   return `the final check's closed-loop moves${at0}${from}`;
 }
 
+function signedDeg(v: number): string {
+  return `${v > 0 ? "+" : ""}${v.toFixed(2)} deg`;
+}
+
+/** Where the set puts 0 deg, its `center` block; undefined in a set written before it said. */
+export function centerSaid(set: unknown): string | undefined {
+  const [counts, raw, offset] = [
+    num(set, "center.counts"),
+    num(set, "center.raw"),
+    num(set, "center.offset_deg"),
+  ];
+  if (counts === undefined || raw === undefined || offset === undefined) return undefined;
+  const asked = num(set, "center.asked_offset_deg");
+  const where = `${counts.toFixed(1)} counts, raw ${raw.toFixed(1)}`;
+  if (at(set, "center.clamped") === true && asked !== undefined) {
+    return `0 deg at ${signedDeg(offset)} from the center of travel, clamped from the policy's ${signedDeg(asked)}, the furthest the soft window fits, at ${where}`;
+  }
+  return offset === 0
+    ? `0 deg at the center of travel, ${where}`
+    : `0 deg at ${signedDeg(offset)} from the center of travel, ${where}`;
+}
+
 export function headlineTiles(docs: RunDocs, steps: readonly RunStep[]): Card<Tile>[] {
   const measured = docs.get("inputs/measured.json");
   const holes = at(docs.get("results/table.json"), "holes");
   return [
     card(steps, ["final"], () => {
-      const cal = angleMap(docs.get("final/set.json"));
+      const set = docs.get("final/set.json");
+      const cal = angleMap(set);
       if (cal === undefined) return lacks("final/set.json angle map");
+      const center = centerSaid(set);
       return {
         label: "Travel",
         value: `${(Math.abs(cal.angleMaxCdeg - cal.angleMinCdeg) / 100).toFixed(2)} deg`,
-        about: `the set's angle map, raw ${String(cal.rawMin)} to ${String(cal.rawMax)}`,
+        about: `the set's angle map, raw ${String(cal.rawMin)} to ${String(cal.rawMax)}${center === undefined ? "" : `; ${center}`}`,
         step: "stops",
       };
     }),

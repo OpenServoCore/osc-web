@@ -117,6 +117,35 @@ test("position mode shows the goal in degrees and a goal past the rail stops at 
   await expect(page.getByText(/servo answered/)).toHaveCount(0);
 });
 
+test("on a centered angle map a goal of 0 deg goes to the center and the goals read signed", async ({
+  page,
+}) => {
+  await gotoSim(page, [1, 2]);
+  await page.getByRole("button", { name: "ID 1" }).click();
+  const card = page.getByRole("region", { name: "Calibration" });
+  for (const [row, from, to] of [
+    ["Angle lowest", "0.00 deg", "-101"],
+    ["Angle highest", "202.00 deg", "101"],
+  ] as const) {
+    await card.getByRole("group", { name: row }).getByRole("button", { name: from }).click();
+    await page.getByRole("textbox").fill(to);
+    await page.getByRole("button", { name: "Apply" }).click();
+    await expect(page.getByRole("textbox")).toBeHidden();
+  }
+  await page.getByRole("link", { name: "Live" }).click();
+  await expect(page.getByRole("region", { name: /^Motion/ })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText("waiting for data")).toHaveCount(0);
+  await pickMode(page, "Position");
+  await expect(page.getByLabel("Center")).toHaveText("Center, 0 deg: 2050.0 counts");
+  await setGoal(page, "0");
+  await expect(page.getByLabel("Goal value")).toHaveText("0.0 deg");
+  await setGoal(page, "-50");
+  await expect(page.getByLabel("Goal value")).toHaveText("-50.0 deg");
+  await setGoal(page, "-500");
+  await expect(page.getByLabel("Goal value")).toHaveText("-101.0 deg");
+  await expect(page.getByText(/servo answered/)).toHaveCount(0);
+});
+
 test("torque on reads back on and the servo keeps answering without a fault", async ({ page }) => {
   await openLive(page);
   const torque = page.getByRole("switch", { name: "Torque" });

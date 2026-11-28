@@ -8,11 +8,12 @@ import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/componen
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useBus } from "@/lib/bus/hooks";
+import { useBus, useClientOnce, useRegisters } from "@/lib/bus/hooks";
 import { CALIBRATION_REGISTERS, editReason, type CalibrationRegister } from "@/lib/calibration";
 import { hexAddr } from "@/lib/format";
+import { rawOfCounts, STATE as LUT } from "@/lib/pos-lut";
 import { useSession } from "@/lib/session";
-import { calibrationStatus, type Calibration, type GearClass } from "@/lib/units";
+import { calibrationStatus, centerCounts, type Calibration, type GearClass } from "@/lib/units";
 
 const GEAR_CLASS_TEXT: Record<GearClass, string> = {
   unknown: "Unknown",
@@ -20,12 +21,27 @@ const GEAR_CLASS_TEXT: Record<GearClass, string> = {
   metal: "Metal",
 };
 
+const STATE_REGISTERS: readonly string[] = ["pos_lut_state"];
+
 export function CalibrationCard({ id, uid }: { id: number; uid: string }) {
   const { descriptor, descriptorError, values, refreshConstants } = useSession();
   const bus = useBus();
   const card = values.get(uid);
   const cal = card?.constants.calibration;
   const fields = descriptor?.fields();
+  // The map's counts are the table's; raw is the pot reading the kernel takes
+  // there, the same counts while no table is live.
+  const lutState = useRegisters(id, STATE_REGISTERS, "slow");
+  const lutLive =
+    lutState !== undefined && !lutState.stale && lutState.read("pos_lut_state") === LUT.LIVE;
+  const lut = useClientOnce(
+    (c) =>
+      descriptor !== undefined && lutLive
+        ? c.readPosLut(id, descriptor)
+        : Promise.resolve(undefined),
+    [id, descriptor, lutLive],
+  );
+  const points = lutLive && lut.value?.live === true ? lut.value.points : undefined;
 
   async function apply(field: Field, raw: number) {
     await bus.write(id, field.name, { kind: field.kind === "int" ? "int" : "uint", value: raw });
@@ -86,6 +102,7 @@ export function CalibrationCard({ id, uid }: { id: number; uid: string }) {
                 </span>
               </div>
             )}
+            <Center cal={cal} points={points} />
           </div>
         )}
       </CardContent>
@@ -97,6 +114,23 @@ function fieldNamed(fields: readonly Field[], name: string): Field {
   const f = fields.find((f) => f.name === name);
   if (f === undefined) throw new Error(`descriptor has no ${name}`);
   return f;
+}
+
+/** 0 deg on the servo: where its angle map crosses 0, the center identification writes it at. */
+function Center({ cal, points }: { cal: Calibration; points: readonly number[] | undefined }) {
+  const counts = calibrationStatus(cal).valid ? centerCounts(cal) : undefined;
+  if (counts === undefined) return null;
+  const raw = points === undefined ? counts : rawOfCounts(points, counts);
+  return (
+    <div role="group" aria-label="Center" className="flex flex-col gap-0.5">
+      <span className="text-xs text-text-3">Center, 0 deg</span>
+      <span className="text-base">{counts.toFixed(1)} counts</span>
+      <span className="font-mono text-xs text-text-3">
+        raw {raw.toFixed(1)}
+        {points === undefined ? "" : " through the table"}; where the angle map reads 0
+      </span>
+    </div>
+  );
 }
 
 function StatusChip({ cal }: { cal: Calibration }) {

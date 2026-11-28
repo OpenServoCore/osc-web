@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { gotoSim } from "./helpers";
+import { rawOfCounts } from "../../src/lib/pos-lut";
+import { gotoSim, MG90A, writeTable } from "./helpers";
 
 // Every simulated servo boots with a real servo's calibration table, so the
 // card opens Calibrated and each row reads its seeded value in the row's unit.
@@ -94,4 +95,25 @@ test("an edit reaches the dashboard card without a reload", async ({ page }) => 
   await page.getByRole("link", { name: "Dashboard" }).click();
   const dashboard = page.getByRole("link", { name: /^ID 1\b/ });
   await expect(dashboard.getByText(/^-1\d\d(\.\d)? deg$/)).toBeVisible();
+});
+
+// Identification writes the map about the center of travel, so 0 deg reads
+// there; the seeded map still has it at the low stop.
+test("the card reads 0 deg where the angle map crosses it, raw through a live table", async ({
+  page,
+}) => {
+  const card = await openCalibration(page, 1);
+  const center = card.getByRole("group", { name: "Center" });
+  await expect(center).toContainText("5.0 counts");
+  await expect(center).toContainText("raw 5.0; where the angle map reads 0");
+
+  await edit(card, "Angle lowest", "0.00 deg", "-101");
+  await edit(card, "Angle highest", "202.00 deg", "101");
+  await expect(center).toContainText("2050.0 counts");
+  await expect(center).toContainText("raw 2050.0; where the angle map reads 0");
+
+  await writeTable(page, 1, MG90A.points);
+  const raw = rawOfCounts(MG90A.points, 2050).toFixed(1);
+  await expect(center).toContainText(`raw ${raw} through the table`);
+  await expect(center).toContainText("2050.0 counts");
 });

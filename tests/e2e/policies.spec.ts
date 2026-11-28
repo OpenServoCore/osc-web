@@ -138,3 +138,63 @@ test("a current share of 0.9 warns that a jammed horn can strip the gears", asyn
   await expect(editor).toBeHidden();
   await expect(row(card, "Current limit")).toContainText("= 1.03 A at 4.18 ohm, set by the run");
 });
+
+test("Default puts 0 deg at the center of travel, and a copy moves it", async ({ page }) => {
+  const card = await openPolicies(page);
+  await card.getByRole("button", { name: "Show all" }).click();
+  const center = row(card, "Center offset");
+  await expect(center).toContainText("0 deg, the center of travel");
+  await expect(center).toContainText("none stated: 0 deg is the servo's center of travel");
+  await expect(center).toContainText("A positive offset moves 0 deg counterclockwise.");
+  await expect(card).not.toContainText("CW stop");
+
+  await copyDefault(page, card);
+  await card.getByRole("button", { name: "Show all" }).click();
+  await center.getByRole("button", { name: "0 deg, the center of travel" }).click();
+  const editor = page.getByRole("dialog", { name: "Center offset" });
+  await editor.getByLabel("Center offset").fill("-12.5");
+  await editor.getByRole("button", { name: "Save" }).click();
+  await expect(editor).toBeHidden();
+  await expect(center.getByRole("button", { name: "-12.5 deg" })).toBeVisible();
+  await expect(card).toContainText("arm-joints . revision 2");
+});
+
+test("a policy stored with the CW stop angle shows its refusal, and an entry takes it out", async ({
+  page,
+}) => {
+  const card = await openPolicies(page);
+  await copyDefault(page, card);
+  await page.evaluate(async () => {
+    const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle("policies");
+    const handle = await dir.getFileHandle("arm-joints.json");
+    const stored = JSON.parse(await (await handle.getFile()).text()) as {
+      motion: Record<string, unknown>;
+    };
+    stored.motion.angle_cw_stop_deg = 0;
+    const writable = await handle.createWritable();
+    await writable.write(`${JSON.stringify(stored, null, 2)}\n`);
+    await writable.close();
+  });
+  await page.goto("/policies?sim=1&policy=arm-joints");
+  await expect(card).toContainText("arm-joints . revision 1");
+  await card.getByRole("button", { name: "Show all" }).click();
+  const center = row(card, "Center offset");
+  await expect(center).toContainText(
+    "the policy states motion.angle_cw_stop_deg, which this tool no longer reads: 0 deg is the servo's center of travel; to move it, state motion.center_offset_deg",
+  );
+
+  await center.getByRole("button", { name: "0 deg, the center of travel" }).click();
+  const editor = page.getByRole("dialog", { name: "Center offset" });
+  await editor.getByLabel("Center offset").fill("2");
+  await editor.getByRole("button", { name: "Save" }).click();
+  await expect(editor).toBeHidden();
+  await expect(center.getByRole("button", { name: "2 deg" })).toBeVisible();
+  await expect(center).not.toContainText("no longer reads");
+  const stored = await page.evaluate(async () => {
+    const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle("policies");
+    const file = await (await dir.getFileHandle("arm-joints.json")).getFile();
+    return JSON.parse(await file.text()) as { motion: Record<string, unknown> };
+  });
+  expect(stored.motion.angle_cw_stop_deg).toBeUndefined();
+  expect(stored.motion.center_offset_deg).toBe(2);
+});

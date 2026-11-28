@@ -71,6 +71,7 @@ import { windingC } from "@/lib/thermal";
 import {
   busV,
   calibrationStatus,
+  centerCounts,
   currentMa,
   DISPLAY,
   dutyTicksPercent,
@@ -672,6 +673,10 @@ function Controls({
   };
 
   const fmt = (c: number) => (spec === undefined ? "" : spec.toDisplay(c).toFixed(spec.digits));
+  const center =
+    spec?.register === "goal_position" && calibrationStatus(config.cal).valid
+      ? centerCounts(config.cal)
+      : undefined;
   const ends = spec === undefined ? { low: 0, high: 0, inverted: false } : displayEnds(spec);
   // A latched fault holds the motor off whatever torque_enable says
   // (firmware kernel/faults.rs); the switch alone does not say so.
@@ -767,6 +772,11 @@ function Controls({
             <span>{fmt(ends.low)}</span>
             <span>{fmt(ends.high)}</span>
           </div>
+          {center !== undefined && (
+            <p aria-label="Center" className="text-xs text-text-3 tabular-nums">
+              Center, 0 deg: {center.toFixed(1)} counts
+            </p>
+          )}
           <div className="flex items-center gap-2">
             <Label htmlFor={goalId} className="w-14">
               Goal

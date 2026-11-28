@@ -241,6 +241,24 @@ test("a descending angle map reads its goal ends lowest degree first, the slider
   expect(displayEnds(raw).inverted).toBe(false);
 });
 
+// Identification writes the map about the center of travel (protocol sec
+// 5.5): 0 deg at the stops' midpoint, the ends +/- half the travel.
+test("on a centered map a goal of 0 deg is the center and the goals read signed", () => {
+  const centered: Calibration = { ...cal, angleMinCdeg: -9000, angleMaxCdeg: 9000 };
+  const deg = goalSpec("Position", { ...ctx, cal: centered });
+  expect(deg.fromDisplay(0)).toBe(2000);
+  expect(deg.fromDisplay(-45)).toBe(1100);
+  expect(deg.toDisplay(2900)).toBeCloseTo(45, 6);
+  expect(displayEnds(deg)).toEqual({ low: 200, high: 3800, inverted: false });
+  expect([deg.toDisplay(200), deg.toDisplay(3800)]).toEqual([-90, 90]);
+  // Counts rising clockwise: the map descends, counterclockwise stays positive.
+  const ccwLow: Calibration = { ...cal, angleMinCdeg: 9000, angleMaxCdeg: -9000 };
+  const down = goalSpec("Position", { ...ctx, cal: ccwLow });
+  expect(down.fromDisplay(0)).toBe(2000);
+  expect(down.fromDisplay(45)).toBe(1100);
+  expect(displayEnds(down)).toEqual({ low: 3800, high: 200, inverted: true });
+});
+
 test("the velocity goal is deg/s over the speed ceiling, counts/s in raw mode", () => {
   const spec = goalSpec("Velocity", ctx);
   expect(spec).toMatchObject({ register: "goal_velocity", unit: "deg/s", digits: 0 });

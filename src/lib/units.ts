@@ -196,6 +196,17 @@ export function positionDeg(counts: number, cal: Calibration): number {
   return cal.angleMinCdeg / 100 + (counts - cal.rawMin) * degPerCount(cal);
 }
 
+/**
+ * The count the angle map reads as 0 deg, the servo's center (protocol sec
+ * 5.5); undefined for a map of no span. The map's ends are no reference:
+ * identification writes them about the center.
+ */
+export function centerCounts(cal: Calibration): number | undefined {
+  const span = angleSpanCdeg(cal);
+  if (span === 0 || cal.rawMax === cal.rawMin) return undefined;
+  return cal.rawMin + ((0 - cal.angleMinCdeg) * (cal.rawMax - cal.rawMin)) / span;
+}
+
 /** Inverse of positionDeg, for goal-position edits. Counts are whole. */
 export function degToCounts(deg: number, cal: Calibration): number {
   const perCount = degPerCount(cal);

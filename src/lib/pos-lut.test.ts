@@ -9,6 +9,7 @@ import {
   isIdentity,
   pointsWords,
   q4,
+  rawOfCounts,
   report,
   STATE,
   stateWords,
@@ -40,6 +41,16 @@ test("the identity is raw << 4 exactly, and a point lands at raw + c[k]", () => 
   expect(interpQ4(4096 + 560, 4, -1)).toBe(interpQ4(560, 4, -1));
   expect(isIdentity(IDENTITY)).toBe(true);
   expect(isIdentity(mg90a)).toBe(false);
+});
+
+test("raw through the table inverts it: the identity is itself, a table lands back on its code", () => {
+  for (const c of [0, 1937, 1937.5, 4095]) expect(rawOfCounts(IDENTITY, c)).toBe(c);
+  for (const raw of [560, 568, 1937, 3504]) {
+    expect(rawOfCounts(mg90a, counts(mg90a, raw))).toBeCloseTo(raw, 9);
+  }
+  expect(rawOfCounts(mg90a, 564)).toBe(560);
+  expect(rawOfCounts(mg90a, -3)).toBe(0);
+  expect(rawOfCounts(mg90a, 5000)).toBe(4095);
 });
 
 test("the mg90-a table reads the notebook's numbers", () => {

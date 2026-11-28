@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 import {
   accelOf,
+  CENTER_OFFSET,
   DEFAULT_POLICY,
   fixedFields,
   formOf,
@@ -12,10 +13,12 @@ import {
   parseShare,
   portability,
   previewOf,
+  retiredCwStop,
   retiredSoftMargin,
   RULE_FIELDS,
   SOFT_TRAVEL,
   speedUpOf,
+  withCenterOffset,
   withSoftTravel,
   withValue,
 } from "./policy-form";
@@ -180,6 +183,61 @@ test("a policy stored with the soft margin share is refused naming the soft trav
   if ("error" in fixed) throw new Error(fixed.error);
   expect("soft_margin_share" in (fixed.motion ?? {})).toBe(false);
   expect(validatePolicy(fixed)).toBeUndefined();
+});
+
+test("Default states no center offset and no CW stop angle: 0 deg is the center of travel", () => {
+  expect("angle_cw_stop_deg" in (DEFAULT_POLICY.motion ?? {})).toBe(false);
+  expect(DEFAULT_POLICY.motion?.center_offset_deg).toBeUndefined();
+  const line = (q: TuningPolicy) =>
+    previewOf(q, PROFILE, R_OHM).preview?.report.fields.find((l) => l.field === CENTER_OFFSET);
+  expect(line(DEFAULT_POLICY)).toMatchObject({ form: "stated", value: 0 });
+  expect(line(DEFAULT_POLICY)?.note).toBe(
+    "0 deg at the center of travel, the policy stating no offset",
+  );
+  const tuned = withCenterOffset(DEFAULT_POLICY, "-12.5");
+  if ("error" in tuned) throw new Error(tuned.error);
+  expect(tuned.motion?.center_offset_deg).toBe(-12.5);
+  expect(validatePolicy(tuned)).toBeUndefined();
+  expect(line(tuned)).toMatchObject({ value: -12.5 });
+  expect(line(tuned)?.note).toMatch(/the run clamps it to the furthest the soft window fits/);
+  const blank = withCenterOffset(tuned, "");
+  if ("error" in blank) throw new Error(blank.error);
+  expect(line(blank)).toMatchObject({ value: 0 });
+  for (const bad of ["east", "1e400"]) {
+    expect("error" in withCenterOffset(DEFAULT_POLICY, bad), bad).toBe(true);
+  }
+});
+
+test("a policy stored with the CW stop angle is refused naming the center offset, and an entry takes it out", () => {
+  const stored = {
+    ...DEFAULT_POLICY,
+    key: "arm-joints",
+    motion: { ...DEFAULT_POLICY.motion, angle_cw_stop_deg: 0 },
+  } as TuningPolicy;
+  const retired = retiredCwStop(stored);
+  expect(retired).toMatch(
+    /^the policy states motion\.angle_cw_stop_deg, which this tool no longer reads: 0 deg is the servo's center of travel/,
+  );
+  expect(retired).toContain("motion.center_offset_deg");
+  expect(validatePolicy(stored)).toBe(retired);
+  expect(previewOf(stored, PROFILE, R_OHM).refusal).toBe(retired);
+  expect(retiredCwStop(DEFAULT_POLICY)).toBeUndefined();
+  for (const text of ["", "2"]) {
+    const fixed = withCenterOffset(stored, text);
+    if ("error" in fixed) throw new Error(fixed.error);
+    expect("angle_cw_stop_deg" in (fixed.motion ?? {})).toBe(false);
+    expect(validatePolicy(fixed)).toBeUndefined();
+  }
+});
+
+test("a version 0 policy's CW stop angle imports as a note, not a value", () => {
+  const v0 = { ...(testdata("policy.json") as Record<string, unknown>), angle_cw_stop_deg: 0 };
+  const m = importPolicy(v0, "policy.json");
+  expect("angle_cw_stop_deg" in (m.policy.motion ?? {})).toBe(false);
+  expect(m.policy.motion?.center_offset_deg ?? null).toBeNull();
+  expect(m.notes.join(" ")).toContain(
+    "the version 0 policy's angle_cw_stop_deg (0) is not read: 0 deg is the servo's center of travel",
+  );
 });
 
 function valueOf(q: TuningPolicy): unknown {

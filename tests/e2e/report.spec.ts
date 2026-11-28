@@ -126,3 +126,35 @@ test("a run that stopped at the probe says why and shows no card past it", async
     "The run did not reach the gather.",
   );
 });
+
+// The recorded run's set rewritten as identification now writes it: the map
+// about the center of travel, the set's center block beside it.
+test("a set with 0 deg at the center reads the arc in its degrees and says where 0 deg is", async ({
+  page,
+}, info) => {
+  const folder = info.outputPath(UTC);
+  cpSync(FIXTURE, folder, { recursive: true });
+  const path = join(folder, "final", "set.json");
+  const set = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown> & {
+    fields: Record<string, { value: number }>;
+  };
+  set.fields.angle_min_cdeg = { ...set.fields.angle_min_cdeg, value: -9350 };
+  set.fields.angle_max_cdeg = { ...set.fields.angle_max_cdeg, value: 9350 };
+  set.center = { counts: 1871.5, raw: 1875, offset_deg: 0, asked_offset_deg: null, clamped: false };
+  writeFileSync(path, JSON.stringify(set, null, 2));
+
+  await openReport(page, folder);
+  await expect(tile(page, "Travel")).toContainText("187.00°");
+  await expect(tile(page, "Travel")).toContainText(
+    "0° at the center of travel, 1871.5 counts, raw 1875.0",
+  );
+  const arc = page.getByRole("region", { name: "Travel map" }).getByRole("img", {
+    name: "Position sensor over 187.0 degrees: 1 position hole, the longest 112.1 counts (5.63 degrees) from -93.5 to -87.8 degrees; 10 ADC wide codes, the widest 11 codes at 7.7 degrees; 0.73 to 1.31 times the average resolution across 90 % of the judged travel.",
+  });
+  await expect(arc).toBeVisible();
+  await expect(arc).toContainText("CW stop -93.5°");
+  await expect(arc).toContainText("CCW stop 93.5°");
+  for (const tick of ["-60°", "-30°", "0°", "30°", "60°"]) {
+    await expect(arc.getByText(tick, { exact: true })).toBeVisible();
+  }
+});

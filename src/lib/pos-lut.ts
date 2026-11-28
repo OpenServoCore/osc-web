@@ -49,6 +49,28 @@ export function counts(points: readonly number[], raw: number): number {
   return q4(points, raw) / GRID;
 }
 
+/**
+ * The raw count the table reads as `linear` counts, its inverse: the
+ * format's line between the points over every code (measure `raw_at`,
+ * oscnb `postable.Table.counts`), the end codes past either end.
+ */
+export function rawOfCounts(points: readonly number[], linear: number): number {
+  const lin = (r: number) => {
+    const i = Math.min(Math.floor(r / GRID), INTERVALS - 1);
+    const [c0, c1] = [points[i] ?? 0, points[i + 1] ?? 0];
+    return r + c0 + ((c1 - c0) * (r - GRID * i)) / GRID;
+  };
+  if (linear <= lin(0)) return 0;
+  if (linear >= lin(ADC_MASK)) return ADC_MASK;
+  let [lo, hi] = [0, ADC_MASK];
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (lin(mid) <= linear) lo = mid;
+    else hi = mid;
+  }
+  return lo + (linear - lin(lo)) / (lin(hi) - lin(lo));
+}
+
 export function isIdentity(points: readonly number[]): boolean {
   return points.every((c) => c === 0);
 }

@@ -101,6 +101,11 @@ export interface OffCarry {
 
 export interface Arc {
   travelDeg: number;
+  /**
+   * The angle map's degrees at the CW stop. Marks sit in degrees of travel
+   * from that stop; this added gives the servo's own, 0 at its center.
+   */
+  cwDeg: number;
   /** Raw counts a degree over the whole travel. */
   avgCountsPerDeg: number;
   good: Good[];
@@ -238,11 +243,20 @@ export function frame(travelDeg: number): Box {
   return { x, y, w: Math.max(...xs) + PAD - x, h: Math.max(...ys) + PAD - y };
 }
 
-/** Degree ticks: every 30 deg, 45 over 200 deg of travel, none too near a stop's own label. */
-export function scaleTicks(travelDeg: number): number[] {
+/**
+ * Degree ticks in the angle map's degrees, the CW stop at `cwDeg`: every 30
+ * deg, 45 over 200 deg of travel, none too near a stop's own label.
+ */
+export function scaleTicks(travelDeg: number, cwDeg: number): number[] {
   const step = travelDeg > 200 ? 45 : 30;
   const out: number[] = [];
-  for (let d = step; d < travelDeg - step / 3; d += step) out.push(d);
+  for (
+    let d = Math.ceil((cwDeg + step / 3) / step) * step;
+    d < cwDeg + travelDeg - step / 3;
+    d += step
+  ) {
+    out.push(d);
+  }
   return out;
 }
 
@@ -377,6 +391,7 @@ function buildArc(docs: RunDocs): Arc | string {
   if (points.length !== INTERVALS) return lacks("final/inputs/pos_lut.json points");
   if (holes === undefined) return lacks("results/table.json holes");
   const travelDeg = Math.abs(cal.angleMaxCdeg - cal.angleMinCdeg) / 100;
+  const cwDeg = Math.min(cal.angleMinCdeg, cal.angleMaxCdeg) / 100;
   if (!(travelDeg > 0) || travelDeg > 360) {
     return `The angle map spans ${travelDeg.toFixed(1)}°, which an arc of one turn cannot draw.`;
   }
@@ -516,8 +531,9 @@ function buildArc(docs: RunDocs): Arc | string {
   offCarry.sort(byAngle);
 
   const resolution: Good[] = [];
-  for (let d = TABLE_ROW_EVERY_DEG; d < travelDeg; d += TABLE_ROW_EVERY_DEG) {
-    const g = good.find((m) => d >= m.fromDeg && d < m.toDeg);
+  const every = TABLE_ROW_EVERY_DEG;
+  for (let d = Math.floor(cwDeg / every) * every + every; d < cwDeg + travelDeg; d += every) {
+    const g = good.find((m) => d - cwDeg >= m.fromDeg && d - cwDeg < m.toDeg);
     if (g !== undefined && !resolution.includes(g)) resolution.push(g);
   }
   const stops: Mark[] = [...unjudged, ...pot, ...adc, ...resolution].sort(
@@ -535,6 +551,7 @@ function buildArc(docs: RunDocs): Arc | string {
 
   return {
     travelDeg,
+    cwDeg,
     avgCountsPerDeg,
     good,
     pot,
@@ -594,13 +611,13 @@ export function summary(arc: Arc): string {
   parts.push(
     p === undefined
       ? "no position holes"
-      : `${countsText(arc.pot.length, "position hole", "position holes")}, the longest ${countsText(p.counts, "count", "counts")} (${p.deg.toFixed(2)} degrees) from ${p.fromDeg.toFixed(1)} to ${p.toDeg.toFixed(1)} degrees`,
+      : `${countsText(arc.pot.length, "position hole", "position holes")}, the longest ${countsText(p.counts, "count", "counts")} (${p.deg.toFixed(2)} degrees) from ${(arc.cwDeg + p.fromDeg).toFixed(1)} to ${(arc.cwDeg + p.toDeg).toFixed(1)} degrees`,
   );
   const a = arc.widestAdc;
   parts.push(
     a === undefined
       ? "no ADC wide codes"
-      : `${countsText(arc.adc.length, "ADC wide code", "ADC wide codes")}, the widest ${countsText(a.counts, "code", "codes")} at ${a.fromDeg.toFixed(1)} degrees`,
+      : `${countsText(arc.adc.length, "ADC wide code", "ADC wide codes")}, the widest ${countsText(a.counts, "code", "codes")} at ${(arc.cwDeg + a.fromDeg).toFixed(1)} degrees`,
   );
   if (arc.spread !== undefined) {
     parts.push(
@@ -662,7 +679,7 @@ function dirsText(dirs: readonly number[]): string {
 }
 
 export function paneOf(m: Mark, arc: Arc): Pane {
-  const where = `${degText(m.fromDeg)} to ${degText(m.toDeg)}`;
+  const where = `${degText(arc.cwDeg + m.fromDeg)} to ${degText(arc.cwDeg + m.toDeg)}`;
   switch (m.kind) {
     case "good":
       return {
@@ -702,7 +719,7 @@ export function paneOf(m: Mark, arc: Arc): Pane {
       return {
         title: `ADC wide code above ${String(m.carry)}`,
         lines: [
-          `${degText(m.fromDeg)}, raw ${rawText(m.fromRaw)}..${rawText(m.toRaw)}, ${countsText(m.counts, "code", "codes")} (${m.deg.toFixed(2)}°)`,
+          `${degText(arc.cwDeg + m.fromDeg)}, raw ${rawText(m.fromRaw)}..${rawText(m.toRaw)}, ${countsText(m.counts, "code", "codes")} (${m.deg.toFixed(2)}°)`,
         ],
         says:
           m.slot === 0
@@ -737,12 +754,12 @@ export interface Row {
   note: string;
 }
 
-function rowOf(m: Mark | OffCarry, kind: string, note: string, key: string): Row {
+function rowOf(m: Mark | OffCarry, cwDeg: number, kind: string, note: string, key: string): Row {
   return {
     key,
     kind,
-    fromDeg: m.fromDeg.toFixed(2),
-    toDeg: m.toDeg.toFixed(2),
+    fromDeg: (cwDeg + m.fromDeg).toFixed(2),
+    toDeg: (cwDeg + m.toDeg).toFixed(2),
     fromRaw: rawText(m.fromRaw),
     toRaw: rawText(m.toRaw),
     counts: Number.isInteger(m.counts) ? String(m.counts) : m.counts.toFixed(1),
@@ -752,16 +769,18 @@ function rowOf(m: Mark | OffCarry, kind: string, note: string, key: string): Row
 
 /** Every hole, wide code and not-judged stretch, and a resolution row every 10 deg, in angle order. */
 export function tableRows(arc: Arc): Row[] {
+  const row = (m: Mark | OffCarry, kind: string, note: string, key: string) =>
+    rowOf(m, arc.cwDeg, kind, note, key);
   const marks = arc.stops.map((m) => {
     switch (m.kind) {
       case "good":
-        return rowOf(m, kindText(m), `${m.q.toFixed(2)}× the average counts a degree`, m.key);
+        return row(m, kindText(m), `${m.q.toFixed(2)}× the average counts a degree`, m.key);
       case "pot":
-        return rowOf(m, kindText(m), `${m.deg.toFixed(2)}°`, m.key);
+        return row(m, kindText(m), `${m.deg.toFixed(2)}°`, m.key);
       case "adc":
-        return rowOf(m, kindText(m), `above carry ${String(m.carry)}`, m.key);
+        return row(m, kindText(m), `above carry ${String(m.carry)}`, m.key);
       case "not judged":
-        return rowOf(
+        return row(
           m,
           kindText(m),
           m.why === "turn" ? "the passes turn here" : "no slow pass crossed",
@@ -770,7 +789,7 @@ export function tableRows(arc: Arc): Row[] {
     }
   });
   const off = arc.offCarry.map((o, i) =>
-    rowOf(o, "never read, not above a carry", "part of a position stretch", `off-${String(i)}`),
+    row(o, "never read, not above a carry", "part of a position stretch", `off-${String(i)}`),
   );
   return [...marks, ...off].sort((a, b) => Number(a.fromDeg) - Number(b.fromDeg));
 }

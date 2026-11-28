@@ -15,7 +15,7 @@ import {
   termAt,
   type Term,
 } from "./report";
-import { heatSaid } from "./report-cards";
+import { centerSaid, heatSaid } from "./report-cards";
 import type { RunStep } from "./run-folder";
 
 const RUN = new URL(
@@ -178,5 +178,29 @@ describe("the heat line", () => {
       "Heat model from inputs/thermal.json beside the version 0 nameplate, not identified: fast 2.38 s 20.4 °C/W, slow 128.9 s 76.8 °C/W",
     );
     expect(heatSaid(json("inputs/resolved.json"), undefined)).toBe(NO_HEAT_MODEL);
+  });
+});
+
+describe("where the set puts 0 deg", () => {
+  // The record's contacts 82 / 3792 at 20.1266 counts a deg, a 180 deg window.
+  it("says the center of travel, a tuned offset, and a clamp with what was asked", () => {
+    const set = (center: Record<string, unknown>) => ({ center });
+    expect(
+      centerSaid(set({ counts: 1937, raw: 1940.25, offset_deg: 0, asked_offset_deg: null })),
+    ).toBe("0° at the center of travel, 1937.0 counts, raw 1940.3");
+    expect(
+      centerSaid(set({ counts: 1957.13, raw: 1960, offset_deg: 1, asked_offset_deg: 1 })),
+    ).toBe("0° at +1.00° from the center of travel, 1957.1 counts, raw 1960.0");
+    expect(
+      centerSaid(
+        set({ counts: 1960.5, raw: 1963, offset_deg: 1.17, asked_offset_deg: 5, clamped: true }),
+      ),
+    ).toBe(
+      "0° at +1.17° from the center of travel, clamped from the policy's +5.00°, the furthest the soft window fits, at 1960.5 counts, raw 1963.0",
+    );
+  });
+
+  it("says nothing for a set written before it held a center", () => {
+    expect(centerSaid(json("final/set.json"))).toBeUndefined();
   });
 });

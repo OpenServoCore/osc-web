@@ -29,7 +29,7 @@ test("the arc spans the recorded travel with the pot hole hatched red at the CW 
     "aria-label",
     "Position sensor over 187.0 degrees: 1 position hole, the longest 112.1 counts (5.63 degrees) from 0.0 to 5.7 degrees; 10 ADC wide codes, the widest 11 codes at 101.2 degrees; 0.73 to 1.31 times the average resolution across 90 % of the judged travel.",
   );
-  await expect(arc).toContainText("CW stop 0°");
+  await expect(arc).toContainText("CW stop 0.0°");
   await expect(arc).toContainText("CCW stop 187.0°");
   await expect(arc).toContainText("112.1 counts (5.63°) at raw 6.75..118.80");
 

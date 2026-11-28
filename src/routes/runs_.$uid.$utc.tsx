@@ -135,7 +135,7 @@ function Report({ run, uid, utc }: { run: LoadedRun; uid: string; utc: string })
       <Tiles tiles={headlineTiles(docs, steps)} uid={uid} utc={utc} />
       <ReportCard
         title="Travel map"
-        says="The position sensor over the travel, in horn degrees from the CW stop: where the pot jumps, where the converter skips codes, and how many counts a degree the pot gives everywhere else."
+        says="The position sensor over the travel, in the degrees of the set's angle map: where the pot jumps, where the converter skips codes, and how many counts a degree the pot gives everywhere else."
         card={healthArc(docs, steps)}
       >
         {(a) => <HealthArc arc={a} />}

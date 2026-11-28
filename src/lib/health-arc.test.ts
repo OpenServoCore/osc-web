@@ -10,6 +10,7 @@ import {
   phiOf,
   point,
   R,
+  scaleTicks,
   shadeOf,
   spanOf,
   summary,
@@ -156,6 +157,54 @@ describe("the arc's geometry", () => {
     expect(markAt(arc, far.x, far.y, 8)?.kind).toBe("good");
     const outside = point(2 * R, phiOf(60, 180));
     expect(markAt(arc, outside.x, outside.y, 8)).toBeUndefined();
+  });
+});
+
+describe("the arc's labels", () => {
+  /** The synthetic run with 0 deg at the center of travel, as identification writes the map. */
+  function centered(min: number, max: number): RunDocs {
+    const docs = synthetic();
+    const set = docs.get("final/set.json") as { fields: Record<string, { value: number }> };
+    set.fields.angle_min_cdeg = { value: min };
+    set.fields.angle_max_cdeg = { value: max };
+    return docs;
+  }
+
+  it("ticks in the map's degrees, none too near a stop", () => {
+    expect(scaleTicks(180, -90)).toEqual([-60, -30, 0, 30, 60]);
+    // The record's +/- 92.17 deg: +/- 90 sits 2.17 deg from each stop's label.
+    expect(scaleTicks(184.34, -92.17)).toEqual([-60, -30, 0, 30, 60]);
+    expect(scaleTicks(180, 0)).toEqual([30, 60, 90, 120, 150]);
+    expect(scaleTicks(270, -135)).toEqual([-90, -45, 0, 45, 90]);
+  });
+
+  it("reads every place in the map's degrees, 0 at the center, the marks still from the CW stop", () => {
+    // Counts rising clockwise: the map descends and the hole at raw 1000 sits CCW of the center.
+    const down = arcOf(centered(9000, -9000));
+    expect(down.cwDeg).toBe(-90);
+    expect(tableRows(down).find((r) => r.kind === "position hole")).toMatchObject({
+      fromDeg: "44.95",
+      toDeg: "45.00",
+    });
+    const arc = arcOf(centered(-9000, 9000));
+    expect(arc.pot[0]?.fromDeg).toBeCloseTo(45, 9);
+    const rows = tableRows(arc);
+    expect(rows.find((r) => r.kind === "position hole")).toMatchObject({
+      fromDeg: "-45.00",
+      toDeg: "-44.95",
+    });
+    const every10 = rows.filter((r) => r.kind === "resolution");
+    expect(every10).toHaveLength(17);
+    every10.forEach((r, i) => {
+      const d = -80 + 10 * i;
+      expect(Number(r.fromDeg) <= d && d < Number(r.toDeg), `${d}`).toBe(true);
+    });
+    const hole = arc.pot[0];
+    if (hole === undefined) throw new Error("no hole");
+    expect(paneOf(hole, arc).lines[0]).toMatch(/^-45\.0° to -44\.9°, 1 count/);
+    expect(summary(arc)).toBe(
+      "Position sensor over 180.0 degrees: 1 position hole, the longest 1 count (0.05 degrees) from -45.0 to -44.9 degrees; 2 ADC wide codes, the widest 11 codes at 7.4 degrees; 1.00 to 1.00 times the average resolution across 90 % of the judged travel.",
+    );
   });
 });
 

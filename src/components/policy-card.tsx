@@ -25,6 +25,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { unitSymbol, withUnit } from "@/lib/format";
 import {
   accelOf,
+  CENTER_OFFSET,
+  CENTER_OFFSET_HINT,
   formOf,
   moveSpeedFixed,
   moveSpeedShare,
@@ -32,6 +34,7 @@ import {
   parseShare,
   portability,
   previewOf,
+  retiredCwStop,
   retiredSoftMargin,
   shareText,
   SOFT_TRAVEL,
@@ -39,6 +42,7 @@ import {
   speedUpOf,
   valueAt,
   WARN,
+  withCenterOffset,
   withSoftTravel,
   withValue,
 } from "@/lib/policy-form";
@@ -426,13 +430,17 @@ export function PolicyCard({
               >
                 <SoftTravel ctx={ctx} />
               </Row>
-              <Row label="Angle at the CW stop" why={why("motion.angle_cw_stop_deg")}>
-                <NumberValue
-                  ctx={ctx}
-                  title="Angle at the CW stop"
-                  path="motion.angle_cw_stop_deg"
-                  unit="deg"
-                />
+              <Row
+                label="Center offset"
+                note={retiredCwStop(policy) ?? line(CENTER_OFFSET)?.clamp ?? CENTER_OFFSET_HINT}
+                noteTone={
+                  retiredCwStop(policy) === undefined && line(CENTER_OFFSET)?.clamp === undefined
+                    ? "grey"
+                    : "warning"
+                }
+                why={why(CENTER_OFFSET)}
+              >
+                <CenterOffset ctx={ctx} />
               </Row>
             </Section>
             <Section title="Tuning targets">
@@ -721,6 +729,20 @@ function SoftTravel({ ctx }: { ctx: Ctx }) {
       fields={[{ id: "v", label: "Soft travel", unit: "deg" }]}
       initial={{ v: typeof v === "number" ? String(v) : "" }}
       apply={(vals) => withSoftTravel(ctx.policy, vals.v)}
+    />
+  );
+}
+
+function CenterOffset({ ctx }: { ctx: Ctx }) {
+  const v = valueAt(ctx.policy, CENTER_OFFSET);
+  return (
+    <Editable
+      ctx={ctx}
+      title="Center offset"
+      shown={typeof v === "number" ? withUnit(num(v), "deg") : "0°, the center of travel"}
+      fields={[{ id: "v", label: "Center offset", unit: "deg" }]}
+      initial={{ v: typeof v === "number" ? String(v) : "" }}
+      apply={(vals) => withCenterOffset(ctx.policy, vals.v)}
     />
   );
 }

@@ -200,7 +200,15 @@ describe("where the set puts 0 deg", () => {
     );
   });
 
+  it("says the recorded run's center, the middle of its two first contacts", () => {
+    expect(centerSaid(json("final/set.json"))).toBe(
+      "0 deg at the center of travel, 1926.8 counts, raw 1935.8",
+    );
+  });
+
   it("says nothing for a set written before it held a center", () => {
-    expect(centerSaid(json("final/set.json"))).toBeUndefined();
+    const before = json("final/set.json") as Record<string, unknown>;
+    delete before.center;
+    expect(centerSaid(before)).toBeUndefined();
   });
 });

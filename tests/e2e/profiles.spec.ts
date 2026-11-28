@@ -69,7 +69,7 @@ async function enterMg90(card: Locator): Promise<void> {
   await edit(card, "Brushes and segments", "Segments: not set", {
     "Commutator segments": "3",
   });
-  await edit(card, "Stop to stop", "not set", { "Travel stop to stop": "184.33" });
+  await edit(card, "Rated travel", "not set", { "Rated travel": "180" });
   await choose(card, "Counterclockwise raises the reading", "not set", "Yes");
   await edit(card, "Operating range", "not set", { Lowest: "4.8", Highest: "6.6" });
   await card.getByRole("button", { name: "Add a rating" }).click();
@@ -231,4 +231,43 @@ test("the Library's Profiles link stays open with no adapter", async ({ page }) 
   await page.getByRole("link", { name: "Profiles" }).click();
   await expect(page.getByRole("heading", { name: "Servo profiles" })).toBeVisible();
   await expect(page.getByText("No profiles yet.")).toBeVisible();
+});
+
+test("a profile stored with the stop-to-stop travel asks for the rated travel, and the entry takes it out", async ({
+  page,
+}) => {
+  await openPage(page);
+  const record = JSON.parse(testdata("profile.json").toString()) as Record<string, unknown>;
+  const { rated_travel_deg: _, ...rest } = record;
+  const old = { ...rest, revision: 2, travel_deg: 184.33 };
+  await page.evaluate(async (value) => {
+    const dir = await (
+      await navigator.storage.getDirectory()
+    ).getDirectoryHandle("profiles", {
+      create: true,
+    });
+    const writable = await (
+      await dir.getFileHandle("vorpal-mg90.json", { create: true })
+    ).createWritable();
+    await writable.write(`${JSON.stringify(value, null, 2)}\n`);
+    await writable.close();
+  }, old);
+  await page.reload();
+  const card = page.getByRole("region", { name: "Profile" });
+  const row = card.getByRole("group", { name: "Rated travel" });
+  await expect(row).toContainText(
+    "the profile states travel_deg, the stop-to-stop travel, which this tool now measures: take it out and enter rated_travel_deg",
+  );
+  await expect(card.getByText("1 missing")).toBeVisible();
+
+  await edit(card, "Rated travel", "not set", { "Rated travel": "180" });
+  await expect(row.getByRole("button", { name: "180°" })).toBeVisible();
+  await expect(card.getByText("ready", { exact: true })).toBeVisible();
+  const stored = await page.evaluate(async () => {
+    const dir = await (await navigator.storage.getDirectory()).getDirectoryHandle("profiles");
+    const file = await (await dir.getFileHandle("vorpal-mg90.json")).getFile();
+    return JSON.parse(await file.text()) as Record<string, unknown>;
+  });
+  expect(stored.travel_deg).toBeUndefined();
+  expect(stored.rated_travel_deg).toBe(180);
 });

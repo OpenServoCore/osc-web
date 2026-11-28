@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { ConnectionPopover } from "@/components/connection-popover";
 import { FirmwareItem } from "@/components/firmware-dialog";
+import { Logo, LogoMark } from "@/components/logo";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -81,11 +82,9 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" variant="floating">
       <SidebarHeader>
-        <div className="flex h-8 items-center gap-2 px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
-          <Cog className="size-5 shrink-0" />
-          <span className="truncate font-semibold group-data-[collapsible=icon]:hidden">
-            OpenServoCore
-          </span>
+        <div className="flex h-8 items-center px-2 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+          <Logo className="h-7 w-auto shrink-0 group-data-[collapsible=icon]:hidden" />
+          <LogoMark className="hidden size-7 shrink-0 group-data-[collapsible=icon]:block" />
         </div>
       </SidebarHeader>
       <SidebarContent>

@@ -33,7 +33,7 @@ async function openRun(page: Page, speed = "3 M", profile = PROFILE): Promise<vo
   await page.getByRole("button", { name: "ID 1" }).click();
   const card = page.getByRole("region", { name: "Identification" });
   await card.getByRole("combobox", { name: "Profile" }).click({ timeout: 15_000 });
-  await page.getByRole("option", { name: "vorpal-mg90 rev 2", exact: true }).click();
+  await page.getByRole("option", { name: "vorpal-mg90 rev 3", exact: true }).click();
   await card.getByRole("button", { name: "Identify" }).click();
   // A cold dev server compiles the run screen's chunk on this first request.
   await expect(page.getByRole("heading", { name: "Identify ID 1" })).toBeVisible({
@@ -94,7 +94,7 @@ test("a run on the simulated servo steps through rest, ends at the probe, and it
 }) => {
   await openRun(page);
   await expect(page.getByLabel("Run inputs")).toHaveText(
-    "profile vorpal-mg90 rev 2 . policy Default . board facts read from the servo",
+    "profile vorpal-mg90 rev 3 . policy Default . board facts read from the servo",
   );
   const worker = page.waitForEvent("worker");
   await page.getByRole("button", { name: "Start" }).click();
@@ -386,7 +386,7 @@ test("a stopped run in the list offers Resume; the page says what the module ref
     const file = await dir.getFileHandle("vorpal-mg90.json");
     const text = await (await file.getFile()).text();
     const w = await file.createWritable();
-    await w.write(text.replace('"revision": 2', '"revision": 3'));
+    await w.write(text.replace('"revision": 3', '"revision": 4'));
     await w.close();
   });
 

@@ -84,14 +84,12 @@ test("each step's drill-in opens from the report and shows its numbers", async (
   await back();
 
   await drillFromReport(page, "Table");
-  await expect(page.getByRole("region", { name: "Estimates" })).toContainText(
-    "results/table.json writes no estimates.",
-  );
+  await expectEstimate(page, "pot_step4_counts", ["5.0000", "", "30", "raw counts"]);
   await expect(row(page.getByRole("table", { name: "Checks" }), "table residual")).toContainText(
-    "2.97 counts rms",
+    "2.96 counts rms",
   );
   await expect(page.getByRole("table", { name: "Table scale" })).toContainText(
-    "scale.counts_per_deg19.9519",
+    "scale.counts_per_deg19.9094",
   );
   await back();
 
@@ -142,6 +140,9 @@ test("each step's drill-in opens from the report and shows its numbers", async (
   await back();
 
   await drillFromReport(page, "Final check");
+  await expect(page.getByRole("region", { name: "Estimates" })).toContainText(
+    "final/results/verify.json writes no estimates.",
+  );
   const scores = page.getByRole("table", { name: "Move scores" });
   await expect(scores.getByRole("row")).toHaveCount(13);
   await expect(row(scores, "10% + out")).toContainText("0.5889");

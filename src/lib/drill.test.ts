@@ -46,11 +46,23 @@ describe("a step's estimates and checks", () => {
     expect(ke).toMatchObject({ value: "1.1577e-3", sd: "± 7.5884e-6", n: "11", unit: "V s/rad" });
   });
 
-  it("leaves the spread blank where nothing repeated and says so where the step wrote null", () => {
+  it("leaves the spread blank where the step wrote none and says so where the step wrote null", () => {
     const rows = estimateRows(json("results/rest.json"));
     expect(rows.find((r) => r.name === "vdd_v")).toMatchObject({ sd: "", n: "1" });
     expect(rows.find((r) => r.name === "vdd_frame_ripple_mv_pp")?.value).toBe("none written");
-    expect(estimateRows(json("results/table.json"))).toEqual([]);
+    expect(estimateRows(json("results/table.json"))).toEqual([
+      expect.objectContaining({
+        name: "pot_step4_counts",
+        value: "5.0000",
+        sd: "",
+        n: "30",
+        unit: "raw counts",
+      }),
+    ]);
+  });
+
+  it("gives no rows for a step that writes no estimates", () => {
+    expect(estimateRows(json("final/results/verify.json"))).toEqual([]);
   });
 
   it("keeps the checks word for word", () => {

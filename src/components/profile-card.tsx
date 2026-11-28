@@ -34,6 +34,7 @@ import {
   parseStages,
   PLASTIC_STOPPER,
   pulsesPerTurn,
+  RATED_TRAVEL,
   ratings,
   secondsPer60,
   stagesText,
@@ -42,6 +43,7 @@ import {
   teethProduct,
   withField,
   withoutRating,
+  withRatedTravel,
   withRatio,
   withRating,
   withStages,
@@ -91,8 +93,8 @@ export function ProfileCard({
             </PopoverTrigger>
             <PopoverContent side="bottom" align="start">
               A profile holds the facts about a servo model that no measurement gives: the gears,
-              the motor's counts, the travel and the maker's ratings. One profile serves every servo
-              of that model.
+              the motor's counts, the rated travel and the maker's ratings. One profile serves every
+              servo of that model.
             </PopoverContent>
           </Popover>
         </CardTitle>
@@ -193,14 +195,20 @@ export function ProfileCard({
         </Section>
 
         <Section title="Travel and direction">
-          <Row label="Stop to stop" issue={fieldIssue(p, "travel_deg")} grey={grey("travel_deg")}>
+          <Row
+            label="Rated travel"
+            issue={fieldIssue(p, "rated_travel_deg")}
+            note={RATED_TRAVEL}
+            noteTone="grey"
+            grey={grey("rated_travel_deg")}
+          >
             <NumberEditor
-              title="Travel stop to stop"
+              title="Rated travel"
               unit="deg"
-              value={p.travel_deg}
-              shown={p.travel_deg == null ? NOT_SET : `${p.travel_deg.toFixed(1)}°`}
-              field="travel_deg"
-              apply={(v) => withField(p, "travel_deg", v)}
+              value={p.rated_travel_deg}
+              shown={p.rated_travel_deg == null ? NOT_SET : `${formatNumber(p.rated_travel_deg)}°`}
+              field="rated_travel_deg"
+              apply={(v) => withRatedTravel(p, v)}
               onSave={save}
             />
           </Row>

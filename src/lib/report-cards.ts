@@ -567,6 +567,7 @@ export function inputs(docs: RunDocs, steps: readonly RunStep[]): Card<Inputs> {
     const cc = docs.get("inputs/cross-checks.json");
     const checks: CrossCheck[] = [];
     if (at(cc, "travel") !== undefined) checks.push(crossCheck("travel", at(cc, "travel")));
+    if (at(cc, "pacing") !== undefined) checks.push(crossCheck("pacing", at(cc, "pacing")));
     for (const c of list(cc, "free_speed")) {
       checks.push(crossCheck(rowWhat("free speed", "V / Ke", c), c));
     }

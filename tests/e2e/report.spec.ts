@@ -47,10 +47,10 @@ test("a recorded run's report shows its measured values with their spread, the m
   );
   await expect(check).toContainText("at v_kp_q88 50, the tune's try 7");
   await expect(tile(page, "Longest position hole")).toContainText(
-    "4.97°112.1 counts at raw 6.75..118.80; 1 hole listed",
+    "5.63°112.1 counts at raw 6.75..118.80; 1 hole listed",
   );
   await expect(tile(page, "Widest ADC wide code")).toContainText(
-    "11 codes0.55° at raw 2048..2058; 10 listed",
+    "11 codes0.55° at raw 2048..2058; 11 listed",
   );
 
   await page.getByRole("button", { name: "Show as table" }).click();
@@ -65,14 +65,17 @@ test("a recorded run's report shows its measured values with their spread, the m
   await expect(scores).toContainText("Rest error: 0.15°");
 
   await expect(page.getByLabel("Friction line")).toContainText(
-    "Line 37.5980 mA + 0.2614 mA per °/s, rms 1.0407 mA over 14 legs.",
+    "Line 37.5980 mA + 0.2608 mA per °/s, rms 1.0407 mA over 14 legs.",
   );
 
   const inputs = page.getByRole("region", { name: "Inputs" });
   await expect(inputs).toContainText("Move speed200°/s");
   const checks = inputs.getByRole("table", { name: "Cross-checks" });
   await expect(checks.getByRole("row").filter({ hasText: /^travel/ })).toContainText(
-    "186.9993° n 1184.3329°+1.45 %",
+    "183.0071° ± 0.0117, n 3180.0000°+1.67 %",
+  );
+  await expect(checks.getByRole("row").filter({ hasText: /^pacing/ })).toContainText(
+    "19.9094 counts/° n 122.7556 counts/°-12.51 %",
   );
   await expect(
     checks.getByRole("row").filter({ hasText: "free speed at 4.8 V, V / Ke" }),

@@ -54,7 +54,7 @@ test("a rule share of 0 is refused in the CLI's words", () => {
 });
 
 test("an incomplete profile names its first missing field with the run's sentence", () => {
-  const r = readiness({ ...PROFILE, gear_ratio: null, travel_deg: null }, RECORD_POLICY);
+  const r = readiness({ ...PROFILE, gear_ratio: null, rated_travel_deg: null }, RECORD_POLICY);
   expect(r.blocker).toEqual({
     kind: "missing",
     field: "gear_ratio",
@@ -72,8 +72,8 @@ test("a blank heat model blocks the run, checked after every other fact", () => 
     field: "thermal",
     text: NO_HEAT_MODEL,
   });
-  const both = readiness({ ...PROFILE, thermal: null, travel_deg: null }, RECORD_POLICY);
-  expect(both.blocker).toMatchObject({ kind: "missing", field: "travel_deg" });
+  const both = readiness({ ...PROFILE, thermal: null, rated_travel_deg: null }, RECORD_POLICY);
+  expect(both.blocker).toMatchObject({ kind: "missing", field: "rated_travel_deg" });
 });
 
 test("a plastic train is refused first: no field it lacks would make it identifiable", () => {

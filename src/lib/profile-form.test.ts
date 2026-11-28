@@ -25,6 +25,7 @@ import {
   secondsPer60,
   slug,
   teethProduct,
+  withRatedTravel,
   withRatio,
   withRating,
   withStages,
@@ -117,8 +118,8 @@ test("a blank profile lacks every required fact, each with the CLI's own sentenc
   expect(fieldIssue(blank, "gear_class")).toMatch(/^Without the gear material/);
   expect(fieldIssue(blank, "counts")).toMatch(/^Without both counts the run cannot measure/);
   expect(fieldIssue({ ...blank, brushes: 2 }, "counts")).toMatch(/^Without both counts/);
-  expect(fieldIssue({ ...blank, travel_deg: 400 }, "travel_deg")).toMatch(
-    /^A horn cannot turn more than one turn/,
+  expect(fieldIssue({ ...blank, rated_travel_deg: 400 }, "rated_travel_deg")).toMatch(
+    /^The run sets the soft limits to the rated travel and paces its first moves by it: the profile has no usable rated_travel_deg/,
   );
   expect(fieldIssue(blank, "no_load")).toBe(NO_RATING);
   expect(fieldIssue(blank, "thermal")).toBe(NO_HEAT_MODEL);
@@ -165,6 +166,39 @@ test("the record's profile and its version 0 nameplate need nothing more", () =>
   });
   expect(v0.profile.gear_ratio).toBe(RECORD.gear_ratio);
   expect(v0.profile.no_load).toEqual(RECORD.no_load);
+});
+
+test("a profile stored with the stop-to-stop travel_deg asks for the rated travel in the run's words", () => {
+  const stored = {
+    ...RECORD,
+    rated_travel_deg: null,
+    travel_deg: 184.33,
+    provenance: {
+      ...RECORD.provenance,
+      fields: { ...RECORD.provenance?.fields, travel_deg: { how: "user" } },
+    },
+  } as ServoProfile;
+  const retired =
+    "the profile states travel_deg, the stop-to-stop travel, which this tool now measures: take it out and enter rated_travel_deg, the travel the maker's sheet states (180 for a servo sold as 180 deg)";
+  expect(fieldIssue(stored, "rated_travel_deg")).toBe(retired);
+  expect(missing(stored)).toEqual(["rated_travel_deg"]);
+  const entered = withRatedTravel(stored, 180);
+  expect(entered.rated_travel_deg).toBe(180);
+  expect("travel_deg" in entered).toBe(false);
+  expect(entered.provenance?.fields?.travel_deg).toBeUndefined();
+  expect(entered.provenance?.fields?.rated_travel_deg).toEqual({ how: "user" });
+  expect(missing(entered)).toEqual([]);
+});
+
+test("a version 0 nameplate's travel_deg is noted on import and never carried as the rating", () => {
+  const m = migrate(testdata("nameplate-stop-to-stop.json"), undefined);
+  expect(m.profile.rated_travel_deg ?? null).toBeNull();
+  expect(m.notes).toContain(
+    "the version 0 nameplate's travel_deg (184.33) is the travel stop to stop; the profile takes the maker's rated travel: enter rated_travel_deg",
+  );
+  expect(fieldIssue(m.profile, "rated_travel_deg")).toMatch(/no usable rated_travel_deg/);
+  expect(RECORD.rated_travel_deg).toBe(180);
+  expect(RECORD.provenance?.fields?.rated_travel_deg?.how).toBe("user");
 });
 
 test("a rating writes a no-load and a stall row at its voltage, replacing the rows there", () => {

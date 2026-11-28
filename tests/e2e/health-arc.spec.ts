@@ -27,11 +27,11 @@ test("the arc spans the recorded travel with the pot hole hatched red at the CW 
   const { arc, pane } = await openArc(page);
   await expect(arc).toHaveAttribute(
     "aria-label",
-    "Position sensor over 187.0 degrees: 1 position hole, the longest 112.1 counts (4.97 degrees) from 0.0 to 5.0 degrees; 10 ADC wide codes, the widest 11 codes at 100.5 degrees; 0.72 to 1.32 times the average resolution across 90 % of the judged travel.",
+    "Position sensor over 187.0 degrees: 1 position hole, the longest 112.1 counts (5.63 degrees) from 0.0 to 5.7 degrees; 10 ADC wide codes, the widest 11 codes at 101.2 degrees; 0.73 to 1.31 times the average resolution across 90 % of the judged travel.",
   );
   await expect(arc).toContainText("CW stop 0 deg");
   await expect(arc).toContainText("CCW stop 187.0 deg");
-  await expect(arc).toContainText("112.1 counts (4.97 deg) at raw 6.75..118.80");
+  await expect(arc).toContainText("112.1 counts (5.63 deg) at raw 6.75..118.80");
 
   const hole = arc.locator('[data-kind="pot"]');
   await expect(hole).toHaveAttribute("data-raw", /^6\.75\d*\.\.118\.80\d*$/);
@@ -59,11 +59,11 @@ test("the arc spans the recorded travel with the pot hole hatched red at the CW 
   expect(holeBox.x).toBeGreaterThan(svgBox.x + svgBox.width / 2);
   await page.mouse.move(holeBox.x + holeBox.width / 2, holeBox.y + holeBox.height / 2);
   await expect(pane).toContainText("Position hole");
-  await expect(pane).toContainText("0.0 deg to 5.0 deg, 112.1 counts (4.97 deg)");
+  await expect(pane).toContainText("0.0 deg to 5.7 deg, 112.1 counts (5.63 deg)");
   await expect(pane).toContainText("raw 6.75..118.80");
   await expect(pane).toContainText("the motor turned 5 ripple cycles (0.97 deg at the horn)");
   await expect(pane).toContainText("seen on passes 1, 3, 5 and 7, with the counts falling");
-  await expect(pane).toContainText("a hole where they run over 7.08x typical (1 + 4 x 1.52)");
+  await expect(pane).toContainText("a hole where they run over 6.89x typical (1 + 4 x 1.47)");
 });
 
 test("the converter's wide codes are violet ticks at the carries", async ({ page }) => {
@@ -88,7 +88,7 @@ test("the converter's wide codes are violet ticks at the carries", async ({ page
   if (widest === null) throw new Error("not laid out");
   await page.mouse.move(widest.x + widest.width / 2, widest.y + widest.height / 2);
   await expect(pane).toContainText("ADC wide code above 2047");
-  await expect(pane).toContainText("100.5 deg, raw 2048..2058, 11 codes (0.55 deg)");
+  await expect(pane).toContainText("101.2 deg, raw 2048..2058, 11 codes (0.55 deg)");
   await expect(pane).toContainText(
     "The stored slot reads the stuck code as the middle of the gap.",
   );
@@ -102,11 +102,11 @@ test("the keyboard steps the pane through the marks in angle order", async ({ pa
   await expect(pane).toContainText("No wide code judged");
   await expect(pane).toContainText("No slow pass crossed these codes.");
   await page.keyboard.press("ArrowLeft");
+  await expect(pane).toContainText("Position hole");
+  await page.keyboard.press("ArrowLeft");
   await expect(pane).toContainText(
     "The passes turn here, so no wide code is judged within 15 counts of a turn.",
   );
-  await page.keyboard.press("ArrowLeft");
-  await expect(pane).toContainText("Position hole");
   await page.keyboard.press("ArrowLeft");
   await expect(pane).toContainText("counts a degree here");
   await page.keyboard.press("ArrowLeft");
@@ -125,7 +125,7 @@ test("the table view lists every mark and the resolution every 10 deg", async ({
   await card.getByRole("button", { name: "Show as table" }).click();
   const rows = card.getByRole("table", { name: "Travel map as a table" }).getByRole("row");
   await expect(rows.filter({ hasText: "position hole" })).toHaveText(
-    "position hole0.045.026.75118.80112.14.97 deg",
+    "position hole0.045.656.75118.80112.15.63 deg",
   );
   await expect(rows.filter({ hasText: /^ADC wide code/ })).toHaveCount(10);
   await expect(rows.filter({ hasText: "above carry 2047" })).toContainText("2048205811");

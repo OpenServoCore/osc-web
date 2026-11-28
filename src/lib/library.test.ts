@@ -22,7 +22,7 @@ const mg90: ServoProfile = {
   gear_ratio: 308.0533,
   brushes: 2,
   rotor_segments: 3,
-  travel_deg: 184.33,
+  rated_travel_deg: 180,
   count_rises_ccw: true,
   operating_v: { min: 4.8, max: 6.6 },
   no_load: [{ at_v: 4.8, seconds: 0.1, per_deg: 60 }],
@@ -70,9 +70,9 @@ test("each save that changes the file bumps the revision; an unchanged save does
   const same = await shelf.save({ ...mg90, revision: first.value.revision });
   expect(same.value.revision).toBe(1);
   expect(same.sha256).toBe(first.sha256);
-  const second = await shelf.save({ ...mg90, travel_deg: 184.5 });
+  const second = await shelf.save({ ...mg90, rated_travel_deg: 170 });
   expect(second.value.revision).toBe(2);
-  expect(second.value.travel_deg).toBe(184.5);
+  expect(second.value.rated_travel_deg).toBe(170);
   const third = await shelf.save({ ...second.value, gear_ratio: 308.05 });
   expect(third.value.revision).toBe(3);
   expect((await shelf.get("vorpal-mg90"))?.value.revision).toBe(3);
@@ -152,7 +152,7 @@ test("setup.json is kept per servo under its uid", async () => {
   expect(await readSetup(root, uid1)).toEqual({ profile, policy });
   expect(await readSetup(root, uid2)).toEqual({ profile, policy: null });
 
-  const changed = refOf(await profiles(root).save({ ...mg90, travel_deg: 184.5 }));
+  const changed = refOf(await profiles(root).save({ ...mg90, rated_travel_deg: 170 }));
   await writeSetup(root, uid2, { profile: changed, policy: null });
   expect((await readSetup(root, uid2))?.profile?.revision).toBe(2);
   expect((await readSetup(root, uid1))?.profile).toEqual(profile);

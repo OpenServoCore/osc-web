@@ -12,7 +12,7 @@ import { fieldIssue, identifiable, NOT_METAL, REQUIRED, slug, type Required } fr
 export const FIELD_NAME: Record<Required, string> = {
   gear_class: "gear material",
   gear_ratio: "gear ratio",
-  travel_deg: "travel stop to stop",
+  rated_travel_deg: "rated travel",
   count_rises_ccw: "count direction",
   counts: "brush and segment counts",
   operating_v: "operating range",

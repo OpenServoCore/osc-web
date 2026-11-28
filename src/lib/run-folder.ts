@@ -49,6 +49,7 @@ export interface StoredRun {
 }
 
 const TITLES: Readonly<Record<string, string>> = {
+  resume: "Resume",
   rest: "Rest",
   probe: "Probe",
   stops: "Stops",

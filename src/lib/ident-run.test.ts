@@ -1,12 +1,21 @@
 import type { RunOutcome } from "@openservocore/client-ident";
 import { expect, test } from "vitest";
 import { RUN_UID, RUN_UTC, syntheticRun } from "../../tests/fixtures/synthetic-run";
-import { handOver, outcomeRun, runArgs, storeOutcome, type Lender } from "./ident-run";
+import {
+  handOver,
+  outcomeRun,
+  resumeArgs,
+  rewriteOutcome,
+  runArgs,
+  stopped,
+  type Lender,
+} from "./ident-run";
 import type { ServoProfile, Stored, TuningPolicy } from "./library";
-import { listTree, readFile } from "./opfs";
+import { listTree, readFile, writeFile } from "./opfs";
 import { memoryOpfs } from "./opfs-fake";
 import { DEFAULT_POLICY } from "./policy-form";
-import { listRuns } from "./run-folder";
+import { listRuns, locateRun } from "./run-folder";
+import { mirrorInto } from "./run-mirror";
 
 const DEVICE = { productName: "osc-adapter" } as USBDevice;
 
@@ -106,7 +115,7 @@ test("the run's folder goes into storage at its <uid>/<UTC>/ path, byte for byte
   const at = `${RUN_UID}/${RUN_UTC}`;
   const run = syntheticRun();
   const root = memoryOpfs();
-  const stored = await storeOutcome(
+  const stored = await rewriteOutcome(
     root,
     outcome(
       run.map((f) => ({ path: `${at}/${f.path}`, bytes: f.bytes })),
@@ -122,6 +131,112 @@ test("the run's folder goes into storage at its <uid>/<UTC>/ path, byte for byte
 test("a run refused before it named a folder stores nothing", async () => {
   const root = memoryOpfs();
   expect(outcomeRun(outcome([]))).toBeUndefined();
-  expect(await storeOutcome(root, outcome([]))).toBeUndefined();
+  expect(await rewriteOutcome(root, outcome([]))).toBeUndefined();
   expect(await listRuns(root)).toEqual([]);
+});
+
+const AT = `${RUN_UID}/${RUN_UTC}`;
+const bytesOf = (s: string) => new TextEncoder().encode(s);
+
+test("the mirror applies each change as the run tells it, and a move takes the folder whole", async () => {
+  const root = memoryOpfs();
+  const m = mirrorInto(root);
+  await m.onStore({ op: "write", path: `${AT}/captures/probe/01.csv.gz`, bytes: bytesOf("a") });
+  await m.onStore({ op: "write", path: `${AT}/run.json`, bytes: bytesOf("{}") });
+  await m.onStore({ op: "write", path: `${AT}/run.json`, bytes: bytesOf('{"n": 2}') });
+  await m.onStore({
+    op: "move",
+    from: `${AT}/captures/probe`,
+    to: `${AT}/segments/1/captures/probe`,
+  });
+  expect(m.failure()).toBeUndefined();
+  expect((await listTree(root, AT)).map((f) => f.path)).toEqual([
+    "run.json",
+    "segments/1/captures/probe/01.csv.gz",
+  ]);
+  expect(await readFile(root, `${AT}/run.json`)).toEqual(bytesOf('{"n": 2}'));
+});
+
+test("a change the mirror cannot apply is kept, and the ones after it still go", async () => {
+  const root = memoryOpfs();
+  const m = mirrorInto(root);
+  await m.onStore({ op: "move", from: `${AT}/captures/none`, to: `${AT}/segments/1/none` });
+  await m.onStore({ op: "write", path: `${AT}/run.json`, bytes: bytesOf("{}") });
+  expect(m.failure()).toBe(
+    `${AT}/captures/none to ${AT}/segments/1/none: nothing at ${AT}/captures/none to move`,
+  );
+  expect(await readFile(root, `${AT}/run.json`)).toEqual(bytesOf("{}"));
+});
+
+test("a mirror that failed is written over with the outcome's folder whole", async () => {
+  const root = memoryOpfs();
+  await writeFile(root, `${AT}/stray.json`, bytesOf("{}"));
+  const run = syntheticRun();
+  const stored = await rewriteOutcome(
+    root,
+    outcome(
+      run.map((f) => ({ path: `${AT}/${f.path}`, bytes: f.bytes })),
+      AT,
+    ),
+  );
+  expect(stored?.identity).toMatchObject({ uid: RUN_UID, utc: RUN_UTC });
+  expect((await listTree(root, AT)).map((f) => f.path)).toEqual(run.map((f) => f.path).sort());
+});
+
+test("a run that did not get through the final check is offered a resume; a whole one is not", () => {
+  const whole = locateRun(syntheticRun().map((f) => ({ path: `${AT}/${f.path}`, bytes: f.bytes })));
+  expect(stopped(whole.identity)).toBe(false);
+  expect(
+    stopped({ ...whole.identity, steps: [{ name: "rest", state: "accepted", why: null }] }),
+  ).toBe(true);
+  expect(
+    stopped({
+      ...whole.identity,
+      steps: whole.identity.steps.map((s) =>
+        s.name === "final" ? { ...s, state: "refused", why: "refused: overshoot" } : s,
+      ),
+    }),
+  ).toBe(true);
+});
+
+test("a resume is given the profile and policy run.json records, from the library, and the folder whole", async () => {
+  const root = memoryOpfs();
+  const doc = {
+    servo_uid: RUN_UID,
+    given: {
+      nameplate: { path: "profiles/vorpal-mg90.json", sha1: "x" },
+      policy: { path: "policies/default.json", sha1: "y" },
+      tries: 6,
+    },
+    steps: { rest: { state: "accepted" }, probe: { state: "running" } },
+  };
+  await writeFile(root, `${AT}/run.json`, bytesOf(JSON.stringify(doc)));
+  await writeFile(root, `${AT}/results/rest.json`, bytesOf("{}"));
+  await writeFile(root, "profiles/vorpal-mg90.json", bytesOf('{"key": "vorpal-mg90"}'));
+  const a = await resumeArgs(root, 3, AT, undefined);
+  expect(a).toMatchObject({
+    id: 3,
+    nameplate: "profiles/vorpal-mg90.json",
+    policy: "policies/default.json",
+    folder: AT,
+  });
+  const paths = a.files.map((f) => f.path);
+  expect(paths).toEqual([
+    "profiles/vorpal-mg90.json",
+    "policies/default.json",
+    `${AT}/results/rest.json`,
+    `${AT}/run.json`,
+  ]);
+  // The Default policy as a new run is given it.
+  const given = runArgs(3, { value: { key: "vorpal-mg90" } } as Stored<ServoProfile>, null);
+  expect(a.files[1]?.bytes).toEqual(given.files[1]?.bytes);
+
+  // A folder whose run.json names no files is given the servo's setup now, for the module to refuse.
+  await writeFile(root, `${AT}/run.json`, bytesOf(JSON.stringify({ ...doc, given: undefined })));
+  const b = await resumeArgs(root, 3, AT, {
+    nameplate: "profiles/vorpal-mg90.json",
+    policy: "policies/strict.json",
+  });
+  expect([b.nameplate, b.policy]).toEqual(["profiles/vorpal-mg90.json", "policies/strict.json"]);
+  expect(b.files.map((f) => f.path)).not.toContain("policies/strict.json");
 });

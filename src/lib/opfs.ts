@@ -149,3 +149,48 @@ export async function removeDir(root: OpfsDir, path: string): Promise<void> {
     if (!notFound(e)) throw e;
   }
 }
+
+/** The file's bytes; null where no file is there, a folder too. */
+async function fileAt(root: OpfsDir, path: string): Promise<Uint8Array<ArrayBuffer> | null> {
+  try {
+    return await readFile(root, path);
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "TypeMismatchError") return null;
+    throw e;
+  }
+}
+
+/** Removes a file; a file that does not exist is no error. */
+export async function removeFile(root: OpfsDir, path: string): Promise<void> {
+  const parts = segments(path);
+  const name = parts.pop() ?? "";
+  const parent = await openDir(root, parts);
+  if (parent === null) return;
+  try {
+    await parent.removeEntry(name);
+  } catch (e) {
+    if (!notFound(e)) throw e;
+  }
+}
+
+/**
+ * Moves the file at `from`, or the folder there whole, to `to`, bytes untouched: each file is
+ * copied, then the old one removed. Refused when nothing is at `from`, or something is at `to`.
+ */
+export async function movePath(root: OpfsDir, from: string, to: string): Promise<void> {
+  const there = (await fileAt(root, to)) !== null || (await listTree(root, to)).length > 0;
+  if (there) throw new Error(`${to} exists`);
+  const file = await fileAt(root, from);
+  if (file !== null) {
+    await writeFile(root, to, file);
+    await removeFile(root, from);
+    return;
+  }
+  const tree = await listTree(root, from);
+  if (tree.length === 0) throw new Error(`nothing at ${from} to move`);
+  for (const f of tree) {
+    const bytes = await readFile(root, `${from}/${f.path}`);
+    if (bytes !== null) await writeFile(root, `${to}/${f.path}`, bytes);
+  }
+  await removeDir(root, from);
+}

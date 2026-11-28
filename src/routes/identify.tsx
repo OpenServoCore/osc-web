@@ -1,30 +1,50 @@
 import type { BaudRate } from "@openservocore/client";
-import type { RunArgs } from "@openservocore/client-ident";
-import { createFileRoute, Link, useBlocker } from "@tanstack/react-router";
-import { ArrowLeft, ScanSearch } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import type { ResumeArgs, RunArgs } from "@openservocore/client-ident";
+import { createFileRoute, Link, useBlocker, useNavigate } from "@tanstack/react-router";
+import { ArrowLeft, RotateCcw, ScanSearch } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { StepMark } from "@/components/step-mark";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FIELD_NAME, readiness, type Blocker } from "@/lib/ident-setup";
-import { runArgs } from "@/lib/ident-run";
+import { resumeArgs, runArgs, stopped } from "@/lib/ident-run";
 import { policies, profiles } from "@/lib/library";
 import { DEFAULT_KEY, DEFAULT_POLICY } from "@/lib/policy-form";
 import { stoppedAt } from "@/lib/report";
-import { current, doneShare, STEP_TEXT, stateText, type Feed } from "@/lib/run-feed";
-import { phrase, stepTitle } from "@/lib/run-folder";
+import {
+  current,
+  doneShare,
+  feedOfSteps,
+  STEP_TEXT,
+  unitText,
+  type Feed,
+  type FeedStep,
+} from "@/lib/run-feed";
+import { phrase, stepTitle, utcText, type RunIdentity } from "@/lib/run-folder";
 import { useSession } from "@/lib/session";
 import { rateIssue } from "@/lib/stream";
 import { useIdentRun, type RunTarget, type RunView } from "@/lib/use-ident-run";
-import { useLibrary } from "@/lib/use-library";
+import { storage, useLibrary } from "@/lib/use-library";
+import { useResumePlan } from "@/lib/use-resume-plan";
+import { useRuns } from "@/lib/use-runs";
 import { useSetup } from "@/lib/use-setup";
 
-export const Route = createFileRoute("/identify")({ component: IdentifyPage });
+export const Route = createFileRoute("/identify")({
+  component: IdentifyPage,
+  // The rest of the query (`?sim`) passes through untouched.
+  validateSearch: (search: Record<string, unknown>): { resume?: string } => ({
+    ...search,
+    resume: typeof search.resume === "string" ? search.resume : undefined,
+  }),
+});
 
 function IdentifyPage() {
   const session = useSession();
   const { status, servos, selected, baud, simulated, discover } = session;
-  const { view, start, cancel } = useIdentRun(simulated, () => {
+  const { resume: wanted } = Route.useSearch();
+  const navigate = useNavigate();
+  const { view, start, resume, cancel, reset } = useIdentRun(simulated, () => {
     void discover();
   });
   const [warned, setWarned] = useState(false);
@@ -40,12 +60,25 @@ function IdentifyPage() {
   });
 
   const live = status === "ready" || status === "scanning";
-  const chosen = live ? servos.find((s) => s.id === selected) : undefined;
+  const wantedUid = wanted?.split("/")[0];
+  const chosen = live
+    ? servos.find((s) => (wantedUid === undefined ? s.id === selected : s.uid === wantedUid))
+    : undefined;
   const target: RunTarget | undefined =
     view.target ?? (chosen === undefined ? undefined : { id: chosen.id, uid: chosen.uid });
   if (target === undefined) {
-    return <p className="text-text-3">Pick a servo in the left pane.</p>;
+    return (
+      <p className="text-text-3">
+        {live && wantedUid !== undefined
+          ? `Servo ${wantedUid} is not on the bus: connect it to resume its run.`
+          : "Pick a servo in the left pane."}
+      </p>
+    );
   }
+  const offerResume = (at: string) => {
+    reset();
+    void navigate({ to: "/identify", search: (s) => ({ ...s, resume: at }) });
+  };
   return (
     <>
       <div className="mb-4 flex items-center gap-3">
@@ -69,14 +102,23 @@ function IdentifyPage() {
         </p>
       )}
       {view.phase === "ready" ? (
-        <BeforeStart
-          key={target.uid}
-          target={target}
-          baud={live ? baud : undefined}
-          onStart={(args) => void start(target, args)}
-        />
+        <div className="flex flex-col gap-4">
+          <BeforeStart
+            key={target.uid}
+            target={target}
+            baud={live ? baud : undefined}
+            onStart={(args) => void start(target, args)}
+          />
+          <StoppedRun
+            key={`${target.uid} ${wanted ?? ""}`}
+            target={target}
+            baud={live ? baud : undefined}
+            at={wanted}
+            onResume={(args) => void resume(target, args)}
+          />
+        </div>
       ) : (
-        <RunScreen view={view} onCancel={cancel} />
+        <RunScreen view={view} onCancel={cancel} onResume={offerResume} />
       )}
     </>
   );
@@ -108,6 +150,13 @@ function TabNotes() {
   );
 }
 
+/** Why a run cannot start at the bus speed `baud`, if it cannot. */
+function rateRefusal(baud: BaudRate | undefined): string | undefined {
+  if (baud === undefined) return "The bus speed is not known yet.";
+  const issue = rateIssue(baud);
+  return issue === undefined ? undefined : `An identification captures on TEL bursts. ${issue}`;
+}
+
 function BeforeStart({
   target,
   baud,
@@ -132,15 +181,7 @@ function BeforeStart({
   const profile = profileShelf.entries.find((e) => e.value.key === setup.profile?.key);
   const policy = policyShelf.entries.find((e) => e.value.key === setup.policy?.key) ?? null;
   const ready = readiness(profile?.value, policy?.value ?? DEFAULT_POLICY);
-  const rate =
-    baud === undefined
-      ? "The bus speed is not known yet."
-      : (() => {
-          const issue = rateIssue(baud);
-          return issue === undefined
-            ? undefined
-            : `An identification captures on TEL bursts. ${issue}`;
-        })();
+  const rate = rateRefusal(baud);
   const refusal = ready.blocker === undefined ? rate : blockerText(ready.blocker);
   const policyName =
     policy === null || policy.value.key === DEFAULT_KEY
@@ -182,11 +223,23 @@ function BeforeStart({
   );
 }
 
-function RunScreen({ view, onCancel }: { view: RunView; onCancel: () => void }) {
+function RunScreen({
+  view,
+  onCancel,
+  onResume,
+}: {
+  view: RunView;
+  onCancel: () => void;
+  onResume: (at: string) => void;
+}) {
   const over = view.phase === "ended";
   return (
     <div className="flex flex-col gap-4">
-      {over ? <Outcome view={view} /> : <ProgressBlock view={view} onCancel={onCancel} />}
+      {over ? (
+        <Outcome view={view} onResume={onResume} />
+      ) : (
+        <ProgressBlock view={view} onCancel={onCancel} />
+      )}
       <div className="grid grid-cols-[18rem_1fr] items-start gap-4">
         <StepList feed={view.feed} over={over} />
         <Lines lines={view.feed.lines} />
@@ -201,12 +254,14 @@ function ProgressBlock({ view, onCancel }: { view: RunView; onCancel: () => void
     view.phase === "loading"
       ? ["Loading the identification", "Fetching the run's module. Nothing goes to the servo yet."]
       : view.phase === "saving"
-        ? [
-            "Storing the run",
-            "Copying the run folder into this browser. Nothing goes to the servo.",
-          ]
+        ? ["Storing the run", "The run folder is in this browser. Nothing goes to the servo."]
         : step === undefined
-          ? ["Reaching the servo", "Reading the profile and the policy, then finding the servo."]
+          ? view.resuming === undefined
+            ? ["Reaching the servo", "Reading the profile and the policy, then finding the servo."]
+            : [
+                "Reaching the servo",
+                `Reading the run folder ${view.resuming}/, the profile and the policy, then finding the servo.`,
+              ]
           : [stepTitle(step.name), STEP_TEXT[step.name] ?? ""];
   return (
     <section
@@ -231,13 +286,16 @@ function ProgressBlock({ view, onCancel }: { view: RunView; onCancel: () => void
   );
 }
 
-function Outcome({ view }: { view: RunView }) {
+function Outcome({ view, onResume }: { view: RunView; onResume: (at: string) => void }) {
   const { outcome, stored, failure } = view;
   const steps = stored?.identity.steps;
   const stop = steps === undefined ? undefined : stoppedAt(steps);
+  const at = stored === undefined ? undefined : `${stored.identity.uid}/${stored.identity.utc}`;
   return (
     <section aria-label="Run outcome" className="flex flex-col gap-2 rounded-lg border bg-card p-4">
-      <h2 className="font-medium">The run ended</h2>
+      <h2 className="font-medium">
+        {view.resuming === undefined ? "The run ended" : "The resumed run ended"}
+      </h2>
       {failure !== undefined && <p className="text-danger">{failure}</p>}
       {outcome?.refused !== undefined && <p className="text-warning">refused: {outcome.refused}</p>}
       {stored !== undefined && (
@@ -248,13 +306,11 @@ function Outcome({ view }: { view: RunView }) {
           {outcome?.accepted === true && " The tune accepted a set."}
         </p>
       )}
-      {stored === undefined ? (
+      {stored === undefined || at === undefined ? (
         outcome !== undefined && <p className="text-text-3">The run wrote no run folder.</p>
       ) : (
         <div className="flex flex-wrap items-center gap-3 text-sm">
-          <span className="text-text-3">
-            The run folder is in this browser at {stored.identity.uid}/{stored.identity.utc}/.
-          </span>
+          <span className="text-text-3">The run folder is in this browser at {at}/.</span>
           <Button asChild size="sm">
             <Link
               to="/runs/$uid/$utc"
@@ -264,11 +320,19 @@ function Outcome({ view }: { view: RunView }) {
               Open the report
             </Link>
           </Button>
-          <Link
-            to="/runs"
-            search={(s) => ({ ...s, run: `${stored.identity.uid}/${stored.identity.utc}` })}
-            className="text-text-3 underline"
-          >
+          {stopped(stored.identity) && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                onResume(at);
+              }}
+            >
+              <RotateCcw />
+              Resume
+            </Button>
+          )}
+          <Link to="/runs" search={(s) => ({ ...s, run: at })} className="text-text-3 underline">
             All runs
           </Link>
         </div>
@@ -281,21 +345,162 @@ function StepList({ feed, over }: { feed: Feed; over: boolean }) {
   return (
     <ol aria-label="Steps" className="flex flex-col gap-1 rounded-lg border bg-card p-3">
       {feed.steps.map((s) => (
-        <li
-          key={s.name}
-          aria-current={s.phase === "running" && !over ? "step" : undefined}
-          className="flex flex-col rounded px-2 py-1 aria-[current=step]:bg-muted"
-        >
-          <span className="flex justify-between gap-2">
-            <span className="font-medium">{stepTitle(s.name)}</span>
-            <span className="text-sm text-text-3">{stateText(s, over)}</span>
-          </span>
-          {s.phase === "ended" && s.why !== null && s.state !== "accepted" && (
-            <span className="text-sm text-text-3">{s.why}</span>
-          )}
-        </li>
+        <StepRow key={s.name} step={s} over={over} />
       ))}
     </ol>
+  );
+}
+
+function StepRow({ step: s, over }: { step: FeedStep; over: boolean }) {
+  const running = s.phase === "running" && !over;
+  const label = running ? unitText(s) : s.phase === "ended" ? tryText(s) : undefined;
+  return (
+    <li
+      aria-current={running ? "step" : undefined}
+      className="flex flex-col rounded px-2 py-1 aria-[current=step]:bg-muted"
+    >
+      <span className="flex items-center gap-2">
+        <StepMark step={s} over={over} />
+        <span className="font-medium">{stepTitle(s.name)}</span>
+        {label !== undefined && <span className="ml-auto text-xs text-text-3">{label}</span>}
+      </span>
+      {s.phase === "ended" && s.why !== null && s.state !== "accepted" && (
+        <span className="pl-7 text-sm text-text-3">{s.why}</span>
+      )}
+    </li>
+  );
+}
+
+function tryText(s: FeedStep): string | undefined {
+  return s.phase === "ended" && s.try !== undefined
+    ? `try ${String(s.try.at)} of at most ${String(s.try.of)}`
+    : undefined;
+}
+
+/** The servo's setup as a new run would take it: what a resume names where its folder records none. */
+function useRunArgs(target: RunTarget): RunArgs | undefined {
+  const profileShelf = useLibrary(profiles);
+  const policyShelf = useLibrary(policies);
+  const { setup } = useSetup(target.uid);
+  if (
+    setup === undefined ||
+    profileShelf.entries === undefined ||
+    policyShelf.entries === undefined
+  ) {
+    return undefined;
+  }
+  const profile = profileShelf.entries.find((e) => e.value.key === setup.profile?.key);
+  const policy = policyShelf.entries.find((e) => e.value.key === setup.policy?.key) ?? null;
+  return profile === undefined ? undefined : runArgs(target.id, profile, policy);
+}
+
+/**
+ * The stopped run a resume goes on with: the one asked for (`at`), else this servo's newest run
+ * that did not get through the final check. Its steps as its folder records them, what the module
+ * says a resume would do, or why it refuses, in the module's words.
+ */
+function StoppedRun({
+  target,
+  baud,
+  at,
+  onResume,
+}: {
+  target: RunTarget;
+  baud: BaudRate | undefined;
+  at: string | undefined;
+  onResume: (args: ResumeArgs) => void;
+}) {
+  const { runs } = useRuns();
+  const fallback = useRunArgs(target);
+  const run: RunIdentity | undefined = runs
+    ?.map((r) => r.identity)
+    .find((r) =>
+      at === undefined ? r.uid === target.uid && stopped(r) : `${r.uid}/${r.utc}` === at,
+    );
+  const folder = run === undefined ? undefined : `${run.uid}/${run.utc}`;
+  const [args, setArgs] = useState<ResumeArgs>();
+  const [problem, setProblem] = useState<string>();
+  const [nameplate, policy] = [fallback?.nameplate, fallback?.policy];
+  useEffect(() => {
+    if (folder === undefined) return;
+    let live = true;
+    const named =
+      nameplate === undefined || policy === undefined ? undefined : { nameplate, policy };
+    void (async () => {
+      try {
+        const a = await resumeArgs(await storage(), target.id, folder, named);
+        if (live) setArgs(a);
+      } catch (e) {
+        if (live) setProblem(e instanceof Error ? e.message : String(e));
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [folder, target.id, nameplate, policy]);
+  const check = useResumePlan(args);
+  const feed = useMemo(() => (run === undefined ? undefined : feedOfSteps(run.steps)), [run]);
+  if (run === undefined || feed === undefined) {
+    return at === undefined || runs === undefined ? null : (
+      <p className="text-warning">The run {at}/ is not in this browser.</p>
+    );
+  }
+  const { plan, refused } = check;
+  const said = problem ?? refused;
+  const rate = rateRefusal(baud);
+  return (
+    <section aria-label="Stopped run" className="flex flex-col gap-3 rounded-lg border bg-card p-4">
+      <h2 className="font-medium">
+        The run of {utcText(run.utc)}, {run.reach}
+      </h2>
+      <div className="grid grid-cols-[18rem_1fr] items-start gap-4">
+        <StepList feed={feed} over={true} />
+        <div className="flex flex-col gap-2 text-sm">
+          {said !== undefined ? (
+            <p role="status" className="text-warning">
+              {said}
+            </p>
+          ) : plan === undefined ? (
+            <p className="text-text-3">Reading the run folder.</p>
+          ) : (
+            <>
+              <p aria-label="Resume plan">
+                Resume goes on in the same folder from {phrase(plan.from)}, as segment{" "}
+                {plan.segment}. The steps accepted before it stay.
+                {plan.coolS > 0 &&
+                  ` It first waits up to ${String(Math.ceil(plan.coolS))} s, torque off, for the winding to cool.`}
+                {plan.reseat &&
+                  " It first presses the high stop once, to check the horn sits where it did."}
+              </p>
+              <ul className="list-disc pl-5 text-text-3">
+                {plan.why.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+            </>
+          )}
+          {rate !== undefined && said === undefined && (
+            <p role="status" className="text-warning">
+              {rate}
+            </p>
+          )}
+          <div>
+            <Button
+              variant="outline"
+              disabled={
+                args === undefined || plan === undefined || said !== undefined || rate !== undefined
+              }
+              onClick={() => {
+                if (args !== undefined) onResume(args);
+              }}
+            >
+              <RotateCcw />
+              Resume
+            </Button>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 

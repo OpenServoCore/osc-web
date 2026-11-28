@@ -34,27 +34,23 @@ test("a recorded run's report shows its measured values with their spread, the m
     "profile mg90-d rev 0 . policy policy rev 0 . board facts read from the servo . osc-ident 0.1.0 . 5 min 45 s . through the final check",
   );
 
-  await expect(tile(page, "Travel")).toContainText("187.00 deg");
-  await expect(tile(page, "Winding resistance")).toContainText("4.0988 ohm+/- 0.0446, n 36");
-  await expect(tile(page, "Winding resistance at 25 C")).toContainText(
-    "4.1599 ohm+/- 0.0453, n 36",
-  );
-  await expect(tile(page, "Motor constant Ke")).toContainText(
-    "1.1577e-3 V s/rad+/- 7.5884e-6, n 11",
-  );
-  await expect(tile(page, "Inertia J")).toContainText("6.5849e-9 kg m^2+/- 2.6168e-10, n 6");
-  await expect(tile(page, "Free speed at 5 V")).toContainText("803.2716 deg/s+/- 5.2651, n 11");
-  await expect(tile(page, "Friction at a slow move")).toContainText("37.5980 mA+/- 0.4511, n 14");
+  await expect(tile(page, "Travel")).toContainText("187.00°");
+  await expect(tile(page, "Winding resistance")).toContainText("4.0988 Ω± 0.0446, n 36");
+  await expect(tile(page, "Winding resistance at 25 °C")).toContainText("4.1599 Ω± 0.0453, n 36");
+  await expect(tile(page, "Motor constant Ke")).toContainText("1.1577e-3 V s/rad± 7.5884e-6, n 11");
+  await expect(tile(page, "Inertia J")).toContainText("6.5849e-9 kg m²± 2.6168e-10, n 6");
+  await expect(tile(page, "Free speed at 5 V")).toContainText("803.2716°/s± 5.2651, n 11");
+  await expect(tile(page, "Friction at a slow move")).toContainText("37.5980 mA± 0.4511, n 14");
   const check = tile(page, "Move check");
   await expect(check).toContainText(
-    "12 movesworst overshoot 0.92 deg (33% + out), worst rest error 0.36 deg (1% - out)",
+    "12 movesworst overshoot 0.92° (33% + out), worst rest error 0.36° (1% - out)",
   );
   await expect(check).toContainText("at v_kp_q88 50, the tune's try 7");
   await expect(tile(page, "Longest position hole")).toContainText(
-    "5.63 deg112.1 counts at raw 6.75..118.80; 1 hole listed",
+    "5.63°112.1 counts at raw 6.75..118.80; 1 hole listed",
   );
   await expect(tile(page, "Widest ADC wide code")).toContainText(
-    "11 codes0.55 deg at raw 2048..2058; 11 listed",
+    "11 codes0.55° at raw 2048..2058; 11 listed",
   );
 
   await page.getByRole("button", { name: "Show as table" }).click();
@@ -65,28 +61,28 @@ test("a recorded run's report shows its measured values with their spread, the m
 
   const scores = page.getByRole("list", { name: "Move scores" });
   await expect(page.getByRole("combobox", { name: "Move" })).toContainText("10% + out");
-  await expect(scores).toContainText("Overshoot: 0.59 deg");
-  await expect(scores).toContainText("Rest error: 0.15 deg");
+  await expect(scores).toContainText("Overshoot: 0.59°");
+  await expect(scores).toContainText("Rest error: 0.15°");
 
   await expect(page.getByLabel("Friction line")).toContainText(
-    "Line 37.5980 mA + 0.2608 mA per deg/s, rms 1.0407 mA over 14 legs.",
+    "Line 37.5980 mA + 0.2608 mA per °/s, rms 1.0407 mA over 14 legs.",
   );
 
   const inputs = page.getByRole("region", { name: "Inputs" });
-  await expect(inputs).toContainText("Move speed200 deg/s");
+  await expect(inputs).toContainText("Move speed200°/s");
   const checks = inputs.getByRole("table", { name: "Cross-checks" });
   await expect(checks.getByRole("row").filter({ hasText: /^travel/ })).toContainText(
-    "183.0071 deg +/- 0.0117, n 3180.0000 deg+1.67 %",
+    "183.0071° ± 0.0117, n 3180.0000°+1.67 %",
   );
   await expect(checks.getByRole("row").filter({ hasText: /^pacing/ })).toContainText(
-    "19.9094 counts/deg n 122.7556 counts/deg-12.51 %",
+    "19.9094 counts/° n 122.7556 counts/°-12.51 %",
   );
   await expect(
     checks.getByRole("row").filter({ hasText: "free speed at 4.8 V, V / Ke" }),
-  ).toContainText("771.1407 deg/s +/- 5.0545, n 11600.0000 deg/s+28.52 %");
+  ).toContainText("771.1407°/s ± 5.0545, n 11600.0000°/s+28.52 %");
   await expect(
     checks.getByRole("row").filter({ hasText: "stall current at 4.8 V, V / R" }),
-  ).toContainText("1.1711 A +/- 0.0127, n 36states none");
+  ).toContainText("1.1711 A ± 0.0127, n 36states none");
 
   await expect(page.getByRole("region", { name: "Store the final set" })).toContainText(
     `osc-ident --id <bus id> save --set ${UID}/${UTC}/final/set.json --table ${UID}/${UTC}/final/inputs/pos_lut.json`,
@@ -148,17 +144,17 @@ test("a set with 0 deg at the center reads the arc in its degrees and says where
   writeFileSync(path, JSON.stringify(set, null, 2));
 
   await openReport(page, folder);
-  await expect(tile(page, "Travel")).toContainText("187.00 deg");
+  await expect(tile(page, "Travel")).toContainText("187.00°");
   await expect(tile(page, "Travel")).toContainText(
-    "0 deg at the center of travel, 1871.5 counts, raw 1875.0",
+    "0° at the center of travel, 1871.5 counts, raw 1875.0",
   );
   const arc = page.getByRole("region", { name: "Travel map" }).getByRole("img", {
     name: "Position sensor over 187.0 degrees: 1 position hole, the longest 112.1 counts (5.63 degrees) from -93.5 to -87.8 degrees; 10 ADC wide codes, the widest 11 codes at 7.7 degrees; 0.73 to 1.31 times the average resolution across 90 % of the judged travel.",
   });
   await expect(arc).toBeVisible();
-  await expect(arc).toContainText("CW stop -93.5 deg");
-  await expect(arc).toContainText("CCW stop 93.5 deg");
-  for (const tick of ["-60 deg", "-30 deg", "0 deg", "30 deg", "60 deg"]) {
+  await expect(arc).toContainText("CW stop -93.5°");
+  await expect(arc).toContainText("CCW stop 93.5°");
+  for (const tick of ["-60°", "-30°", "0°", "30°", "60°"]) {
     await expect(arc.getByText(tick, { exact: true })).toBeVisible();
   }
 });

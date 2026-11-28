@@ -206,9 +206,7 @@ export function ProfileCard({
               title="Rated travel"
               unit="deg"
               value={p.rated_travel_deg}
-              shown={
-                p.rated_travel_deg == null ? NOT_SET : `${formatNumber(p.rated_travel_deg)} deg`
-              }
+              shown={p.rated_travel_deg == null ? NOT_SET : `${formatNumber(p.rated_travel_deg)}°`}
               field="rated_travel_deg"
               apply={(v) => withRatedTravel(p, v)}
               onSave={save}
@@ -258,9 +256,9 @@ export function ProfileCard({
                 <span className="text-text-3">no speed stated</span>
               ) : (
                 <>
-                  <span className="font-mono">{secondsPer60(r.noLoad).toFixed(2)} s/60 deg</span>
+                  <span className="font-mono">{secondsPer60(r.noLoad).toFixed(2)} s/60°</span>
                   <span className="font-mono">
-                    = {formatNumber(Math.round(degPerS(r.noLoad)))} deg/s
+                    = {formatNumber(Math.round(degPerS(r.noLoad)))}°/s
                   </span>
                   {p.gear_ratio != null && p.gear_ratio > 0 && (
                     <span className="font-mono text-text-3">
@@ -629,7 +627,7 @@ function RatingEditor({
         const replaces = ratings(profile).some((x) => x.at_v === r.rating.at_v)
           ? `; replaces the ${formatNumber(r.rating.at_v)} V rating`
           : "";
-        return { preview: `= ${formatNumber(Math.round(speed))} deg/s${rpm}${replaces}` };
+        return { preview: `= ${formatNumber(Math.round(speed))}°/s${rpm}${replaces}` };
       }}
       onSave={(v) => {
         const r = read(v);
@@ -655,7 +653,7 @@ function HeatEditor({
   const shown =
     h == null
       ? NOT_SET
-      : `fast ${formatNumber(h.fast_tau_s)} s, ${formatNumber(h.fast_gain_c_per_w)} C/W; slow ${formatNumber(h.slow_tau_s)} s, ${formatNumber(h.slow_gain_c_per_w)} C/W`;
+      : `fast ${formatNumber(h.fast_tau_s)} s, ${formatNumber(h.fast_gain_c_per_w)} °C/W; slow ${formatNumber(h.slow_tau_s)} s, ${formatNumber(h.slow_gain_c_per_w)} °C/W`;
   const read = (v: Values) => {
     const nums = HEAT_FIELDS.map((f) => parseNumber(v[f.id] ?? ""));
     const bad = nums.find((n) => "error" in n);

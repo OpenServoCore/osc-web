@@ -62,15 +62,15 @@ test("the mg90-a table reads the notebook's numbers", () => {
   expect(r.windows?.min).toBeCloseTo(0.6125, 9);
   expect(r.windows?.max).toBeCloseTo(1.8825, 9);
   expect(r).not.toHaveProperty("grade");
-  expect(pointsWords(r, MG90)).toBe("185 calibration points between 16.6 deg and 165.6 deg.");
+  expect(pointsWords(r, MG90)).toBe("185 calibration points between 16.6° and 165.6°.");
   expect(pointsWords(r, undefined)).toBe(
     "185 calibration points between raw 560 counts and raw 3504 counts.",
   );
   expect(windowsWords(r, MG90)).toBe(
-    "Local gain over every 25-count window between 15.8 deg and 166.4 deg: 0.61x to 1.88x nominal.",
+    "Local gain over every 25-count window between 15.8° and 166.4°: 0.61× to 1.88× nominal.",
   );
   expect(windowsWords(r, undefined)).toBe(
-    "Local gain over every 25-count window between raw 544 counts and raw 3520 counts: 0.61x to 1.88x nominal.",
+    "Local gain over every 25-count window between raw 544 counts and raw 3520 counts: 0.61× to 1.88× nominal.",
   );
 });
 
@@ -91,10 +91,10 @@ test("the mg90-a error over the MG90 map: 71 counts is 3.6 deg, 2.0% of travel",
   expect(s.x[i]).toBeCloseTo(328 * degPerCount, 9);
   expect(s.y[i]).toBeCloseTo(-4 * degPerCount, 9);
   expect(headline(s)).toBe(
-    "The sensor reads up to 3.6 deg (2.0% of travel) off; this table corrects it.",
+    "The sensor reads up to 3.6° (2.0% of travel) off; this table corrects it.",
   );
-  expect(hoverWords(s, i)).toBe("16.6 deg: reads low by 0.2 deg (0.1% of travel)");
-  expect(hoverWords(s, 0)).toBe("0.0 deg: on target");
+  expect(hoverWords(s, i)).toBe("16.6°: reads low by 0.2° (0.1% of travel)");
+  expect(hoverWords(s, 0)).toBe("0.0°: on target");
   expect(hoverWords(s, s.x.length)).toBe("");
 });
 
@@ -138,7 +138,7 @@ test("a falling angle map keeps x ascending and flips the error with it", () => 
   const i = 3849 - 560;
   expect(s.x[i]).toBeCloseTo(183.06 - (328 * 183.06) / 3617, 9);
   expect(s.y[i]).toBeCloseTo((4 * 183.06) / 3617, 9);
-  expect(hoverWords(s, i)).toBe("166.5 deg: reads high by 0.2 deg (0.1% of travel)");
+  expect(hoverWords(s, i)).toBe("166.5°: reads high by 0.2° (0.1% of travel)");
 });
 
 test("the identity has no gains to read", () => {
@@ -161,7 +161,7 @@ test("a coarse SG90-class step, one 6x interval, reads its window gains as they 
   expect(r.windows?.min).toBeCloseTo(0.0625, 9);
   expect(r.windows?.max).toBeCloseTo(4.0875, 9);
   expect(windowsWords(r, undefined)).toBe(
-    "Local gain over every 25-count window between raw 1584 counts and raw 1696 counts: 0.06x to 4.09x nominal.",
+    "Local gain over every 25-count window between raw 1584 counts and raw 1696 counts: 0.06× to 4.09× nominal.",
   );
 });
 
@@ -171,6 +171,6 @@ test("every state reads in words and says what the kernel applies", () => {
   expect(stateWords(STATE.LIVE)).toMatch(/^Live/);
   expect(stateWords(STATE.REJECT_TORQUE)).toContain("torque was on");
   expect(stateWords(STATE.REJECT_ENDS)).toContain("stop");
-  expect(stateWords(STATE.REJECT_SHAPE)).toContain("16x");
+  expect(stateWords(STATE.REJECT_SHAPE)).toContain("16×");
   expect(stateWords(9)).toContain("Unknown table state 9");
 });

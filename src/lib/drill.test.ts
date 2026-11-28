@@ -34,16 +34,16 @@ function names(dir: string): string[] {
 }
 
 describe("a step's estimates and checks", () => {
-  it("gives each estimate its value, spread and n as osc-ident prints them", () => {
+  it("gives each estimate its value, spread, n and unit as the report shows them", () => {
     const rows = estimateRows(json("results/stops.json"));
     expect(rows.find((r) => r.name === "r_seated_ohm")).toMatchObject({
       value: "4.0988",
-      sd: "+/- 0.0446",
+      sd: "± 0.0446",
       n: "36",
-      unit: "ohm",
+      unit: "Ω",
     });
     const ke = estimateRows(json("results/spins.json")).find((r) => r.name === "ke_v_s_per_rad");
-    expect(ke).toMatchObject({ value: "1.1577e-3", sd: "+/- 7.5884e-6", n: "11", unit: "V s/rad" });
+    expect(ke).toMatchObject({ value: "1.1577e-3", sd: "± 7.5884e-6", n: "11", unit: "V s/rad" });
   });
 
   it("leaves the spread blank where the step wrote none and says so where the step wrote null", () => {

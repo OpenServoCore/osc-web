@@ -123,7 +123,7 @@ function Center({ cal, points }: { cal: Calibration; points: readonly number[] |
   const raw = points === undefined ? counts : rawOfCounts(points, counts);
   return (
     <div role="group" aria-label="Center" className="flex flex-col gap-0.5">
-      <span className="text-xs text-text-3">Center, 0 deg</span>
+      <span className="text-xs text-text-3">Center, 0°</span>
       <span className="text-base">{counts.toFixed(1)} counts</span>
       <span className="font-mono text-xs text-text-3">
         raw {raw.toFixed(1)}

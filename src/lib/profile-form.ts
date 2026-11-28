@@ -139,7 +139,7 @@ export const HEAT_FIELDS = [
 ] as const;
 
 export const RATED_TRAVEL =
-  "The output's travel as the maker's sheet states it, 180 for a servo sold as 180 deg. Identification measures the stops; the soft window is this wide unless the policy states its own.";
+  "The output's travel as the maker's sheet states it, 180 for a servo sold as 180°. Identification measures the stops; the soft window is this wide unless the policy states its own.";
 
 export const NO_RATING =
   "The speed ceiling that protects the brushes cannot be set: no rating states a no-load speed inside the operating range.";

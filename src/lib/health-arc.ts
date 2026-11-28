@@ -393,7 +393,7 @@ function buildArc(docs: RunDocs): Arc | string {
   const travelDeg = Math.abs(cal.angleMaxCdeg - cal.angleMinCdeg) / 100;
   const cwDeg = Math.min(cal.angleMinCdeg, cal.angleMaxCdeg) / 100;
   if (!(travelDeg > 0) || travelDeg > 360) {
-    return `The angle map spans ${travelDeg.toFixed(1)} deg, which an arc of one turn cannot draw.`;
+    return `The angle map spans ${travelDeg.toFixed(1)}°, which an arc of one turn cannot draw.`;
   }
   const crossedFrom = num(holes, "adc.crossed.from_counts");
   const crossedTo = num(holes, "adc.crossed.to_counts");
@@ -577,7 +577,7 @@ function buildArc(docs: RunDocs): Arc | string {
 }
 
 export function degText(v: number, digits = 1): string {
-  return `${v.toFixed(digits)} deg`;
+  return `${v.toFixed(digits)}°`;
 }
 
 function countsText(n: number, one: string, many: string): string {
@@ -636,7 +636,7 @@ export function readout(arc: Arc): { label: string; value: string }[] {
       ? { label: "longest position hole", value: "none listed" }
       : {
           label: "longest position hole",
-          value: `${countsText(p.counts, "count", "counts")} (${p.deg.toFixed(2)} deg) at raw ${rawText(p.fromRaw)}..${rawText(p.toRaw)}`,
+          value: `${countsText(p.counts, "count", "counts")} (${p.deg.toFixed(2)}°) at raw ${rawText(p.fromRaw)}..${rawText(p.toRaw)}`,
         },
   );
   const a = arc.widestAdc;
@@ -645,7 +645,7 @@ export function readout(arc: Arc): { label: string; value: string }[] {
       ? { label: "widest ADC wide code", value: "none listed" }
       : {
           label: "widest ADC wide code",
-          value: `${countsText(a.counts, "code", "codes")} (${a.deg.toFixed(2)} deg) at raw ${rawText(a.fromRaw)}..${rawText(a.toRaw)}`,
+          value: `${countsText(a.counts, "code", "codes")} (${a.deg.toFixed(2)}°) at raw ${rawText(a.fromRaw)}..${rawText(a.toRaw)}`,
         },
   );
   return out;
@@ -686,7 +686,7 @@ export function paneOf(m: Mark, arc: Arc): Pane {
         title: where,
         lines: [
           `raw ${rawText(m.fromRaw)}..${rawText(m.toRaw)}`,
-          `the pot gives ${m.countsPerDeg.toFixed(1)} counts a degree here, ${m.q.toFixed(2)}x its average of ${arc.avgCountsPerDeg.toFixed(1)}`,
+          `the pot gives ${m.countsPerDeg.toFixed(1)} counts a degree here, ${m.q.toFixed(2)}× its average of ${arc.avgCountsPerDeg.toFixed(1)}`,
           `the table spreads these counts by ${m.gain.toFixed(2)} to land on true degrees`,
         ],
         says: plainResolution(shadeOf(m.q)),
@@ -697,16 +697,16 @@ export function paneOf(m: Mark, arc: Arc): Pane {
       const moved =
         m.cycles === undefined
           ? undefined
-          : `the motor turned ${countsText(m.cycles, "ripple cycle", "ripple cycles")}${m.shaftDeg === undefined ? "" : ` (${m.shaftDeg.toFixed(2)} deg at the horn)`} while the pot ran ${countsText(m.counts, "count", "counts")}`;
+          : `the motor turned ${countsText(m.cycles, "ripple cycle", "ripple cycles")}${m.shaftDeg === undefined ? "" : ` (${m.shaftDeg.toFixed(2)}° at the horn)`} while the pot ran ${countsText(m.counts, "count", "counts")}`;
       const seen = passesText(m.passes);
       const rule =
         r.perCycle === undefined || r.line === undefined
           ? undefined
-          : `found by: pot counts a ripple cycle, ${r.perCycle[0].toFixed(2)} to ${r.perCycle[1].toFixed(2)} typical on the passes; a hole where they run over ${r.line.toFixed(2)}x typical${r.farK === undefined || r.s === undefined ? "" : ` (1 + ${String(r.farK)} x ${r.s.toFixed(2)})`}${m.rMax === undefined ? "" : `, here up to ${m.rMax.toFixed(1)}x`}`;
+          : `found by: pot counts a ripple cycle, ${r.perCycle[0].toFixed(2)} to ${r.perCycle[1].toFixed(2)} typical on the passes; a hole where they run over ${r.line.toFixed(2)}× typical${r.farK === undefined || r.s === undefined ? "" : ` (1 + ${String(r.farK)} × ${r.s.toFixed(2)})`}${m.rMax === undefined ? "" : `, here up to ${m.rMax.toFixed(1)}×`}`;
       return {
         title: "Position hole",
         lines: [
-          `${where}, ${countsText(m.counts, "count", "counts")} (${m.deg.toFixed(2)} deg)`,
+          `${where}, ${countsText(m.counts, "count", "counts")} (${m.deg.toFixed(2)}°)`,
           `raw ${rawText(m.fromRaw)}..${rawText(m.toRaw)}`,
           ...(moved === undefined ? [] : [moved]),
           ...(seen === "" ? [] : [`seen ${seen}${dirsText(m.dirs)}`]),
@@ -719,7 +719,7 @@ export function paneOf(m: Mark, arc: Arc): Pane {
       return {
         title: `ADC wide code above ${String(m.carry)}`,
         lines: [
-          `${degText(arc.cwDeg + m.fromDeg)}, raw ${rawText(m.fromRaw)}..${rawText(m.toRaw)}, ${countsText(m.counts, "code", "codes")} (${m.deg.toFixed(2)} deg)`,
+          `${degText(arc.cwDeg + m.fromDeg)}, raw ${rawText(m.fromRaw)}..${rawText(m.toRaw)}, ${countsText(m.counts, "code", "codes")} (${m.deg.toFixed(2)}°)`,
         ],
         says:
           m.slot === 0
@@ -774,9 +774,9 @@ export function tableRows(arc: Arc): Row[] {
   const marks = arc.stops.map((m) => {
     switch (m.kind) {
       case "good":
-        return row(m, kindText(m), `${m.q.toFixed(2)}x the average counts a degree`, m.key);
+        return row(m, kindText(m), `${m.q.toFixed(2)}× the average counts a degree`, m.key);
       case "pot":
-        return row(m, kindText(m), `${m.deg.toFixed(2)} deg`, m.key);
+        return row(m, kindText(m), `${m.deg.toFixed(2)}°`, m.key);
       case "adc":
         return row(m, kindText(m), `above carry ${String(m.carry)}`, m.key);
       case "not judged":

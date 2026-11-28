@@ -3,8 +3,10 @@ import {
   listDirs,
   listFiles,
   listTree,
+  movePath,
   readFile,
   removeDir,
+  removeFile,
   writeFile,
   type OpfsDir,
   type OpfsFile,
@@ -119,4 +121,29 @@ test("a write that fails leaves the old file", async () => {
     "disk full",
   );
   expect(await readFile(root, "profiles/a.json")).toEqual(text("old"));
+});
+
+test("a move takes a file, or a folder whole, to a name not there, bytes untouched", async () => {
+  const root = memoryOpfs();
+  await writeFile(root, "r/captures/probe/01.csv.gz", new Uint8Array([1, 2, 3]));
+  await writeFile(root, "r/captures/probe/02.csv.gz", new Uint8Array([4]));
+  await writeFile(root, "r/results/probe.json", text("{}"));
+  await movePath(root, "r/captures/probe", "r/segments/1/captures/probe");
+  await movePath(root, "r/results/probe.json", "r/segments/1/results/probe.json");
+  expect((await listTree(root, "r")).map((f) => f.path)).toEqual([
+    "segments/1/captures/probe/01.csv.gz",
+    "segments/1/captures/probe/02.csv.gz",
+    "segments/1/results/probe.json",
+  ]);
+  expect(await readFile(root, "r/segments/1/captures/probe/01.csv.gz")).toEqual(
+    new Uint8Array([1, 2, 3]),
+  );
+  await expect(movePath(root, "r/none", "r/x")).rejects.toThrow("nothing at r/none to move");
+  await writeFile(root, "r/results/probe.json", text("{}"));
+  await expect(
+    movePath(root, "r/results/probe.json", "r/segments/1/results/probe.json"),
+  ).rejects.toThrow("exists");
+  await removeFile(root, "r/results/probe.json");
+  await removeFile(root, "r/results/probe.json");
+  expect(await readFile(root, "r/results/probe.json")).toBeNull();
 });

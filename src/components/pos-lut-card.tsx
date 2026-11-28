@@ -121,8 +121,8 @@ function chartOptions(
       r: { range: [y[0] * s.pctPerUnit, y[1] * s.pctPerUnit] },
     },
     axes: [
-      { ...axis, label: deg ? "position, deg" : "position, raw counts" },
-      { ...axis, scale: "y", size: 60, label: deg ? "error, deg" : "error, counts" },
+      { ...axis, label: deg ? "position, °" : "position, raw counts" },
+      { ...axis, scale: "y", size: 60, label: deg ? "error, °" : "error, counts" },
       {
         ...axis,
         scale: "r",

@@ -10,14 +10,14 @@ test("the Settings tab reads the id row", async ({ page }) => {
 test("the Board tab reads the sim's shunt resistance", async ({ page }) => {
   await openTable(page);
   await page.getByRole("tab", { name: "Board" }).click();
-  await expect(row(page, "shunt_r_mohm").getByRole("cell")).toHaveText("60 mOhm");
+  await expect(row(page, "shunt_r_mohm").getByRole("cell")).toHaveText("60 mΩ");
 });
 
 test("the Board tab reads the sim's bias divider", async ({ page }) => {
   await openTable(page);
   await page.getByRole("tab", { name: "Board" }).click();
-  await expect(row(page, "vmotor_bias_top_ohm").getByRole("cell")).toHaveText("430 ohm");
-  await expect(row(page, "vmotor_bias_bot_ohm").getByRole("cell")).toHaveText("100 ohm");
+  await expect(row(page, "vmotor_bias_top_ohm").getByRole("cell")).toHaveText("430 Ω");
+  await expect(row(page, "vmotor_bias_bot_ohm").getByRole("cell")).toHaveText("100 Ω");
 });
 
 test("the Live values tab reads an integer position", async ({ page }) => {

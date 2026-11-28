@@ -1,5 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Download, FileArchive, FileChartColumn, FolderOpen, History } from "lucide-react";
+import {
+  Download,
+  FileArchive,
+  FileChartColumn,
+  FolderOpen,
+  History,
+  RotateCcw,
+} from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +26,7 @@ import {
   type RunIdentity,
   type StoredRun,
 } from "@/lib/run-folder";
+import { stopped } from "@/lib/ident-run";
 import { useSession } from "@/lib/session";
 import { download, storage } from "@/lib/use-library";
 import { useRuns } from "@/lib/use-runs";
@@ -250,6 +258,14 @@ function RunCard({ run, onExport }: { run: StoredRun; onExport: () => void }) {
             <Download />
             Download as zip
           </Button>
+          {stopped(r) && (
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/identify" search={(s) => ({ ...s, resume: keyOf(r) })}>
+                <RotateCcw />
+                Resume
+              </Link>
+            </Button>
+          )}
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">

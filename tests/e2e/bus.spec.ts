@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const READOUT = /^-?\d+(\.\d+)? deg$/;
+const READOUT = /^-?\d+(\.\d+)?°$/;
 
 test("the debug panel reports a clean bus while the dashboard polls", async ({ page }) => {
   await page.goto("/?sim=1,2&debug");

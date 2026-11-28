@@ -3,6 +3,7 @@
 // report passes no judgment of its own, so the words "pass" and "warning"
 // appear only where the tool wrote them.
 
+import { withUnit } from "./format";
 import { listFiles, readFile, type OpfsDir } from "./opfs";
 import { phrase, type RunStep } from "./run-folder";
 import { positionDeg, type Calibration } from "./units";
@@ -97,16 +98,16 @@ export function short(v: number): string {
   return v !== 0 && Math.abs(v) < 0.01 ? v.toExponential(4) : v.toFixed(4);
 }
 
-/** A quantity's spread as osc-ident prints it: `+/- sd, n N`, `n N` where nothing repeated, or `nominal`. */
+/** A quantity's spread as osc-ident prints it, +/- as the plus-minus sign: `+/- sd, n N`, `n N` where nothing repeated, or `nominal`. */
 export function spreadSaid(t: Term): string {
-  if (t.sd !== null && t.n !== null) return `+/- ${short(t.sd)}, n ${String(t.n)}`;
+  if (t.sd !== null && t.n !== null) return `± ${short(t.sd)}, n ${String(t.n)}`;
   if (t.n !== null) return `n ${String(t.n)}`;
   return "nominal";
 }
 
-/** The value and its unit, as osc-ident prints them. */
+/** The value and its unit, as osc-ident prints them with the unit's symbol. */
 export function valueSaid(t: Term): string {
-  return t.unit === "" ? short(t.value) : `${short(t.value)} ${t.unit}`;
+  return withUnit(short(t.value), t.unit);
 }
 
 /**

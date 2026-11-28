@@ -128,10 +128,10 @@ describe("parseInput number", () => {
 
   test("scaled input must land on a count", () => {
     expect(parseInput(deg, "1.23")).toEqual({ ok: true, value: 1.23 });
-    expect(parseInput(deg, "1.234")).toEqual({ ok: false, reason: "steps of 0.01 deg" });
+    expect(parseInput(deg, "1.234")).toEqual({ ok: false, reason: "steps of 0.01°" });
     expect(parseInput(deg, "400")).toEqual({
       ok: false,
-      reason: "between -327.68 and 327.67 deg",
+      reason: "between -327.68 and 327.67°",
     });
   });
 });
@@ -163,8 +163,8 @@ describe("parseInput enum, bool, raw", () => {
 describe("formatValue", () => {
   test("number, enum, bool, raw", () => {
     expect(formatValue(fieldKind(id), 7)).toBe("7");
-    expect(formatValue(deg, 123)).toBe("1.23 deg");
-    expect(formatValue(deg, -5)).toBe("-0.05 deg");
+    expect(formatValue(deg, 123)).toBe("1.23°");
+    expect(formatValue(deg, -5)).toBe("-0.05°");
     expect(formatValue(fieldKind(mode), 3)).toBe("Position");
     expect(formatValue(fieldKind(mode), 9)).toBe("9");
     expect(formatValue(fieldKind(torque), true)).toBe("On");
@@ -178,7 +178,7 @@ describe("rangeHint", () => {
     expect(rangeHint(fieldKind(id) as NumberKind)).toBe("1 to 249");
     expect(rangeHint(fieldKind(chans) as NumberKind)).toBe("at most 7");
     expect(rangeHint(fieldKind(goal) as NumberKind)).toBeUndefined();
-    expect(rangeHint({ ...deg, min: -9000, max: 9000 })).toBe("-90.00 deg to 90.00 deg");
+    expect(rangeHint({ ...deg, min: -9000, max: 9000 })).toBe("-90.00° to 90.00°");
   });
 });
 

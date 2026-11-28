@@ -11,15 +11,15 @@ test("a number edit shows after apply and survives a refresh", async ({ page }) 
   await openTable(page);
   await page.getByRole("button", { name: /^Identity and bus/ }).click();
   const cell = tableRow(page, "response_deadline_us").getByRole("cell");
-  await expect(cell).toHaveText(/^\d+ us$/);
+  await expect(cell).toHaveText(/^\d+ µs$/);
   const next = Number(/^\d+/.exec((await cell.textContent()) ?? "")?.[0]) + 100;
   const editor = await openEditor(page, "response_deadline_us");
   await editor.getByRole("textbox").fill(String(next));
   await editor.getByRole("button", { name: "Apply" }).click();
   await expect(editor).toHaveCount(0);
-  await expect(cell).toHaveText(`${next} us`);
+  await expect(cell).toHaveText(`${next} µs`);
   await page.getByRole("button", { name: "Refresh" }).click();
-  await expect(cell).toHaveText(`${next} us`);
+  await expect(cell).toHaveText(`${next} µs`);
 });
 
 test("a bool row flips through the switch", async ({ page }) => {

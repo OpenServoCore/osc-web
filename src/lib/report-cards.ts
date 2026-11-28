@@ -1,6 +1,7 @@
 // What each card of the run report shows, from the run's files. A card whose
 // entries the run did not accept says why instead, in the run's own terms.
 
+import { withUnit } from "./format";
 import { errorSeries, type ErrorSeries } from "./pos-lut";
 import { NO_HEAT_MODEL } from "./profile-form";
 import {
@@ -93,7 +94,7 @@ function gainText(docs: RunDocs): string {
 }
 
 function signedDeg(v: number): string {
-  return `${v > 0 ? "+" : ""}${v.toFixed(2)} deg`;
+  return `${v > 0 ? "+" : ""}${v.toFixed(2)}°`;
 }
 
 /** Where the set puts 0 deg, its `center` block; undefined in a set written before it said. */
@@ -107,11 +108,11 @@ export function centerSaid(set: unknown): string | undefined {
   const asked = num(set, "center.asked_offset_deg");
   const where = `${counts.toFixed(1)} counts, raw ${raw.toFixed(1)}`;
   if (at(set, "center.clamped") === true && asked !== undefined) {
-    return `0 deg at ${signedDeg(offset)} from the center of travel, clamped from the policy's ${signedDeg(asked)}, the furthest the soft window fits, at ${where}`;
+    return `0° at ${signedDeg(offset)} from the center of travel, clamped from the policy's ${signedDeg(asked)}, the furthest the soft window fits, at ${where}`;
   }
   return offset === 0
-    ? `0 deg at the center of travel, ${where}`
-    : `0 deg at ${signedDeg(offset)} from the center of travel, ${where}`;
+    ? `0° at the center of travel, ${where}`
+    : `0° at ${signedDeg(offset)} from the center of travel, ${where}`;
 }
 
 export function headlineTiles(docs: RunDocs, steps: readonly RunStep[]): Card<Tile>[] {
@@ -125,7 +126,7 @@ export function headlineTiles(docs: RunDocs, steps: readonly RunStep[]): Card<Ti
       const center = centerSaid(set);
       return {
         label: "Travel",
-        value: `${(Math.abs(cal.angleMaxCdeg - cal.angleMinCdeg) / 100).toFixed(2)} deg`,
+        value: `${(Math.abs(cal.angleMaxCdeg - cal.angleMinCdeg) / 100).toFixed(2)}°`,
         about: `the set's angle map, raw ${String(cal.rawMin)} to ${String(cal.rawMax)}${center === undefined ? "" : `; ${center}`}`,
         step: "stops",
       };
@@ -138,16 +139,16 @@ export function headlineTiles(docs: RunDocs, steps: readonly RunStep[]): Card<Ti
         "inputs/measured.json",
         board === undefined
           ? "seated at both stops"
-          : `seated at both stops, the board at ${board.toFixed(1)} C`,
+          : `seated at both stops, the board at ${board.toFixed(1)} °C`,
         "stops",
       );
     }),
     card(steps, ["stops"], () =>
       termTile(
-        "Winding resistance at 25 C",
+        "Winding resistance at 25 °C",
         termAt(docs.get("results/stops.json"), "estimates.r_seated_25c_ohm"),
         "results/stops.json",
-        "the seated resistance through copper's slope to 25 C",
+        "the seated resistance through copper's slope to 25 °C",
         "stops",
       ),
     ),
@@ -182,7 +183,7 @@ export function headlineTiles(docs: RunDocs, steps: readonly RunStep[]): Card<Ti
         label: `Free speed at ${String(volts)} V`,
         value: valueSaid(speed),
         spread: spreadSaid(speed),
-        about: `${String(volts)} V over Ke is ${short(volts / ke.value)} motor rad/s; over the gear ratio ${String(gear)}, ${short(speed.value)} deg/s at the horn`,
+        about: `${String(volts)} V over Ke is ${short(volts / ke.value)} motor rad/s; over the gear ratio ${String(gear)}, ${short(speed.value)}°/s at the horn`,
         step: "spins",
       };
     }),
@@ -204,8 +205,8 @@ export function headlineTiles(docs: RunDocs, steps: readonly RunStep[]): Card<Ti
         label: "Move check",
         value: `${String(moves.length)} moves`,
         spread: [
-          over && `worst overshoot ${over.value.toFixed(2)} deg (${over.name})`,
-          rest && `worst rest error ${rest.value.toFixed(2)} deg (${rest.name})`,
+          over && `worst overshoot ${over.value.toFixed(2)}° (${over.name})`,
+          rest && `worst rest error ${rest.value.toFixed(2)}° (${rest.name})`,
         ]
           .filter(Boolean)
           .join(", "),
@@ -229,7 +230,7 @@ export function headlineTiles(docs: RunDocs, steps: readonly RunStep[]): Card<Ti
       }
       return {
         label: "Longest position hole",
-        value: `${(num(longest, "deg") ?? 0).toFixed(2)} deg`,
+        value: `${(num(longest, "deg") ?? 0).toFixed(2)}°`,
         spread: `${(num(longest, "counts") ?? 0).toFixed(1)} counts at raw ${rawText(num(longest, "from_counts") ?? 0)}..${rawText(num(longest, "to_counts") ?? 0)}; ${n}`,
         about: "the pot",
         step: "table",
@@ -252,7 +253,7 @@ export function headlineTiles(docs: RunDocs, steps: readonly RunStep[]): Card<Ti
       return {
         label: "Widest ADC wide code",
         value: `${String(num(longest, "counts") ?? 0)} codes`,
-        spread: `${(num(longest, "deg") ?? 0).toFixed(2)} deg at raw ${rawText(num(longest, "from_counts") ?? 0)}..${rawText(num(longest, "to_counts") ?? 0)}; ${n}`,
+        spread: `${(num(longest, "deg") ?? 0).toFixed(2)}° at raw ${rawText(num(longest, "from_counts") ?? 0)}..${rawText(num(longest, "to_counts") ?? 0)}; ${n}`,
         about: "the converter, the same on every channel",
         step: "table",
       };
@@ -460,7 +461,7 @@ export function effort(docs: RunDocs, steps: readonly RunStep[]): Card<Effort> {
   });
 }
 
-/** A resolved value in words: "200 deg/s", "2/3 of the stated no-load speed". */
+/** A resolved value in words with its shown unit: 200 deg/s, 2/3 of the stated no-load speed. */
 export function resolvedText(line: unknown): string {
   const v = at(line, "value");
   const unit = str(line, "unit") ?? "";
@@ -472,7 +473,7 @@ export function resolvedText(line: unknown): string {
         : typeof v === "string"
           ? v
           : "";
-  return unit === "" ? value : `${value} ${unit}`;
+  return withUnit(value, unit);
 }
 
 export interface ResolvedLine {
@@ -524,7 +525,7 @@ function crossCheck(what: string, c: unknown): CrossCheck {
   return {
     what,
     run: run === undefined ? "none" : `${valueSaid(run)} ${spreadSaid(run)}`,
-    stated: sv === undefined ? "states none" : `${short(sv)} ${str(stated, "unit") ?? ""}`.trim(),
+    stated: sv === undefined ? "states none" : withUnit(short(sv), str(stated, "unit") ?? ""),
     statedFrom: str(stated, "from"),
     difference: diff === undefined ? undefined : `${diff >= 0 ? "+" : ""}${diff.toFixed(2)} %`,
   };
@@ -546,7 +547,7 @@ function heatValues(get: (id: string) => number | undefined): string | undefined
   ];
   if (ft === undefined || fg === undefined || st === undefined || sg === undefined)
     return undefined;
-  return `fast ${ft.toFixed(2)} s ${fg.toFixed(1)} C/W, slow ${st.toFixed(1)} s ${sg.toFixed(1)} C/W`;
+  return `fast ${ft.toFixed(2)} s ${fg.toFixed(1)} °C/W, slow ${st.toFixed(1)} s ${sg.toFixed(1)} °C/W`;
 }
 
 /** Where the run's heat model came from and its four values, as osc-ident prints them. */
@@ -617,12 +618,14 @@ export function saveLine(
   uid: string,
   utc: string,
   id: number | undefined,
-): Card<string> {
+): Card<{ line: string }> {
   return card(steps, ["final"], () => {
     if (setFile === undefined) return "run.json names no final set.";
     const at0 = `${uid}/${utc}`;
     const live = str(docs.get("final/set.json"), "pos_table.state") === "LIVE";
     const table = live ? ` --table ${at0}/final/inputs/pos_lut.json` : "";
-    return `osc-ident --id ${id === undefined ? "<bus id>" : String(id)} save --set ${at0}/${setFile}${table}`;
+    return {
+      line: `osc-ident --id ${id === undefined ? "<bus id>" : String(id)} save --set ${at0}/${setFile}${table}`,
+    };
   });
 }

@@ -21,7 +21,7 @@ test("a label search lists the hit and Enter lands on its row", async ({ page })
   // Identity and bus starts collapsed, so a visible row means the jump expanded it.
   const cell = row(page, "response_deadline_us").getByRole("cell");
   await expect(cell).toBeVisible();
-  await expect(cell).toHaveText(/^\d+ us$/);
+  await expect(cell).toHaveText(/^\d+ µs$/);
 });
 
 test("an address search lists the field at that address", async ({ page }) => {

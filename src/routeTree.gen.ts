@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as IdentifyRouteImport } from './routes/identify'
 import { Route as LiveRouteImport } from './routes/live'
 import { Route as PoliciesRouteImport } from './routes/policies'
 import { Route as ProfilesRouteImport } from './routes/profiles'
@@ -22,6 +23,11 @@ import { Route as RunsUidUtcStepRouteImport } from './routes/runs_.$uid.$utc_.$s
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IdentifyRoute = IdentifyRouteImport.update({
+  id: '/identify',
+  path: '/identify',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LiveRoute = LiveRouteImport.update({
@@ -67,6 +73,7 @@ const RunsUidUtcStepRoute = RunsUidUtcStepRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/identify': typeof IdentifyRoute
   '/live': typeof LiveRoute
   '/policies': typeof PoliciesRoute
   '/profiles': typeof ProfilesRoute
@@ -78,6 +85,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/identify': typeof IdentifyRoute
   '/live': typeof LiveRoute
   '/policies': typeof PoliciesRoute
   '/profiles': typeof ProfilesRoute
@@ -90,6 +98,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/identify': typeof IdentifyRoute
   '/live': typeof LiveRoute
   '/policies': typeof PoliciesRoute
   '/profiles': typeof ProfilesRoute
@@ -103,6 +112,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/identify'
     | '/live'
     | '/policies'
     | '/profiles'
@@ -114,6 +124,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/identify'
     | '/live'
     | '/policies'
     | '/profiles'
@@ -125,6 +136,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/identify'
     | '/live'
     | '/policies'
     | '/profiles'
@@ -137,6 +149,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  IdentifyRoute: typeof IdentifyRoute
   LiveRoute: typeof LiveRoute
   PoliciesRoute: typeof PoliciesRoute
   ProfilesRoute: typeof ProfilesRoute
@@ -154,6 +167,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/identify': {
+      id: '/identify'
+      path: '/identify'
+      fullPath: '/identify'
+      preLoaderRoute: typeof IdentifyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/live': {
@@ -217,6 +237,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  IdentifyRoute: IdentifyRoute,
   LiveRoute: LiveRoute,
   PoliciesRoute: PoliciesRoute,
   ProfilesRoute: ProfilesRoute,

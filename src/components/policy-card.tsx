@@ -22,6 +22,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { unitSymbol, withUnit } from "@/lib/format";
 import {
   accelOf,
   CENTER_OFFSET,
@@ -137,9 +138,7 @@ export function PolicyCard({
   const moveRow = (
     <Row
       label="Move speed"
-      resolved={
-        v?.velocity_limit_deg_s == null ? undefined : `= ${num(v.velocity_limit_deg_s)} deg/s`
-      }
+      resolved={v?.velocity_limit_deg_s == null ? undefined : `= ${num(v.velocity_limit_deg_s)}°/s`}
       note={line("motion.move_speed")?.clamp}
       why={why("motion.move_speed")}
     >
@@ -157,7 +156,7 @@ export function PolicyCard({
         shown={(f) =>
           f.tag === "share_of_ceiling"
             ? `${num(f.amount ?? 0)} of the ceiling`
-            : `${num(f.amount ?? 0)} deg/s`
+            : `${num(f.amount ?? 0)}°/s`
         }
         resolved={(q) => {
           const r = previewOf(q, profile, rOhm).preview;
@@ -165,7 +164,7 @@ export function PolicyCard({
           return r?.values.velocity_limit_deg_s == null
             ? {}
             : {
-                preview: `= ${num(r.values.velocity_limit_deg_s)} deg/s${at}`,
+                preview: `= ${num(r.values.velocity_limit_deg_s)}°/s${at}`,
                 warning: clamp,
               };
         }}
@@ -175,9 +174,7 @@ export function PolicyCard({
   const speedUpRow = (
     <Row
       label="Speed-up time"
-      resolved={
-        v?.accel_limit_deg_s2 == null ? undefined : `= ${num(v.accel_limit_deg_s2)} deg/s^2`
-      }
+      resolved={v?.accel_limit_deg_s2 == null ? undefined : `= ${num(v.accel_limit_deg_s2)}°/s²`}
       why={why("motion.speed_up")}
     >
       <Dual
@@ -191,12 +188,12 @@ export function PolicyCard({
         }}
         portable={{ tag: "s", label: "Time", unit: "s to the move speed" }}
         fixed={{ tag: "deg_s2", label: "Fixed", unit: "deg/s^2" }}
-        shown={(f) => (f.tag === "s" ? `${num(f.amount ?? 0)} s` : `${num(f.amount ?? 0)} deg/s^2`)}
+        shown={(f) => (f.tag === "s" ? `${num(f.amount ?? 0)} s` : `${num(f.amount ?? 0)}°/s²`)}
         resolved={(q) => {
           const r = previewOf(q, profile, rOhm);
           if (r.refusal !== undefined) return { error: r.refusal };
           const a = r.preview?.values.accel_limit_deg_s2;
-          return a == null ? {} : { preview: `= ${num(a)} deg/s^2${at}` };
+          return a == null ? {} : { preview: `= ${num(a)}°/s²${at}` };
         }}
       />
     </Row>
@@ -282,7 +279,7 @@ export function PolicyCard({
                 resolved={
                   pv.preview === undefined
                     ? undefined
-                    : `= ${num(Math.round(pv.preview.speedCeilingDegS))} deg/s`
+                    : `= ${num(Math.round(pv.preview.speedCeilingDegS))}°/s`
                 }
                 why={why("protection.speed_ceiling")}
               >
@@ -293,7 +290,7 @@ export function PolicyCard({
                 resolved={
                   pv.preview === undefined || rOhm === undefined
                     ? BY_RUN
-                    : `= ${pv.preview.currentLimitA.toFixed(2)} A at ${num(rOhm)} ohm, ${BY_RUN}`
+                    : `= ${pv.preview.currentLimitA.toFixed(2)} A at ${num(rOhm)} Ω, ${BY_RUN}`
                 }
                 why={why("protection.current_limit")}
               >
@@ -390,8 +387,8 @@ export function PolicyCard({
                   fixed={{ tag: "deg_s", label: "Fixed", unit: "deg/s" }}
                   shown={(f) =>
                     f.tag === "deg_s"
-                      ? `${num(f.amount ?? 0)} deg/s`
-                      : `${num(f.amount ?? 0)}x the still-shaft speed`
+                      ? `${num(f.amount ?? 0)}°/s`
+                      : `${num(f.amount ?? 0)}× the still-shaft speed`
                   }
                   resolved={(q) => {
                     const f = formOf(q.protection?.stall_speed);
@@ -465,7 +462,7 @@ export function PolicyCard({
                   shown={(f) =>
                     f.tag === "hz"
                       ? `${num(f.amount ?? 0)} Hz`
-                      : `${num(f.amount ?? 0)}x the electrical corner`
+                      : `${num(f.amount ?? 0)}× the electrical corner`
                   }
                   resolved={() => ({ preview: WARN.loopRate })}
                 />
@@ -488,7 +485,7 @@ export function PolicyCard({
                   shown={(f) =>
                     f.tag === "hz"
                       ? `${num(f.amount ?? 0)} Hz`
-                      : `${num(f.amount ?? 0)}x the mechanical corner`
+                      : `${num(f.amount ?? 0)}× the mechanical corner`
                   }
                   resolved={() => ({ preview: WARN.loopRate })}
                 />
@@ -527,7 +524,7 @@ export function PolicyCard({
                   shown={(f) =>
                     f.tag === "counts"
                       ? `${num(f.amount ?? 0)} counts`
-                      : `${num(f.amount ?? 0)}x the pot's noise while driving`
+                      : `${num(f.amount ?? 0)}× the pot's noise while driving`
                   }
                   resolved={(q) => {
                     const f = formOf(q.sensor?.pot_jump);
@@ -565,7 +562,10 @@ export function PolicyCard({
                 {heat.map((h) => (
                   <Row key={h.id} label={h.label} note={h.line.note} noteTone="grey">
                     <span className="px-1 font-mono">
-                      {typeof h.line.value === "number" ? num(h.line.value) : ""} {h.line.unit}
+                      {withUnit(
+                        typeof h.line.value === "number" ? num(h.line.value) : "",
+                        h.line.unit,
+                      )}
                     </span>
                     <span className="font-mono text-sm text-text-3">{h.line.form}</span>
                   </Row>
@@ -717,10 +717,10 @@ function SoftTravel({ ctx }: { ctx: Ctx }) {
   const rated = ctx.profile?.rated_travel_deg;
   const shown =
     typeof v === "number"
-      ? `${num(v)} deg`
+      ? withUnit(num(v), "deg")
       : rated == null
         ? "the profile's rated travel"
-        : `the profile's rated travel, ${num(rated)} deg`;
+        : `the profile's rated travel, ${withUnit(num(rated), "deg")}`;
   return (
     <Editable
       ctx={ctx}
@@ -739,7 +739,7 @@ function CenterOffset({ ctx }: { ctx: Ctx }) {
     <Editable
       ctx={ctx}
       title="Center offset"
-      shown={typeof v === "number" ? `${num(v)} deg` : "0 deg, the center of travel"}
+      shown={typeof v === "number" ? withUnit(num(v), "deg") : "0°, the center of travel"}
       fields={[{ id: "v", label: "Center offset", unit: "deg" }]}
       initial={{ v: typeof v === "number" ? String(v) : "" }}
       apply={(vals) => withCenterOffset(ctx.policy, vals.v)}
@@ -761,7 +761,7 @@ function NumberValue({
   warn?: (n: number) => string | undefined;
 }) {
   const v = valueAt(ctx.policy, path);
-  const shown = typeof v !== "number" ? KEPT : `${num(v)}${unit === "" ? "" : ` ${unit}`}`;
+  const shown = typeof v !== "number" ? KEPT : withUnit(num(v), unit);
   return (
     <Editable
       ctx={ctx}
@@ -862,7 +862,9 @@ function Dual({
             <TabsTrigger value={portable.tag}>{portable.label}</TabsTrigger>
             <TabsTrigger value={fixed.tag}>{fixed.label}</TabsTrigger>
           </TabsList>
-          <span className="mt-1 block text-xs text-text-3">{specOf(values.form).unit}</span>
+          <span className="mt-1 block text-xs text-text-3">
+            {unitSymbol(specOf(values.form).unit)}
+          </span>
         </Tabs>
       )}
       apply={(vals) => {
@@ -902,7 +904,7 @@ function SpeedCeiling({ ctx }: { ctx: Ctx }) {
           preview:
             r === undefined
               ? undefined
-              : `= ${num(Math.round(r.speedCeilingDegS))} deg/s with ${ctx.profile?.key ?? ""}`,
+              : `= ${num(Math.round(r.speedCeilingDegS))}°/s with ${ctx.profile?.key ?? ""}`,
           warning: looser ? WARN.speedCeiling : undefined,
         };
       }}
@@ -978,7 +980,7 @@ function PositionError({ ctx }: { ctx: Ctx }) {
   const shown =
     e == null
       ? KEPT
-      : `${e.deg == null ? "-" : num(e.deg)} deg for ${e.time_ms == null ? "-" : num(e.time_ms)} ms`;
+      : `${e.deg == null ? "-" : num(e.deg)}° for ${e.time_ms == null ? "-" : num(e.time_ms)} ms`;
   return (
     <Editable
       ctx={ctx}

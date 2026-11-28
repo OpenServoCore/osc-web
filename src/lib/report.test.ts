@@ -45,7 +45,7 @@ describe("numbers as osc-ident prints them", () => {
 
   it("says a spread as +/- sd and n, n alone, or nominal", () => {
     const t: Term = { value: 1, sd: 0.04458048587985423, n: 36, unit: "ohm" };
-    expect(spreadSaid(t)).toBe("+/- 0.0446, n 36");
+    expect(spreadSaid(t)).toBe("± 0.0446, n 36");
     expect(spreadSaid({ ...t, sd: null })).toBe("n 36");
     expect(spreadSaid({ ...t, sd: null, n: null })).toBe("nominal");
   });
@@ -169,13 +169,13 @@ describe("the heat line", () => {
     const m = migrate(record("profile.json"), record("policy-of-record.json"));
     const resolved = resolvePreview(m.profile, m.policy, 4.18).report;
     expect(heatSaid(resolved, undefined)).toBe(
-      `Heat model from the profile vorpal-mg90 rev ${String(m.profile.revision)}, not identified: fast 2.38 s 20.4 C/W, slow 128.9 s 76.8 C/W`,
+      `Heat model from the profile vorpal-mg90 rev ${String(m.profile.revision)}, not identified: fast 2.38 s 20.4 °C/W, slow 128.9 s 76.8 °C/W`,
     );
   });
 
   it("reads a version 0 run's thermal.json, and says the run's refusal with neither", () => {
     expect(heatSaid(json("inputs/resolved.json"), json("inputs/thermal.json"))).toBe(
-      "Heat model from inputs/thermal.json beside the version 0 nameplate, not identified: fast 2.38 s 20.4 C/W, slow 128.9 s 76.8 C/W",
+      "Heat model from inputs/thermal.json beside the version 0 nameplate, not identified: fast 2.38 s 20.4 °C/W, slow 128.9 s 76.8 °C/W",
     );
     expect(heatSaid(json("inputs/resolved.json"), undefined)).toBe(NO_HEAT_MODEL);
   });
@@ -187,16 +187,16 @@ describe("where the set puts 0 deg", () => {
     const set = (center: Record<string, unknown>) => ({ center });
     expect(
       centerSaid(set({ counts: 1937, raw: 1940.25, offset_deg: 0, asked_offset_deg: null })),
-    ).toBe("0 deg at the center of travel, 1937.0 counts, raw 1940.3");
+    ).toBe("0° at the center of travel, 1937.0 counts, raw 1940.3");
     expect(
       centerSaid(set({ counts: 1957.13, raw: 1960, offset_deg: 1, asked_offset_deg: 1 })),
-    ).toBe("0 deg at +1.00 deg from the center of travel, 1957.1 counts, raw 1960.0");
+    ).toBe("0° at +1.00° from the center of travel, 1957.1 counts, raw 1960.0");
     expect(
       centerSaid(
         set({ counts: 1960.5, raw: 1963, offset_deg: 1.17, asked_offset_deg: 5, clamped: true }),
       ),
     ).toBe(
-      "0 deg at +1.17 deg from the center of travel, clamped from the policy's +5.00 deg, the furthest the soft window fits, at 1960.5 counts, raw 1963.0",
+      "0° at +1.17° from the center of travel, clamped from the policy's +5.00°, the furthest the soft window fits, at 1960.5 counts, raw 1963.0",
     );
   });
 

@@ -135,7 +135,7 @@ export function stateWords(state: number): string {
     case STATE.REJECT_ENDS:
       return "Rejected: a calibration point sits at or past a stop, so the stops would not map to themselves. Rebuild the table against the current stops; the sensor is read as-is.";
     case STATE.REJECT_SHAPE:
-      return "Rejected: an interval is not increasing or is steeper than 16x, which no sensor does. Rebuild it from a fresh capture; the sensor is read as-is.";
+      return "Rejected: an interval is not increasing or is steeper than 16×, which no sensor does. Rebuild it from a fresh capture; the sensor is read as-is.";
     default:
       return `Unknown table state ${state}; the sensor is read as-is.`;
   }
@@ -199,7 +199,7 @@ export function errorSeries(points: readonly number[], cal: Calibration | undefi
 }
 
 function fmtValue(v: number, unit: Unit): string {
-  return unit === "deg" ? `${v.toFixed(1)} deg` : `${v.toFixed(0)} counts`;
+  return unit === "deg" ? `${v.toFixed(1)}°` : `${v.toFixed(0)} counts`;
 }
 
 /** An error of `abs` in the series' unit as percent of travel, or of the converter's range. */
@@ -240,5 +240,5 @@ export function windowsWords(r: Report, cal: Calibration | undefined): string | 
   if (r.band === undefined || r.windows === undefined) return undefined;
   const at = (raw: number) => rawAt(raw, cal);
   const w = r.windows;
-  return `Local gain over every ${w.counts}-count window between ${at(r.band[0])} and ${at(r.band[1])}: ${w.min.toFixed(2)}x to ${w.max.toFixed(2)}x nominal.`;
+  return `Local gain over every ${w.counts}-count window between ${at(r.band[0])} and ${at(r.band[1])}: ${w.min.toFixed(2)}× to ${w.max.toFixed(2)}× nominal.`;
 }

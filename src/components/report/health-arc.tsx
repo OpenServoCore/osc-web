@@ -57,6 +57,7 @@ const INK = {
   unjudged: "stroke-border-strong forced-colors:stroke-[CanvasText]",
   cut: "fill-surface forced-colors:fill-[Canvas]",
   good: "fill-(--fill) stroke-(--fill) forced-colors:fill-[CanvasText] forced-colors:stroke-[CanvasText]",
+  outline: "fill-none stroke-border-strong forced-colors:stroke-[CanvasText]",
   focus: "stroke-focus forced-colors:stroke-[Highlight]",
 } as const;
 
@@ -101,6 +102,10 @@ function Marks({ arc, id, focus }: { arc: Arc; id: string; focus: Mark | undefin
             strokeWidth={0.75}
           />
         ))}
+        {arc.good.length > 0 && (
+          // The average's gray sits close to the surface: the outline keeps the band's edge.
+          <path d={sectorPath(0, S, b0, b1, S)} strokeWidth={1} className={INK.outline} />
+        )}
         {arc.unjudged.map((m) => (
           <g key={m.key} data-kind="not judged">
             <path d={sectorPath(m.fromDeg, m.toDeg, b0, b1, S)} className={INK.cut} />
@@ -147,7 +152,7 @@ function Marks({ arc, id, focus }: { arc: Arc; id: string; focus: Mark | undefin
                 dominantBaseline="central"
                 className="fill-text-3 text-xs forced-colors:fill-[CanvasText]"
               >
-                {d} deg
+                {d}°
               </text>
             </g>
           );
@@ -247,26 +252,17 @@ function Swatch({ kind, id }: { kind: Mark["kind"] | "adc-hollow"; id: string })
     <svg width="22" height="14" aria-hidden="true" className="shrink-0">
       {kind === "good" && (
         <>
-          <rect
-            width="7.33"
-            height="14"
-            className={INK.good}
-            style={{ "--fill": fillOf(-1) } as CSSProperties}
-          />
-          <rect
-            x="7.33"
-            width="7.34"
-            height="14"
-            className={INK.good}
-            style={{ "--fill": fillOf(0) } as CSSProperties}
-          />
-          <rect
-            x="14.67"
-            width="7.33"
-            height="14"
-            className={INK.good}
-            style={{ "--fill": fillOf(1) } as CSSProperties}
-          />
+          {SCALE_STEPS.map((t, i) => (
+            <rect
+              key={t}
+              x={i * 4.4}
+              width="4.4"
+              height="14"
+              className={INK.good}
+              style={{ "--fill": fillOf(t) } as CSSProperties}
+            />
+          ))}
+          <rect x="0.5" y="0.5" width="21" height="13" strokeWidth={1} className={INK.outline} />
         </>
       )}
       {kind === "pot" && (
@@ -300,12 +296,54 @@ function Swatch({ kind, id }: { kind: Mark["kind"] | "adc-hollow"; id: string })
   );
 }
 
+const SCALE_STEPS = [-1, -0.5, 0, 0.5, 1] as const;
+
+/** The good travel's scale: coarse 0.5× to fine 2× the average counts a degree, 1× neutral. */
+function DensityScale() {
+  const w = 24;
+  const at = (i: number) => i * w + w / 2;
+  return (
+    <svg width={SCALE_STEPS.length * w} height="30" aria-hidden="true" className="shrink-0">
+      {SCALE_STEPS.map((t, i) => (
+        <rect
+          key={t}
+          x={i * w}
+          width={w}
+          height="12"
+          className={INK.good}
+          style={{ "--fill": fillOf(t) } as CSSProperties}
+        />
+      ))}
+      <rect
+        x="0.5"
+        y="0.5"
+        width={SCALE_STEPS.length * w - 1}
+        height="11"
+        strokeWidth={1}
+        className={INK.outline}
+      />
+      {(
+        [
+          [0, "0.5×"],
+          [2, "1×"],
+          [4, "2×"],
+        ] as const
+      ).map(([i, label]) => (
+        <text key={label} x={at(i)} y="26" textAnchor="middle" className={`fill-text-3 ${SMALL}`}>
+          {label}
+        </text>
+      ))}
+    </svg>
+  );
+}
+
 function Legend({ id }: { id: string }) {
   return (
     <ul aria-label="Legend" className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-text-2">
-      <li className="flex items-center gap-1.5">
-        <Swatch kind="good" id={id} />
-        good travel, counts a degree against the average from 0.5x to 2x
+      <li className="flex items-center gap-2">
+        <DensityScale />
+        good travel: counts a degree against the average, coarser (ochre) to finer (blue), gray at
+        the average
       </li>
       <li className="flex items-center gap-1.5">
         <Swatch kind="pot" id={id} />
@@ -394,8 +432,8 @@ function TableView({ arc }: { arc: Arc }) {
       <thead className="text-left text-text-3">
         <tr>
           <th className="py-1 font-normal">Kind</th>
-          <th className="py-1 font-normal">From, deg</th>
-          <th className="py-1 font-normal">To, deg</th>
+          <th className="py-1 font-normal">From, °</th>
+          <th className="py-1 font-normal">To, °</th>
           <th className="py-1 font-normal">Raw from</th>
           <th className="py-1 font-normal">Raw to</th>
           <th className="py-1 font-normal">Counts</th>

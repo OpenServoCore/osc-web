@@ -201,7 +201,7 @@ describe("the arc's labels", () => {
     });
     const hole = arc.pot[0];
     if (hole === undefined) throw new Error("no hole");
-    expect(paneOf(hole, arc).lines[0]).toMatch(/^-45\.0 deg to -44\.9 deg, 1 count/);
+    expect(paneOf(hole, arc).lines[0]).toMatch(/^-45\.0° to -44\.9°, 1 count/);
     expect(summary(arc)).toBe(
       "Position sensor over 180.0 degrees: 1 position hole, the longest 1 count (0.05 degrees) from -45.0 to -44.9 degrees; 2 ADC wide codes, the widest 11 codes at 7.4 degrees; 1.00 to 1.00 times the average resolution across 90 % of the judged travel.",
     );

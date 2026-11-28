@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { gotoSim } from "./helpers";
 
 // The simulated fleet boots calibrated, so the position family reads degrees.
-const READOUT = /^-?\d+(\.\d+)? deg$/;
+const READOUT = /^-?\d+(\.\d+)?°$/;
 
 async function openLive(page: Page): Promise<void> {
   await gotoSim(page, [1, 2]);
@@ -47,8 +47,8 @@ test("the winding series joins the temperature panel in C", async ({ page }) => 
   await openLive(page);
   await expect(page.getByRole("region", { name: /^Temperature/ })).toHaveCount(0);
   await page.getByRole("switch", { name: "Winding" }).click();
-  await expect(page.getByRole("region", { name: /^Temperature C/ })).toBeVisible();
-  await expect(page.getByLabel("Winding value")).toHaveText(/^-?\d+\.\d C$/);
+  await expect(page.getByRole("region", { name: /^Temperature °C/ })).toBeVisible();
+  await expect(page.getByLabel("Winding value")).toHaveText(/^-?\d+\.\d °C$/);
 });
 
 test("the motor voltage series reads the held differential in volts", async ({ page }) => {

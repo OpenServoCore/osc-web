@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, FileChartColumn } from "lucide-react";
 import { HealthArc } from "@/components/report/health-arc";
+import { SaveSet } from "@/components/save-set";
 import {
   AccuracyChart,
   EffortChart,
@@ -24,6 +25,7 @@ import {
 } from "@/lib/report-cards";
 import { isDrillStep } from "@/lib/drill";
 import { phrase, stepTitle, utcText, type Named, type RunStep } from "@/lib/run-folder";
+import { hasFinalSet } from "@/lib/save-set";
 import { useSession } from "@/lib/session";
 import { useRunReport, type LoadedRun } from "@/lib/use-report";
 
@@ -123,7 +125,8 @@ function Report({ run, uid, utc }: { run: LoadedRun; uid: string; utc: string })
   const { servos } = useSession();
   const steps = run.identity.steps;
   const docs = run.docs;
-  const id = servos.find((s) => s.uid === uid)?.id;
+  const servo = servos.find((s) => s.uid === uid);
+  const id = servo?.id;
   const save = saveLine(docs, steps, run.times.setFile, uid, utc, id);
   return (
     <div className="flex flex-col gap-4">
@@ -176,10 +179,20 @@ function Report({ run, uid, utc }: { run: LoadedRun; uid: string; utc: string })
       </ReportCard>
       <ReportCard
         title="Store the final set"
-        says="osc-ident leaves the final set on the servo until a reboot. To store it, run this from the folder that holds the run folder:"
+        says="The run leaves the final set on the servo until a reboot. To store it, run this from the folder that holds the run folder, or save it from this page:"
         card={save}
       >
-        {(line) => <code className="rounded bg-muted p-2 font-mono text-sm break-all">{line}</code>}
+        {({ line }) => (
+          <div className="flex flex-col gap-3">
+            <code className="rounded bg-muted p-2 font-mono text-sm break-all">{line}</code>
+            {hasFinalSet(run.identity) && (
+              <SaveSet
+                identity={run.identity}
+                servo={servo === undefined ? undefined : { id: servo.id, uid: servo.uid }}
+              />
+            )}
+          </div>
+        )}
       </ReportCard>
     </div>
   );

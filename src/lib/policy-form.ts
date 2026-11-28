@@ -231,12 +231,12 @@ export function copyKey(name: string): string {
 export const SOFT_TRAVEL = "motion.soft_travel_deg";
 
 export const SOFT_TRAVEL_HINT =
-  "Empty is the profile's rated travel. Less narrows the soft window; more widens it, up to the servo's physical travel, which identification reports. The window is centered on 0 deg.";
+  "Empty is the profile's rated travel. Less narrows the soft window; more widens it, up to the servo's physical travel, which identification reports. The window is centered on 0°.";
 
 export const CENTER_OFFSET = "motion.center_offset_deg";
 
 export const CENTER_OFFSET_HINT =
-  "Empty is 0: 0 deg is the servo's center of travel, which identification measures. A positive offset moves 0 deg counterclockwise. The soft window moves with it; where it would not fit inside the stops, the run clamps the offset and says so.";
+  "Empty is 0: 0° is the servo's center of travel, which identification measures. A positive offset moves 0° counterclockwise. The soft window moves with it; where it would not fit inside the stops, the run clamps the offset and says so.";
 
 /** The soft margin share a policy stored before the soft travel may still state; the type no longer has it. */
 export function retiredSoftMargin(policy: TuningPolicy): string | undefined {
@@ -320,7 +320,7 @@ export const WARN = {
     "A blocked horn whose reading still flickers is not seen as blocked: it keeps pushing at full current.",
   stallSpeedHigh: "A slow move under load can be taken for a block.",
   cutoff:
-    "Above 90 C the winding insulation and the case plastic start to fail. The motor can burn out.",
+    "Above 90 °C the winding insulation and the case plastic start to fail. The motor can burn out.",
   positionError:
     "A motor wired backwards or a slipping gear drives longer before torque cuts, and can slam into a stop.",
   runV: "The servo would run above the maker's range: the motor heats more and its brushes wear fast.",

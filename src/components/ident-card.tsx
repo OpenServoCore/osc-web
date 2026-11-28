@@ -1,5 +1,5 @@
 import type { ServoProfile, TuningPolicy } from "@openservocore/client";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { CircleAlert, CircleQuestionMark, Copy, ScanSearch } from "lucide-react";
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,7 @@ export function IdentCard({ id, uid }: { id: number; uid: string }) {
   const policyShelf = useLibrary(policies);
   const { setup, error, choose } = useSetup(uid);
   const [failure, setFailure] = useState<string>();
-  const [note, setNote] = useState<string>();
+  const navigate = useNavigate();
   const rId = useId();
 
   const problem = failure ?? error ?? profileShelf.error ?? policyShelf.error;
@@ -40,7 +40,6 @@ export function IdentCard({ id, uid }: { id: number; uid: string }) {
     try {
       await choose(next);
       setFailure(undefined);
-      setNote(undefined);
     } catch (e) {
       setFailure(message(e));
     }
@@ -95,11 +94,8 @@ export function IdentCard({ id, uid }: { id: number; uid: string }) {
                 setFailure(message(e));
               }
             }}
-            note={note}
             onIdentify={() => {
-              setNote(
-                "This app cannot run an identification yet; osc-ident runs the same profile and policy.",
-              );
+              void navigate({ to: "/identify", search: true });
             }}
           />
         )}
@@ -116,7 +112,6 @@ function Chooser({
   policies,
   onChoose,
   onCopy,
-  note,
   onIdentify,
 }: {
   uid: string;
@@ -126,7 +121,6 @@ function Chooser({
   policies: readonly Stored<TuningPolicy>[];
   onChoose: (next: ServoSetup) => Promise<void>;
   onCopy: (policy: TuningPolicy) => Promise<void>;
-  note: string | undefined;
   onIdentify: () => void;
 }) {
   const profile = profiles.find((e) => e.value.key === setup.profile?.key);
@@ -204,7 +198,7 @@ function Chooser({
           Identify
         </Button>
         <span className="text-sm text-text-3">
-          {ready.blocker === undefined ? (note ?? "The horn moves stop to stop.") : undefined}
+          {ready.blocker === undefined ? "The horn moves stop to stop." : undefined}
         </span>
       </div>
     </>

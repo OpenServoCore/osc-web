@@ -22,4 +22,4 @@
 
 ## Dependencies
 
-- `@openservocore/client` is the wasm build of the monorepo's `client/web`, consumed as a local path dependency (`file:../open-servo-core/client/web`). `npm run wasm` builds it; the monorepo must be checked out as a sibling directory.
+- `@openservocore/client` is the wasm build of the monorepo's `client/web`, consumed as a local path dependency (`file:../open-servo-core/client/web`). `@openservocore/client-ident` is `client/web-ident` the same way (`file:../open-servo-core/client/web-ident`), loaded only on the identification run screen. `npm run wasm` builds both; the monorepo must be checked out as a sibling directory.
